@@ -33,4 +33,10 @@ func injectDependencies(into container: ContainerType) {
             searchCountryDialCodeUseCase: container.resolve()
         )
     }
+
+    container.register { container -> VerifyCallViewModelType in
+        VerifyCallViewModel(
+            
+        )
+    }
 }
