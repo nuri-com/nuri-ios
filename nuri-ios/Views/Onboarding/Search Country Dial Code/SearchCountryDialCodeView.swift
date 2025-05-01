@@ -14,6 +14,9 @@ struct SearchCountryDialCodeView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 TextField(viewState.searchTextField.placeholder, text: $viewModel.viewState.searchTextField.text)
+                    .onChange(of: viewState.searchTextField.text) { _, newValue in
+                        viewState.searchTextField.textChangeHandler?.action(newValue)
+                    }
                 TextButton(viewState: viewState.cancelButton)
             }
             switch viewState.searchState {

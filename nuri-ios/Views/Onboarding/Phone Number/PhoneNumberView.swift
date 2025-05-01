@@ -18,29 +18,22 @@ struct PhoneNumberView: View {
                 .font(.brandBody)
                 .foregroundStyle(Color.secondary)
             HStack {
-                Text(viewState.countryPicker.label)
+                Text(viewState.countryPickerTitle)
                     .font(.brandCaption)
                     .foregroundStyle(Color.secondary)
                 Spacer()
-                Picker(viewState.countryPicker.label, selection: $viewModel.viewState.countryPicker.selection) {
-                    ForEach(Array(viewState.countryPicker.options.enumerated()), id: \.element) { index, element in
-                        Text(element)
-                            .fixedSize(horizontal: true, vertical: false)
-                            .truncationMode(.tail)
-                            .tag(index)
-                    }
-                }
-                .pickerStyle(MenuPickerStyle())
-                .tint(Color.primary)
-                .onChange(of: viewState.countryPicker.selection) { _, newValue in
-                    viewState.countryPicker.selectionChangeHandler?.action(newValue)
-                }
+                Text(viewState.countryPickerValue)
+                    .font(.brandBody)
+                    .foregroundStyle(Color.primary)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(Color.inputBackground)
             .clipShape(RoundedRectangle(cornerRadius: 3))
             .padding(.vertical, 8)
+            .onTapGesture {
+                viewState.countryPickerSelected.action()
+            }
             HStack(spacing: 8) {
                 Text(viewState.countryCode)
                 TextField(viewState.phoneNumber.placeholder, text: $viewModel.viewState.phoneNumber.text)

@@ -1,7 +1,9 @@
 struct PhoneNumberViewState: ViewModelViewState {
     let title: String
     let subtitle: String
-    var countryPicker: PickerViewState
+    let countryPickerTitle: String
+    var countryPickerValue: String
+    let countryPickerSelected: UserAction
     var countryCode: String
     var phoneNumber: TextFieldViewState
     var countryCodeHint: String?
@@ -11,7 +13,9 @@ struct PhoneNumberViewState: ViewModelViewState {
         .init(
             title: "",
             subtitle: "",
-            countryPicker: .empty,
+            countryPickerTitle: "",
+            countryPickerValue: "",
+            countryPickerSelected: .empty,
             countryCode: "",
             phoneNumber: .empty,
             confirmButton: .empty

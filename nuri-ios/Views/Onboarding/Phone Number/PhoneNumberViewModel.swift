@@ -1,6 +1,12 @@
 import Combine
 
-protocol PhoneNumberViewModelType {
+protocol PhoneNumberViewModelDelegate: OnboardingScreenDelegate {
+    func phoneNumberViewModelDidSelectSearch()
+}
+
+protocol PhoneNumberViewModelType: AnyObject {
+    var delegate: PhoneNumberViewModelDelegate? { get set }
+    func updateSelectedCountry(countryCode: String)
     func toViewModel() -> PhoneNumberViewModel
 }
 
@@ -9,6 +15,8 @@ protocol PhoneNumberViewStateProviding {
 }
 
 final class PhoneNumberViewModel: ObservableObject, PhoneNumberViewModelType, PhoneNumberViewStateProviding {
+
+    weak var delegate: (any PhoneNumberViewModelDelegate)?
 
     @Published var viewState: PhoneNumberViewState = .empty
 
@@ -20,14 +28,11 @@ final class PhoneNumberViewModel: ObservableObject, PhoneNumberViewModelType, Ph
         viewState = .init(
             title: "Your Phone Number",
             subtitle: "Enter your phone number to get started.",
-            countryPicker: .init(
-                label: "Country",
-                options: dialCodesRepository.dialCodes.map { $0.dialCode + " " + $0.country },
-                selection: 0,
-                selectionChangeHandler: .init { [weak self] selection in
-                    self?.countryPickerSelectionChanged(selection)
-                }
-            ),
+            countryPickerTitle: "Country",
+            countryPickerValue: "",
+            countryPickerSelected: .init { [weak self] in
+                self?.countryPickerSelected()
+            },
             countryCode: "+",
             phoneNumber: .init(
                 label: "",
@@ -61,7 +66,7 @@ final class PhoneNumberViewModel: ObservableObject, PhoneNumberViewModelType, Ph
             let country = countries[index]
             let dialCode = country.dialCode
             viewState.countryCode = dialCode
-            viewState.countryPicker.selection = index
+//            viewState.countryPicker.selection = index
 
             countries.remove(at: index)
             let otherCountries = countries.filter({ $0.dialCode == dialCode }).map { $0.country }.sorted()
@@ -70,7 +75,6 @@ final class PhoneNumberViewModel: ObservableObject, PhoneNumberViewModelType, Ph
             } else {
                 viewState.countryCodeHint = nil
             }
-
         case .updatePhoneNumber(let phoneNumber):
             viewState.phoneNumber.text = phoneNumber
             viewState.confirmButton.isDisabled = phoneNumber.count < 5
@@ -79,22 +83,23 @@ final class PhoneNumberViewModel: ObservableObject, PhoneNumberViewModelType, Ph
     }
 
     private func confirmButtonPressed() {
-
+        delegate?.didFinish(screen: .phoneNumber)
     }
 
     private func countryPickerSelectionChanged(_ selection: Int) {
         updateViewState(action: .selectCountry(selection))
     }
 
+    private func countryPickerSelected() {
+        delegate?.phoneNumberViewModelDidSelectSearch()
+    }
+
     private func phoneNumberChanged(_ text: String) {
         let trimmedText = text.replacing(" ", with: "")
-        print(trimmedText)
         let regex = /^\+[0-9]{1,4}/
         if (try? regex.firstMatch(in: trimmedText)) != nil {
-            print("text starts with +")
             let allDialCodes = dialCodesRepository.dialCodes
             let sortedDialCodesNumber = allDialCodes.map { $0.dialCode }.sorted(by: { $0.count > $1.count })
-            print(sortedDialCodesNumber)
             for dialCodeNumber in sortedDialCodesNumber {
                 if trimmedText.starts(with: dialCodeNumber) {
                     if let dialCode = allDialCodes.first(where: { $0.dialCode == dialCodeNumber }) {
@@ -118,6 +123,12 @@ final class PhoneNumberViewModel: ObservableObject, PhoneNumberViewModelType, Ph
     }
 
     // MARK: - PhoneNumberViewModelType
+
+    func updateSelectedCountry(countryCode: String) {
+        if let index = dialCodesRepository.dialCodes.firstIndex(where: { $0.countryCode == countryCode }) {
+            updateViewState(action: .selectCountry(index))
+        }
+    }
 
     func toViewModel() -> PhoneNumberViewModel {
         return self
