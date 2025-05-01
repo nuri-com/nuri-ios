@@ -19,7 +19,6 @@ final class OnboardingWireframe: OnboardingWireframeType {
     func initialViewController() -> UIViewController {
         let viewController = viewController(for: .phoneNumber)
         let navigationController = UINavigationController(rootViewController: viewController)
-        navigationController.setNavigationBarHidden(true, animated: false)
         self.navigationController = navigationController
         return navigationController
     }
