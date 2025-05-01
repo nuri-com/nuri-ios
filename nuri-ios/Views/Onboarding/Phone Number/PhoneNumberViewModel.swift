@@ -1,7 +1,7 @@
 import Combine
 
 protocol PhoneNumberViewModelType {
-    func toConcreteType() -> PhoneNumberViewModel
+    func toViewModel() -> PhoneNumberViewModel
 }
 
 protocol PhoneNumberViewStateProviding {
@@ -119,7 +119,7 @@ final class PhoneNumberViewModel: ObservableObject, PhoneNumberViewModelType, Ph
 
     // MARK: - PhoneNumberViewModelType
 
-    func toConcreteType() -> PhoneNumberViewModel {
+    func toViewModel() -> PhoneNumberViewModel {
         return self
     }
 }

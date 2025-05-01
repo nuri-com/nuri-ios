@@ -4,8 +4,6 @@ struct PhoneNumberView: View {
 
     @ObservedObject var viewModel: PhoneNumberViewModel
 
-    
-
     var body: some View {
         contentView(viewState: viewModel.viewState)
     }

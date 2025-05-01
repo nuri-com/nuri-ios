@@ -29,7 +29,7 @@ final class OnboardingWireframe: OnboardingWireframeType {
 
     private func phoneNumberViewController() -> UIViewController {
         let viewModel: PhoneNumberViewModelType = container.resolve()
-        let view = PhoneNumberView(viewModel: viewModel.toConcreteType())
+        let view = PhoneNumberView(viewModel: viewModel.toViewModel())
         let viewController = UIHostingController(rootView: view)
         return viewController
     }
