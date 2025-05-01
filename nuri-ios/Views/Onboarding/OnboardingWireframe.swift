@@ -2,7 +2,7 @@ import UIKit
 import SwiftUI
 
 protocol OnboardingWireframeType {
-    func viewController() -> UIViewController
+    func initialViewController() -> UIViewController
 }
 
 final class OnboardingWireframe: OnboardingWireframeType {
@@ -13,14 +13,21 @@ final class OnboardingWireframe: OnboardingWireframeType {
         self.container = container
     }
 
-    func viewController() -> UIViewController {
-        let viewController = initialViewController()
+    func initialViewController() -> UIViewController {
+        let viewController = viewController(for: .phoneNumber)
         let navigationController = UINavigationController(rootViewController: viewController)
         navigationController.setNavigationBarHidden(true, animated: false)
         return navigationController
     }
 
-    private func initialViewController() -> UIViewController {
+    private func viewController(for screen: OnboardingScreen) -> UIViewController {
+        switch screen {
+        case .phoneNumber:
+            return phoneNumberViewController()
+        }
+    }
+
+    private func phoneNumberViewController() -> UIViewController {
         let viewModel: PhoneNumberViewModelType = container.resolve()
         let view = PhoneNumberView(viewModel: viewModel.toConcreteType())
         let viewController = UIHostingController(rootView: view)

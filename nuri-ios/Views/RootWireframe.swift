@@ -13,6 +13,6 @@ final class RootWireframe: RootWireframeType {
     }
 
     func start() -> UIViewController {
-        return onboardingWireframe.viewController()
+        return onboardingWireframe.initialViewController()
     }
 }
