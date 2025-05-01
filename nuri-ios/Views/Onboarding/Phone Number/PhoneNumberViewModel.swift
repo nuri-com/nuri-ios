@@ -66,7 +66,7 @@ final class PhoneNumberViewModel: ObservableObject, PhoneNumberViewModelType, Ph
             let country = countries[index]
             let dialCode = country.dialCode
             viewState.countryCode = dialCode
-//            viewState.countryPicker.selection = index
+            viewState.countryPickerValue = country.dialCode + " " + country.country
 
             countries.remove(at: index)
             let otherCountries = countries.filter({ $0.dialCode == dialCode }).map { $0.country }.sorted()

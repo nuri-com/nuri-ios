@@ -27,7 +27,7 @@ struct PhoneNumberView: View {
                     .foregroundStyle(Color.primary)
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.vertical, 16)
             .background(Color.inputBackground)
             .clipShape(RoundedRectangle(cornerRadius: 3))
             .padding(.vertical, 8)
