@@ -1,13 +1,13 @@
 import Combine
 import Foundation
 
-protocol DialCodesRepositoryType {
-    var dialCodes: [DialCode] { get }
+protocol CountryDialCodesRepositoryType {
+    var dialCodes: [CountryDialCode] { get }
 }
 
-final class DialCodesRepository: DialCodesRepositoryType {
+final class CountryDialCodesRepository: CountryDialCodesRepositoryType {
 
-    var dialCodes: [DialCode] = []
+    var dialCodes: [CountryDialCode] = []
 
     init() {
         do {
@@ -17,12 +17,12 @@ final class DialCodesRepository: DialCodesRepositoryType {
         }
     }
 
-    private func loadDialCodes() throws -> [DialCode] {
+    private func loadDialCodes() throws -> [CountryDialCode] {
         guard let url = Bundle.main.url(forResource: "dial-codes", withExtension: "json") else {
             throw BundleError.fileNotFound
         }
         let data = try Data(contentsOf: url)
-        return try JSONDecoder().decode([DialCode].self, from: data)
+        return try JSONDecoder().decode([CountryDialCode].self, from: data)
     }
 }
 

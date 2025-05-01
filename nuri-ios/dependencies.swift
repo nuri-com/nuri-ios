@@ -18,7 +18,19 @@ func injectDependencies(into container: ContainerType) {
         )
     }
 
-    container.register { container -> DialCodesRepositoryType in
-        DialCodesRepository()
+    container.register { container -> CountryDialCodesRepositoryType in
+        CountryDialCodesRepository()
+    }
+
+    container.register { container -> SearchCountryDialCodeUseCaseType in
+        SearchCountryDialCodeUseCase(
+            countryDialCodesRepository: container.resolve()
+        )
+    }
+
+    container.register { container -> SearchCountryDialCodeViewModelType in
+        SearchCountryDialCodeViewModel(
+            searchCountryDialCodeUseCase: container.resolve()
+        )
     }
 }
