@@ -12,9 +12,9 @@ final class PhoneNumberViewModel: ObservableObject, PhoneNumberViewModelType, Ph
 
     @Published var viewState: PhoneNumberViewState = .empty
 
-    private let dialCodesRepository: DialCodesRepositoryType
+    private let dialCodesRepository: CountryDialCodesRepositoryType
 
-    init(dialCodesRepository: DialCodesRepositoryType) {
+    init(dialCodesRepository: CountryDialCodesRepositoryType) {
         self.dialCodesRepository = dialCodesRepository
 
         viewState = .init(
