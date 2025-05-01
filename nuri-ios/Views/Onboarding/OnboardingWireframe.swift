@@ -24,17 +24,18 @@ final class OnboardingWireframe: OnboardingWireframeType {
     }
 
     private func showNextScreen(after screen: OnboardingScreen) {
-        let nextScreen = nextScreen(after: screen)
-        let viewController = viewController(for: nextScreen)
-        navigationController?.pushViewController(viewController, animated: true)
+        if let nextScreen = nextScreen(after: screen) {
+            let viewController = viewController(for: nextScreen)
+            navigationController?.pushViewController(viewController, animated: true)
+        }
     }
 
-    private func nextScreen(after screen: OnboardingScreen) -> OnboardingScreen {
+    private func nextScreen(after screen: OnboardingScreen) -> OnboardingScreen? {
         switch screen {
         case .phoneNumber:
             return .verificationByCall
         case .verificationByCall:
-            fatalError()
+            return nil
         }
     }
 
@@ -43,7 +44,7 @@ final class OnboardingWireframe: OnboardingWireframeType {
         case .phoneNumber:
             return phoneNumberViewController()
         case .verificationByCall:
-            return verificationByCallViewController()
+            return verifyCallViewController()
         }
     }
 
@@ -52,16 +53,14 @@ final class OnboardingWireframe: OnboardingWireframeType {
         viewModel.delegate = self
         phoneNumberViewModel = viewModel
         let view = PhoneNumberView(viewModel: viewModel.toViewModel())
-        return UIHostingController(rootView: view)
+        return hostingController(view: view)
     }
 
-    private func verificationByCallViewController() -> UIViewController {
-//        let viewModel: PhoneNumberViewModelType = container.resolve()
-//        let view = PhoneNumberView(viewModel: viewModel.toViewModel())
-//        let viewController = UIHostingController(rootView: view)
-//        return viewController
-
-        fatalError()
+    private func verifyCallViewController() -> UIViewController {
+        let viewModel: VerifyCallViewModelType = container.resolve()
+        viewModel.delegate = self
+        let view = VerifyCallView(viewModel: viewModel.toViewModel())
+        return hostingController(view: view)
     }
 
     private func presentCountrySearch() {
@@ -71,12 +70,18 @@ final class OnboardingWireframe: OnboardingWireframeType {
         let viewController = UIHostingController(rootView: view)
         navigationController?.present(viewController, animated: true)
     }
+
+    private func hostingController<V: View>(view: V) -> UIViewController {
+        let viewController = UIHostingController(rootView: view)
+        viewController.navigationItem.backBarButtonItem = UIBarButtonItem(title: "", style: .plain, target: nil, action: nil)
+        return viewController
+    }
 }
 
 extension OnboardingWireframe: OnboardingScreenDelegate {
 
     func didFinish(screen: OnboardingScreen) {
-        showNextScreen(after: .phoneNumber)
+        showNextScreen(after: screen)
     }
 }
 
