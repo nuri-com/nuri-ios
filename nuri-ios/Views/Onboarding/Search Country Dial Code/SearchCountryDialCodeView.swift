@@ -12,8 +12,11 @@ struct SearchCountryDialCodeView: View {
     @ViewBuilder
     private func contentView(viewState: SearchCountryDialCodeViewState) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
+            HStack(spacing: 8) {
                 TextField(viewState.searchTextField.placeholder, text: $viewModel.viewState.searchTextField.text)
+                    .padding(8)
+                    .background(Color.inputBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 3))
                     .onChange(of: viewState.searchTextField.text) { _, newValue in
                         viewState.searchTextField.textChangeHandler?.action(newValue)
                     }
