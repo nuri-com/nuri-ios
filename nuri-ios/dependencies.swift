@@ -35,8 +35,10 @@ func injectDependencies(into container: ContainerType) {
     }
 
     container.register { container -> VerifyCallViewModelType in
-        VerifyCallViewModel(
-            
-        )
+        VerifyCallViewModel()
+    }
+
+    container.register { container -> SetupCardExplanationViewModelType in
+        SetupCardExplanationViewModel()
     }
 }

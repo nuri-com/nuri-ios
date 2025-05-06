@@ -55,7 +55,7 @@ struct PhoneNumberView: View {
             }
             Spacer()
             TextButton(viewState: viewState.confirmButton)
-            .buttonStyle(ProminentButtonStyle())
+                .buttonStyle(ProminentButtonStyle())
         }
         .padding(32)
         .frame(maxHeight: .infinity)
