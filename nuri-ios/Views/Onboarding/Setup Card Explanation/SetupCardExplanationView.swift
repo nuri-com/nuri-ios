@@ -26,7 +26,6 @@ struct SetupCardExplanationView: View {
                 Spacer()
                 Image(viewState.illustrationName)
                     .resizable()
-//                    .frame(width: geometry.size.width)
                 Spacer()
                 TextButton(viewState: viewState.continueButton)
                     .buttonStyle(ProminentBlackButtonStyle())
