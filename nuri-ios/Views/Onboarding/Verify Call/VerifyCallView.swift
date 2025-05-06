@@ -13,10 +13,10 @@ struct VerifyCallView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(viewState.title)
                 .font(.brandTitle1)
-                .foregroundStyle(Color.primary)
+                .foregroundStyle(Color.textPrimary)
             Text(viewState.subtitle)
                 .font(.brandBody)
-                .foregroundStyle(Color.secondary)
+                .foregroundStyle(Color.textSecondary)
             Spacer()
             Image(viewState.illustrationName)
             Spacer()
