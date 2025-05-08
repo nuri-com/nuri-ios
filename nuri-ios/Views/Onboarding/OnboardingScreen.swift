@@ -6,4 +6,5 @@ enum OnboardingScreen: Equatable {
     case phoneNumber
     case verificationByCall
     case setupCardExplanation
+    case setupCard
 }

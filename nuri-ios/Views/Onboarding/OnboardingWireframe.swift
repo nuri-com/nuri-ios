@@ -17,7 +17,7 @@ final class OnboardingWireframe: OnboardingWireframeType {
     }
 
     func initialViewController() -> UIViewController {
-        let viewController = viewController(for: .phoneNumber)
+        let viewController = viewController(for: .setupCard)
         let navigationController = UINavigationController(rootViewController: viewController)
         navigationController.navigationBar.tintColor = .textPrimary
         self.navigationController = navigationController
@@ -38,6 +38,8 @@ final class OnboardingWireframe: OnboardingWireframeType {
         case .verificationByCall:
             return .setupCardExplanation
         case .setupCardExplanation:
+            return .setupCard
+        case .setupCard:
             return nil
         }
     }
@@ -50,6 +52,8 @@ final class OnboardingWireframe: OnboardingWireframeType {
             return verifyCallViewController()
         case .setupCardExplanation:
             return setupCardExplanationViewController()
+        case .setupCard:
+            return setupCardViewController()
         }
     }
 
@@ -72,6 +76,13 @@ final class OnboardingWireframe: OnboardingWireframeType {
         let viewModel: SetupCardExplanationViewModelType = container.resolve()
         viewModel.delegate = self
         let view = SetupCardExplanationView(viewModel: viewModel.toViewModel())
+        return hostingController(view: view)
+    }
+
+    private func setupCardViewController() -> UIViewController {
+//        let viewModel: SetupCardViewModelType = container.resolve()
+//        viewModel.delegate = self
+        let view = SetupCardView()
         return hostingController(view: view)
     }
 
