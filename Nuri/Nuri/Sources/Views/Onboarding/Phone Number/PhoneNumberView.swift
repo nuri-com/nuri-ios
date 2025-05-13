@@ -28,7 +28,7 @@ struct PhoneNumberView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 16)
-            .background(Color.inputBackground)
+            .background(NuriAsset.inputBackground.swiftUIColor)
             .clipShape(RoundedRectangle(cornerRadius: 3))
             .padding(.vertical, 8)
             .onTapGesture {
@@ -46,7 +46,7 @@ struct PhoneNumberView: View {
             .font(.brandCaption)
             .padding(.horizontal, 12)
             .padding(.vertical, 16)
-            .background(Color.inputBackground)
+            .background(NuriAsset.inputBackground.swiftUIColor)
             .clipShape(RoundedRectangle(cornerRadius: 3))
             if let countryCodeHint = viewState.countryCodeHint {
                 Text(countryCodeHint)
@@ -59,6 +59,6 @@ struct PhoneNumberView: View {
         }
         .padding(32)
         .frame(maxHeight: .infinity)
-        .background(Color.background)
+        .background(NuriAsset.background.swiftUIColor)
     }
 }

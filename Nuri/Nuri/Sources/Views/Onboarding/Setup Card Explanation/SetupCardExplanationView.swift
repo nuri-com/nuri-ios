@@ -17,10 +17,10 @@ struct SetupCardExplanationView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(viewState.title)
                         .font(.brandTitle1)
-                        .foregroundStyle(Color.textPrimary)
+                        .foregroundStyle(NuriAsset.textPrimary.swiftUIColor)
                     Text(LocalizedStringKey(viewState.subtitle))
                         .font(.brandBody)
-                        .foregroundStyle(Color.textPrimary)
+                        .foregroundStyle(NuriAsset.textPrimary.swiftUIColor)
                 }
                 .padding(padding)
                 Spacer()

@@ -13,10 +13,10 @@ struct VerifyCallView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(viewState.title)
                 .font(.brandTitle1)
-                .foregroundStyle(Color.textPrimary)
+                .foregroundStyle(NuriAsset.textPrimary.swiftUIColor)
             Text(viewState.subtitle)
                 .font(.brandBody)
-                .foregroundStyle(Color.textSecondary)
+                .foregroundStyle(NuriAsset.textSecondary.swiftUIColor)
             Spacer()
             Image(viewState.illustrationName)
             Spacer()
@@ -28,12 +28,12 @@ struct VerifyCallView: View {
             }
             .foregroundStyle(Color.white)
             .padding(20)
-            .background(Color.successGreen)
+            .background(NuriAsset.successGreen.swiftUIColor)
             .clipShape(RoundedRectangle(cornerRadius: 6))
             .opacity(viewState.successMessage != nil ? 1 : 0)
         }
         .padding(32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.background)
+        .background(NuriAsset.background.swiftUIColor)
     }
 }

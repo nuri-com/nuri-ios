@@ -19,7 +19,7 @@ final class OnboardingWireframe: OnboardingWireframeType {
     func initialViewController() -> UIViewController {
         let viewController = viewController(for: .setupCard)
         let navigationController = UINavigationController(rootViewController: viewController)
-        navigationController.navigationBar.tintColor = .textPrimary
+        navigationController.navigationBar.tintColor = UIColor(NuriAsset.textPrimary.swiftUIColor)
         self.navigationController = navigationController
         return navigationController
     }

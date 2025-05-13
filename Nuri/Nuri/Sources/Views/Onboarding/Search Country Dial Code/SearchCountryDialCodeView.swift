@@ -15,7 +15,7 @@ struct SearchCountryDialCodeView: View {
             HStack(spacing: 8) {
                 TextField(viewState.searchTextField.placeholder, text: $viewModel.viewState.searchTextField.text)
                     .padding(8)
-                    .background(Color.inputBackground)
+                    .background(NuriAsset.inputBackground.swiftUIColor)
                     .clipShape(RoundedRectangle(cornerRadius: 3))
                     .onChange(of: viewState.searchTextField.text) { _, newValue in
                         viewState.searchTextField.textChangeHandler?.action(newValue)

@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct ProminentBlackButtonStyle: ButtonStyle {
+struct ProminentButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
@@ -8,8 +8,8 @@ struct ProminentBlackButtonStyle: ButtonStyle {
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 12)
             .padding(.vertical, 16)
-            .background(isEnabled ? Color.textPrimary : Color.disabledButtonBackground)
-            .foregroundStyle(isEnabled ? Color.white.opacity(configuration.isPressed ? 0.25 : 1): Color.secondary)
+            .background(isEnabled ? Color.accentColor : NuriAsset.disabledButtonBackground.swiftUIColor)
+            .foregroundStyle(isEnabled ? Color.primary.opacity(configuration.isPressed ? 0.25 : 1) : Color.secondary)
             .font(.brandBody)
             .clipShape(Capsule())
     }
