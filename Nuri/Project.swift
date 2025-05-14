@@ -17,7 +17,14 @@ let project = Project(
                 ]),
                 "UIApplicationSceneManifest": .dictionary([
                     "UIApplicationSupportsMultipleScenes": .boolean(false),
-                    "UISceneConfigurations": .dictionary([:])
+                    "UISceneConfigurations": .dictionary([
+                        "UIWindowSceneSessionRoleApplication": [
+                            .dictionary([
+                                "UISceneConfigurationName": "Default Configuration",
+                                "UISceneDelegateClassName": "$(PRODUCT_MODULE_NAME).SceneDelegate"
+                            ])
+                        ]
+                    ])
                 ]),
                 "NFCReaderUsageDescription": "Authentication with Passkey",
                 "com.apple.developer.nfc.readersession.felica.systemcodes": .array([]),
@@ -28,6 +35,9 @@ let project = Project(
                     "4A4E45545F4C5F020101",
                     "A00000090501000101",
                     "A00000090501000301"
+                ]),
+                "UILaunchScreen": .dictionary([
+                    "UIImageName": ""
                 ])
             ]),
             sources: ["Nuri/Sources/**"],
@@ -36,6 +46,9 @@ let project = Project(
                 "com.apple.developer.nfc.readersession.formats": .array([
                     "NDEF",
                     "TAG"
+                ]),
+                "com.apple.developer.associated-domains": .array([
+                    "webcredentials:nuri.com"
                 ])
             ]),
             dependencies: [

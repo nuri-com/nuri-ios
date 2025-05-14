@@ -41,4 +41,8 @@ func injectDependencies(into container: ContainerType) {
     container.register { container -> SetupCardExplanationViewModelType in
         SetupCardExplanationViewModel()
     }
+
+    container.register { container -> LoginViewModelType in
+        LoginViewModel()
+    }
 }

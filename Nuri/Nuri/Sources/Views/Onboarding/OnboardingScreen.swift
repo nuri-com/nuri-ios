@@ -3,6 +3,7 @@ protocol OnboardingScreenDelegate: AnyObject {
 }
 
 enum OnboardingScreen: Equatable {
+    case login
     case phoneNumber
     case verificationByCall
     case setupCardExplanation

@@ -17,7 +17,7 @@ final class OnboardingWireframe: OnboardingWireframeType {
     }
 
     func initialViewController() -> UIViewController {
-        let viewController = viewController(for: .setupCard)
+        let viewController = viewController(for: .login)
         let navigationController = UINavigationController(rootViewController: viewController)
         navigationController.navigationBar.tintColor = UIColor(NuriAsset.textPrimary.swiftUIColor)
         self.navigationController = navigationController
@@ -33,6 +33,8 @@ final class OnboardingWireframe: OnboardingWireframeType {
 
     private func nextScreen(after screen: OnboardingScreen) -> OnboardingScreen? {
         switch screen {
+        case .login:
+            return .phoneNumber
         case .phoneNumber:
             return .verificationByCall
         case .verificationByCall:
@@ -46,6 +48,8 @@ final class OnboardingWireframe: OnboardingWireframeType {
 
     private func viewController(for screen: OnboardingScreen) -> UIViewController {
         switch screen {
+        case .login:
+            return loginViewController()
         case .phoneNumber:
             return phoneNumberViewController()
         case .verificationByCall:
@@ -55,6 +59,17 @@ final class OnboardingWireframe: OnboardingWireframeType {
         case .setupCard:
             return setupCardViewController()
         }
+    }
+
+    private func passkeyLoginViewController() -> UIViewController {
+        return PasskeyViewController()
+    }
+
+    private func loginViewController() -> UIViewController {
+        let viewModel: LoginViewModelType = container.resolve()
+        viewModel.delegate = self
+        let view = LoginView(viewModel: viewModel.toViewModel())
+        return hostingController(view: view)
     }
 
     private func phoneNumberViewController() -> UIViewController {
@@ -124,5 +139,12 @@ extension OnboardingWireframe: SearchCountryDialCodeViewModelDelegate {
     func didSelectCountry(countryCode: String) {
         navigationController?.presentedViewController?.dismiss(animated: true)
         phoneNumberViewModel?.updateSelectedCountry(countryCode: countryCode)
+    }
+}
+
+extension OnboardingWireframe: LoginViewModelDelegate {
+
+    func presentationAnchor() -> UIWindow {
+        UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first!.windows.first!
     }
 }
