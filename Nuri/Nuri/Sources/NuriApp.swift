@@ -10,7 +10,7 @@ struct NuriApp: App {
             if isUserLoggedIn {
                 EmptyView()
             } else {
-                EmptyView()
+                WelcomeView()
             }
         }
     }
