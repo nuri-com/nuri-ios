@@ -25,9 +25,7 @@ let project = Project(
                     "A00000090501000101",
                     "A00000090501000301"
                 ]),
-                "UILaunchScreen": .dictionary([
-                    "UIImageName": ""
-                ])
+                "UILaunchStoryboardName": "LaunchScreen"
             ]),
             sources: ["Nuri/Sources/**"],
             resources: ["Nuri/Resources/**"],
