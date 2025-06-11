@@ -2,7 +2,6 @@ import UIKit
 
 fileprivate let container: ContainerType = Container()
 
-@main
 final class AppDelegate: NSObject, UIApplicationDelegate {
 
     func applicationDidFinishLaunching(_ application: UIApplication) {

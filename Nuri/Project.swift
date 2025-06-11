@@ -15,17 +15,6 @@ let project = Project(
                     "Inter.ttf",
                     "Inter-Italic.ttf"
                 ]),
-                "UIApplicationSceneManifest": .dictionary([
-                    "UIApplicationSupportsMultipleScenes": .boolean(false),
-                    "UISceneConfigurations": .dictionary([
-                        "UIWindowSceneSessionRoleApplication": [
-                            .dictionary([
-                                "UISceneConfigurationName": "Default Configuration",
-                                "UISceneDelegateClassName": "$(PRODUCT_MODULE_NAME).SceneDelegate"
-                            ])
-                        ]
-                    ])
-                ]),
                 "NFCReaderUsageDescription": "Authentication with Passkey",
                 "com.apple.developer.nfc.readersession.felica.systemcodes": .array([]),
                 "com.apple.developer.nfc.readersession.iso7816.select-identifiers": .array([
