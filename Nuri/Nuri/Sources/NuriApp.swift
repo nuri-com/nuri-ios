@@ -8,7 +8,7 @@ struct NuriApp: App {
     var body: some Scene {
         WindowGroup {
             if isUserLoggedIn {
-                EmptyView()
+                MainTabBar()
             } else {
                 WelcomeView()
             }
