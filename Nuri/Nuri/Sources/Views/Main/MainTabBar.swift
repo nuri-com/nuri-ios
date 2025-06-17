@@ -5,7 +5,9 @@ struct MainTabBar: View {
     var body: some View {
         TabView {
             Tab("Bitcoin", image: "bitcoin-icon") {
-                BitcoinView()
+                NavigationStack {
+                    BitcoinView()
+                }
             }
             Tab("Card", image: "card-icon") {
                 EmptyView()

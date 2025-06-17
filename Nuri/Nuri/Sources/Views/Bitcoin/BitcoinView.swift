@@ -2,6 +2,8 @@ import SwiftUI
 
 struct BitcoinView: View {
 
+    @State var isSendViewPresented = false
+
     var body: some View {
         VStack {
             HStack {
@@ -27,6 +29,7 @@ struct BitcoinView: View {
                 }
                 .buttonStyle(ProminentBlackButtonStyle())
                 Button("Send") {
+                    isSendViewPresented = true
                 }
                 .buttonStyle(ProminentButtonStyle())
             }
@@ -35,6 +38,11 @@ struct BitcoinView: View {
         }
         .padding(32)
         .background(NuriAsset.background.swiftUIColor)
+        .sheet(isPresented: $isSendViewPresented) {
+            NavigationStack {
+                SendView(isPresented: $isSendViewPresented)
+            }
+        }
     }
 }
 
