@@ -25,13 +25,13 @@ let project = Project(
                     "A00000090501000101",
                     "A00000090501000301"
                 ]),
-                "UILaunchStoryboardName": "LaunchScreen"
+                "UILaunchStoryboardName": "LaunchScreen",
+                "ITSAppUsesNonExemptEncryption": .boolean(false)
             ]),
             sources: ["Nuri/Sources/**"],
             resources: ["Nuri/Resources/**"],
             entitlements: .dictionary([
                 "com.apple.developer.nfc.readersession.formats": .array([
-                    "NDEF",
                     "TAG"
                 ]),
                 "com.apple.developer.associated-domains": .array([
