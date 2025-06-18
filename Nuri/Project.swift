@@ -26,7 +26,8 @@ let project = Project(
                     "A00000090501000301"
                 ]),
                 "UILaunchStoryboardName": "LaunchScreen",
-                "ITSAppUsesNonExemptEncryption": .boolean(false)
+                "ITSAppUsesNonExemptEncryption": .boolean(false),
+                "NSCameraUsageDescription": "Scan QR codes for bitcoin addresses"
             ]),
             sources: ["Nuri/Sources/**"],
             resources: ["Nuri/Resources/**"],
@@ -40,6 +41,7 @@ let project = Project(
             ]),
             dependencies: [
                 .project(target: "Authentication", path: "../Authentication"),
+                .external(name: "CodeScanner"),
             ],
             settings: .settings(
                 base: .init()
