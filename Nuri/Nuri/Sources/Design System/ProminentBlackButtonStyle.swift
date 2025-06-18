@@ -11,6 +11,7 @@ struct ProminentBlackButtonStyle: ButtonStyle {
             .background(isEnabled ? NuriAsset.textPrimary.swiftUIColor : NuriAsset.disabledButtonBackground.swiftUIColor)
             .foregroundStyle(isEnabled ? Color.white.opacity(configuration.isPressed ? 0.25 : 1): Color.secondary)
             .font(.brandBody)
+            .fontWeight(.semibold)
             .clipShape(Capsule())
     }
 }

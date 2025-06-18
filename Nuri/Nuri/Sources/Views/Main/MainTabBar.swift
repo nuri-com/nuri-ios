@@ -10,7 +10,7 @@ struct MainTabBar: View {
                 }
             }
             Tab("Card", image: "card-icon") {
-                EmptyView()
+                CardView()
             }
             Tab("Security", image: "security-icon") {
                 EmptyView()
