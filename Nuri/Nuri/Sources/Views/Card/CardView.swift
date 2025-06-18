@@ -11,7 +11,6 @@ struct CardView: View {
             Spacer()
             Image("card")
                 .shadow(radius: 20)
-//            Spacer()
             Text("Get Your Bitcoin Card.")
                 .font(.title2)
                 .fontWeight(.bold)
@@ -27,15 +26,18 @@ struct CardView: View {
                 Spacer()
             }
             Spacer()
-            Button("Buy with Apple Pay") {}
-                .buttonStyle(ProminentBlackButtonStyle())
+            NavigationLink("Buy with Apple Pay") {
+                CardConfirmAddressView()
+            }
+            .buttonStyle(ProminentBlackButtonStyle())
         }
         .padding(32)
         .background(NuriAsset.background.swiftUIColor)
-
     }
 }
 
 #Preview {
-    CardView()
+    NavigationStack {
+        CardView()
+    }
 }
