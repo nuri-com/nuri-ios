@@ -7,7 +7,7 @@ struct SendView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            CodeScannerView(codeTypes: [.qr], simulatedData: "Cim Topal\ncimtopal@gmail.com", completion: handleScan)
+            CodeScannerView(codeTypes: [.qr], completion: handleScan)
             VStack(spacing: 0) {
                 Rectangle()
                     .fill(Color.black.opacity(0.4))
@@ -24,6 +24,22 @@ struct SendView: View {
                     .fill(Color.black.opacity(0.4))
             }
             .ignoresSafeArea()
+            VStack {
+                Text("Scan a bitcoin or lightning QR code")
+                    .foregroundStyle(Color.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 100)
+                Spacer()
+                Spacer()
+                Spacer()
+                Spacer()
+                Spacer()
+                NavigationLink("Paste from Clipboard") {
+                    SetAmountView()
+                }
+                .buttonStyle(ProminentButtonStyle())
+            }
+            .padding()
             ZStack {
                 Text("Send Bitcoin")
                     .frame(maxWidth: .infinity, alignment: .center)
