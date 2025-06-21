@@ -42,11 +42,11 @@ let project = Project(
             dependencies: [
                 .project(target: "Authentication", path: "../Authentication"),
                 .external(name: "CodeScanner"),
-            ],
-            settings: .settings(
-                base: .init()
-                    .automaticCodeSigning(devTeam: "7NF2K7X2U6")
-            )
+            ]
+            // settings: .settings(
+            //     base: .init()
+            //         .automaticCodeSigning(devTeam: "7NF2K7X2U6")
+            // )
         )
     ]
 )
