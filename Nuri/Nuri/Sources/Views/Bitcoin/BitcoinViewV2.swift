@@ -99,11 +99,11 @@ private struct TwoActionButtons: View {
     let onSendTapped: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            SecondaryHalfButton(title: "Receive", icon: "bitcoin_hand", action: {})
-            PrimaryHalfButton(title: "Send", icon: "qr_scan", action: onSendTapped)
+        HStack(spacing: 16) {
+            PrimaryHalfButton(title: "Receive", icon: "bitcoin_hand", action: {})
+            SecondaryHalfButton(title: "Send", icon: "qr_scan", action: onSendTapped)
         }
-        .padding(.top, 12)
+        .padding(.vertical, 24)
     }
 }
 
@@ -117,12 +117,13 @@ private struct SecondaryHalfButton: View {
             HStack(spacing: 8) {
                 Image(icon)
                     .resizable()
-                    .frame(width: 21, height: 21)
+                    .frame(width: 32, height: 32)
                 Text(title)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 16, weight: .medium))
             }
             .foregroundColor(Color(hex: "#2C232E"))
-            .frame(width: 131.5, height: 43)
+            .frame(maxWidth: .infinity)
+            .frame(height: 48)
             .overlay(
                 RoundedRectangle(cornerRadius: 32)
                     .stroke(Color(hex: "#2C232E"), lineWidth: 1.4)
@@ -141,12 +142,13 @@ private struct PrimaryHalfButton: View {
             HStack(spacing: 8) {
                 Image(icon)
                     .resizable()
-                    .frame(width: 23, height: 23)
+                    .frame(width: 32, height: 32)
                 Text(title)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 16, weight: .medium))
             }
             .foregroundColor(Color(hex: "#2C232E"))
-            .frame(width: 131.5, height: 43)
+            .frame(maxWidth: .infinity)
+            .frame(height: 48)
             .background(Color(hex: "#BEAAFF"))
             .cornerRadius(32)
         }

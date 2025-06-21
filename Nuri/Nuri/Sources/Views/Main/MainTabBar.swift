@@ -6,7 +6,7 @@ struct MainTabBar: View {
     enum Tab {
         case bitcoin
         case card
-        case security
+        case passkey
     }
 
     var body: some View {
@@ -18,7 +18,7 @@ struct MainTabBar: View {
                     NavigationStack { BitcoinViewV2() }
                 case .card:
                     CardView()
-                case .security:
+                case .passkey:
                     EmptyView()
                 }
             }
@@ -41,10 +41,10 @@ struct MainTabBar: View {
                 )
                 Spacer()
                 TabBarItem(
-                    icon: "vector-icon-key",
-                    title: "Security",
-                    isSelected: selectedTab == .security,
-                    action: { selectedTab = .security }
+                    icon: "passkey",
+                    title: "Passkey",
+                    isSelected: selectedTab == .passkey,
+                    action: { selectedTab = .passkey }
                 )
             }
             .padding(.horizontal, 40)
@@ -65,14 +65,15 @@ private struct TabBarItem: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 4) {
+            VStack(spacing: 3) {
                 Image(icon)
                     .resizable()
                     .renderingMode(.template)
-                    .frame(width: 24, height: 24)
+                    .scaledToFit()
+                    .frame(height: 32)
 
                 Text(title)
-                    .font(.system(size: 12))
+                    .font(.system(size: 14, weight: .medium))
             }
             .foregroundColor(Color(hex: "#2C232E"))
             .opacity(isSelected ? 1.0 : 0.5)
