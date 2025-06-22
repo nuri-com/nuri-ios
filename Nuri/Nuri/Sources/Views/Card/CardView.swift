@@ -2,33 +2,34 @@ import SwiftUI
 
 struct CardView: View {
     var body: some View {
-        ScrollView {
-            VStack(spacing: 30) {
+        ZStack {
+            Color("Background").edgesIgnoringSafeArea(.all)
+            VStack(spacing: 0) {
                 topNavigationBar()
-                
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 30)
+
                 Image("nuri-card-new")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 280)
-                    .shadow(color: .black.opacity(0.25), radius: 35, x: 6, y: 6)
+                    .frame(width: 256)
+                    .padding(.bottom, 30)
 
                 Text("Nuri Card for Apple Pay")
-                    .font(Font.custom("SF Pro", size: 28))
+                    .font(.brandTitle1)
                     .foregroundColor(Color("PrimaryNuriBlack"))
                     .multilineTextAlignment(.center)
-                    .frame(width: 284)
+                    .padding(.bottom, 30)
 
                 featureList()
+                    .padding(.bottom, 30)
 
                 actionButton()
                 
-                Spacer() 
+                Spacer()
             }
-            .padding(.horizontal, 24)
             .padding(.top, 44)
-            .padding(.bottom, 34)
         }
-        .background(Color(hex: "#F0F0F0").edgesIgnoringSafeArea(.all))
         .edgesIgnoringSafeArea(.bottom)
     }
 
@@ -44,10 +45,10 @@ struct CardView: View {
                 // Get Card action
             }) {
                 Text("+ Get Card")
-                    .font(Font.custom("Inter-Medium", size: 14))
+                    .font(.custom("Inter", size: 14).weight(.medium))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
                     .background(Color("PrimaryNuriBlack"))
                     .cornerRadius(64)
             }
@@ -60,20 +61,21 @@ struct CardView: View {
             ListItemView(icon: "bitcoin-icon-v2", title: "Top-Up with Bitcoin", subtitle: "Send BTC to add money.")
             ListItemView(icon: "wallet", title: "Add to Apple Wallet", subtitle: "Use Card with Tap-To-Pay")
         }
+        .padding(.horizontal, 40)
     }
 
     private func actionButton() -> some View {
         Button(action: {
             // Get Card action
         }) {
-            HStack(spacing: 16) {
+            HStack(spacing: 8) {
                 Image("card_contactless")
                     .resizable()
                     .renderingMode(.template)
                     .foregroundColor(Color("PrimaryNuriBlack"))
                     .frame(width: 24, height: 24)
                 Text("Get Card")
-                    .font(Font.custom("Inter-Medium", size: 16))
+                    .font(.brandBody)
             }
             .foregroundColor(Color("PrimaryNuriBlack"))
             .frame(maxWidth: .infinity)
@@ -81,10 +83,11 @@ struct CardView: View {
             .background(Color("PrimaryNuriLilac"))
             .cornerRadius(100)
         }
+        .padding(.horizontal, 24)
     }
 }
 
-struct ListItemView: View {
+private struct ListItemView: View {
     let icon: String
     let title: String
     let subtitle: String
@@ -95,18 +98,24 @@ struct ListItemView: View {
                 .resizable()
                 .frame(width: 40, height: 40)
             
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(Font.custom("SF Pro", size: 17))
+                    .font(.custom("Inter", size: 16).weight(.regular))
                     .foregroundColor(Color("PrimaryNuriBlack"))
                 Text(subtitle)
-                    .font(Font.custom("SF Pro", size: 17))
+                    .font(.custom("Inter", size: 16).weight(.regular))
                     .foregroundColor(Color(hex: "#02542d"))
             }
         }
     }
 }
 
-#Preview {
-    CardView()
+#if DEBUG
+struct CardView_Previews: PreviewProvider {
+    static var previews: some View {
+        CardView()
+    }
 }
+#endif
+
+// This extension can be moved to a separate file
