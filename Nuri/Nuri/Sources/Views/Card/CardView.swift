@@ -9,10 +9,11 @@ struct CardView: View {
                     .padding(.horizontal, 24)
                     .padding(.bottom, 30)
 
-                Image("nuri-card-new")
+                Image("nuri-card-v6")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 256)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 24)
                     .padding(.bottom, 30)
 
                 Text("Nuri Card for Apple Pay")
