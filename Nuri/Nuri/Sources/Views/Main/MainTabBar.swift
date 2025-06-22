@@ -19,7 +19,7 @@ struct MainTabBar: View {
                 case .card:
                     CardView()
                 case .passkey:
-                    EmptyView()
+                    NavigationStack { SecurityView() }
                 }
             }
             Spacer(minLength: 0)
