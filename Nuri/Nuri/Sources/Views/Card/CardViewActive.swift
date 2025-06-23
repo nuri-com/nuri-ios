@@ -159,6 +159,13 @@ private struct CardDetailsView: View {
                         Text("5354 5655 2079 6981")
                             .font(.custom("Inter", size: 14).weight(.semibold))
                             .foregroundColor(.white)
+                        Button(action: {
+                            UIPasteboard.general.string = "5354 5655 2079 6981"
+                        }) {
+                            Image("copy-icon")
+                                .resizable()
+                                .frame(width: 14, height: 14)
+                        }
                     }
                     Spacer()
                     Image(systemName: "qrcode")
@@ -175,6 +182,13 @@ private struct CardDetailsView: View {
                         Text("03/30")
                             .font(.custom("Inter", size: 14).weight(.semibold))
                             .foregroundColor(.white)
+                        Button(action: {
+                            UIPasteboard.general.string = "03/30"
+                        }) {
+                            Image("copy-icon")
+                                .resizable()
+                                .frame(width: 14, height: 14)
+                        }
                     }
                     VStack(alignment: .leading, spacing: 2) {
                         Text("CVV")
