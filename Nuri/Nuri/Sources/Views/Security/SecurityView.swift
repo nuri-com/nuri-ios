@@ -20,7 +20,7 @@ struct SecurityView: View {
                             .foregroundColor(Color("PrimaryNuriBlack"))
                             .multilineTextAlignment(.center)
 
-                        VStack(spacing: 24) {
+                        VStack(spacing: 12) {
                             SecurityRow(
                                 icon: "passkey-new",
                                 title: "Passkey",
@@ -142,7 +142,7 @@ private struct SecurityRow: View {
 
             trailing
         }
-        .padding(.vertical, 16)
+        .padding(.vertical, 12)
         .padding(.horizontal, 24)
     }
 }
