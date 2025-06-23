@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct CardViewActive: View {
+    @State private var isTransactionsPresented = false
+
     var body: some View {
         ZStack {
             Color("Background").edgesIgnoringSafeArea(.all)
@@ -51,14 +53,13 @@ struct CardViewActive: View {
 
                 Spacer()
 
-                // chevron to transactions
+                // Link to transactions (matches BitcoinViewV2)
                 Button(action: {
-                    // navigate to transactions
+                    isTransactionsPresented = true
                 }) {
-                    Image(systemName: "chevron.up")
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundColor(Color("PrimaryNuriBlack"))
-                        .padding()
+                    Image("link-icon-to-transactions")
+                        .resizable()
+                        .frame(width: 24, height: 13)
                 }
                 .padding(.bottom, 34)
             }
@@ -66,6 +67,9 @@ struct CardViewActive: View {
         .edgesIgnoringSafeArea(.bottom)
         .navigationBarBackButtonHidden(true)
         .navigationBarHidden(true)
+        .fullScreenCover(isPresented: $isTransactionsPresented) {
+            TransactionsView()
+        }
     }
 
     private func topNavigationBar() -> some View {
