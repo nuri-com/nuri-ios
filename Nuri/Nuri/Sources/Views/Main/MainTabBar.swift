@@ -30,7 +30,6 @@ struct MainTabBar: View {
                     icon: "bitcoin-icon",
                     title: "Bitcoin",
                     isSelected: selectedTab == .bitcoin,
-                    isBitcoin: true,
                     action: { selectedTab = .bitcoin }
                 )
                 Spacer()
@@ -62,16 +61,7 @@ private struct TabBarItem: View {
     let icon: String
     let title: String
     let isSelected: Bool
-    let isBitcoin: Bool
     let action: () -> Void
-
-    init(icon: String, title: String, isSelected: Bool, isBitcoin: Bool = false, action: @escaping () -> Void) {
-        self.icon = icon
-        self.title = title
-        self.isSelected = isSelected
-        self.isBitcoin = isBitcoin
-        self.action = action
-    }
 
     var body: some View {
         Button(action: action) {
@@ -80,7 +70,7 @@ private struct TabBarItem: View {
                     .resizable()
                     .renderingMode(.template)
                     .scaledToFit()
-                    .frame(height: isBitcoin ? 40 : 32)
+                    .frame(height: 32)
 
                 Text(title)
                     .font(.system(size: 14, weight: .medium))
