@@ -9,7 +9,7 @@ struct TransactionsView: View {
         .init(type: .card,    title: "Card Spend",      btc: nil,       fiat:  -10.53, date: "Nov 27"),
         .init(type: .receive, title: "Card Top-Up",     btc: nil,       fiat:   100,   date: "Nov 27"),
         .init(type: .send,    title: "Send Bitcoin",    btc: -0.001,   fiat:  -100,   date: "Nov 27"),
-        .init(type: .receive, title: "Bought Bitcoin",  btc: 133700,    fiat:   133,   date: "Nov 27")
+        .init(type: .receive, title: "Bought Bitcoin",  btc: 0.001337,  fiat:   133,   date: "Nov 27")
     ]
 
     var body: some View {
@@ -119,8 +119,11 @@ private struct TransactionRow: View {
                 .foregroundColor(Color("PrimaryNuriBlack").opacity(0.3))
                 .font(.custom("Inter", size: 16).weight(.medium))
 
-            let suffixValue = Int(absValue * 1_000_000) // six decimals to integer e.g. 0.001000 -> 1000
-            let suffix = Text("\(suffixValue) BTC")
+            // Convert to satoshis (8-decimals) and zero-pad to 6 digits so that
+            // the combined string always shows the full 8-decimal BTC value.
+            let suffixValue = Int(absValue * 100_000_000)
+            let suffixString = String(format: "%06d", suffixValue) // e.g. 42 -> "000042"
+            let suffix = Text("\(suffixString) BTC")
                 .foregroundColor(color)
                 .font(.custom("Inter", size: 16).weight(.medium))
 
