@@ -29,21 +29,21 @@ struct CardViewActive: View {
                 }
                 .padding(.bottom, 30)
 
-                Image("card-flattend")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 256)
-                    .padding(.bottom, 30)
-
                 if showCardDetails {
                     CardDetailsView()
-                        .transition(.opacity.combined(with: .move(edge: .top)))
+                        .transition(.opacity)
+                        .padding(.bottom, 30)
+                } else {
+                    Image("card-flattend")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 256)
                         .padding(.bottom, 30)
                 }
 
                 // Action icons
                 HStack(spacing: 32) {
-                    SmallIconButton(icon: "eye_hidden", title: "Details") {
+                    SmallIconButton(icon: showCardDetails ? "eye_hidden" : "eye_hidden", title: "Details") {
                         withAnimation(.easeInOut) {
                             showCardDetails.toggle()
                         }
@@ -143,42 +143,57 @@ private struct SmallIconButton: View {
 
 private struct CardDetailsView: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Card Details")
-                .font(.custom("Inter", size: 16).weight(.medium))
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Card Number")
-                        .font(.custom("Inter", size: 14))
-                        .foregroundColor(Color(hex: "#6D6D86"))
+        ZStack {
+            // Card background dark
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(hex: "#2C232E"))
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Cim Topal")
+                            .font(.custom("Inter", size: 16).weight(.medium))
+                            .foregroundColor(.white)
+                        Text("Card number")
+                            .font(.custom("Inter", size: 12))
+                            .foregroundColor(.white.opacity(0.7))
+                        Text("5354 5655 2079 6981")
+                            .font(.custom("Inter", size: 14).weight(.semibold))
+                            .foregroundColor(.white)
+                    }
                     Spacer()
-                    Text("4321 5678 9012 3456")
-                        .font(.custom("Inter", size: 16).weight(.semibold))
+                    Image(systemName: "qrcode")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 48, height: 48)
+                        .foregroundColor(.white)
                 }
-                HStack {
-                    Text("Expiry")
-                        .font(.custom("Inter", size: 14))
-                        .foregroundColor(Color(hex: "#6D6D86"))
+                HStack(spacing: 32) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Expiry date")
+                            .font(.custom("Inter", size: 12))
+                            .foregroundColor(.white.opacity(0.7))
+                        Text("03/30")
+                            .font(.custom("Inter", size: 14).weight(.semibold))
+                            .foregroundColor(.white)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("CVV")
+                            .font(.custom("Inter", size: 12))
+                            .foregroundColor(.white.opacity(0.7))
+                        Text("041")
+                            .font(.custom("Inter", size: 14).weight(.semibold))
+                            .foregroundColor(.white)
+                    }
                     Spacer()
-                    Text("12/28")
-                        .font(.custom("Inter", size: 16).weight(.semibold))
-                }
-                HStack {
-                    Text("CVV")
-                        .font(.custom("Inter", size: 14))
-                        .foregroundColor(Color(hex: "#6D6D86"))
-                    Spacer()
-                    Text("123")
-                        .font(.custom("Inter", size: 16).weight(.semibold))
+                    Image("visa-logo") // placeholder, ensure asset exists
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 36, height: 12)
                 }
             }
+            .padding(20)
         }
-        .padding(20)
-        .frame(maxWidth: .infinity)
-        .background(Color.white)
-        .cornerRadius(16)
-        .shadow(radius: 8)
-        .padding(.horizontal, 24)
+        .frame(width: 256, height: 156)
     }
 }
 
