@@ -17,7 +17,9 @@ struct MainTabBar: View {
                 case .bitcoin:
                     NavigationStack { BitcoinViewV2() }
                 case .card:
-                    CardView()
+                    NavigationStack {
+                        CardView()
+                    }
                 case .passkey:
                     NavigationStack { SecurityView() }
                 }

@@ -41,9 +41,7 @@ struct CardView: View {
 
             Spacer()
 
-            Button(action: {
-                // Get Card action
-            }) {
+            NavigationLink(destination: CardViewActive()) {
                 Text("+ Get Card")
                     .font(.custom("Inter", size: 14).weight(.medium))
                     .foregroundColor(.white)
@@ -65,9 +63,7 @@ struct CardView: View {
     }
 
     private func actionButton() -> some View {
-        Button(action: {
-            // Get Card action
-        }) {
+        NavigationLink(destination: CardViewActive()) {
             HStack(spacing: 8) {
                 Image("card_contactless")
                     .resizable()
