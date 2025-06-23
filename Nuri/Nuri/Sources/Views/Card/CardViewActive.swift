@@ -48,9 +48,10 @@ struct CardViewActive: View {
                     .cornerRadius(100)
                 }
                 .padding(.horizontal, 24)
-                .padding(.bottom, 16)
 
-                // chevron to transactions (reuse SendView style maybe)
+                Spacer()
+
+                // chevron to transactions
                 Button(action: {
                     // navigate to transactions
                 }) {
@@ -59,8 +60,7 @@ struct CardViewActive: View {
                         .foregroundColor(Color("PrimaryNuriBlack"))
                         .padding()
                 }
-
-                Spacer()
+                .padding(.bottom, 34)
             }
         }
         .edgesIgnoringSafeArea(.bottom)
