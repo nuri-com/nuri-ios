@@ -102,7 +102,7 @@ struct SecurityView: View {
                     .resizable()
                     .renderingMode(.template)
                     .foregroundColor(Color("PrimaryNuriBlack"))
-                    .frame(width: 32, height: 26)
+                    .frame(width: 32, height: 32)
                 Text("Add a Passkey")
                     .font(.brandBody)
                     .foregroundColor(Color("PrimaryNuriBlack"))
