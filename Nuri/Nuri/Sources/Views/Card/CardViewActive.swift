@@ -2,6 +2,7 @@ import SwiftUI
 
 struct CardViewActive: View {
     @State private var isTransactionsPresented = false
+    @State private var showCardDetails = false
 
     var body: some View {
         ZStack {
@@ -34,10 +35,18 @@ struct CardViewActive: View {
                     .frame(width: 256)
                     .padding(.bottom, 30)
 
+                if showCardDetails {
+                    CardDetailsView()
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                        .padding(.bottom, 30)
+                }
+
                 // Action icons
                 HStack(spacing: 32) {
                     SmallIconButton(icon: "eye_hidden", title: "Details") {
-                        // details
+                        withAnimation(.easeInOut) {
+                            showCardDetails.toggle()
+                        }
                     }
                     SmallIconButton(icon: "lock_open", title: "Freeze") {
                         // freeze card
@@ -129,6 +138,47 @@ private struct SmallIconButton: View {
                     .foregroundColor(Color("PrimaryNuriBlack"))
             }
         }
+    }
+}
+
+private struct CardDetailsView: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Card Details")
+                .font(.custom("Inter", size: 16).weight(.medium))
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Card Number")
+                        .font(.custom("Inter", size: 14))
+                        .foregroundColor(Color(hex: "#6D6D86"))
+                    Spacer()
+                    Text("4321 5678 9012 3456")
+                        .font(.custom("Inter", size: 16).weight(.semibold))
+                }
+                HStack {
+                    Text("Expiry")
+                        .font(.custom("Inter", size: 14))
+                        .foregroundColor(Color(hex: "#6D6D86"))
+                    Spacer()
+                    Text("12/28")
+                        .font(.custom("Inter", size: 16).weight(.semibold))
+                }
+                HStack {
+                    Text("CVV")
+                        .font(.custom("Inter", size: 14))
+                        .foregroundColor(Color(hex: "#6D6D86"))
+                    Spacer()
+                    Text("123")
+                        .font(.custom("Inter", size: 16).weight(.semibold))
+                }
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity)
+        .background(Color.white)
+        .cornerRadius(16)
+        .shadow(radius: 8)
+        .padding(.horizontal, 24)
     }
 }
 
