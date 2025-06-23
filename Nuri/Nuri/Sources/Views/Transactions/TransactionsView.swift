@@ -5,11 +5,11 @@ struct TransactionsView: View {
 
     // MARK: - Sample Data (Matches Figma "transactions-v3" frame)
     private let transactions: [Transaction] = [
-        .init(type: .send,    title: "Send Bitcoin",    btc: -0.053,    fiat: -1_000, date: "Nov 27"),
-        .init(type: .card,    title: "Card Spend",      btc: nil,       fiat:  -10.53, date: "Nov 27"),
-        .init(type: .receive, title: "Card Top-Up",     btc: nil,       fiat:   100,   date: "Nov 27"),
-        .init(type: .send,    title: "Send Bitcoin",    btc: -0.001,   fiat:  -100,   date: "Nov 27"),
-        .init(type: .receive, title: "Bought Bitcoin",  btc: 0.001337,  fiat:   133,   date: "Nov 27")
+        .init(iconName: "list-item-icon-paperplane_send", title: "Send Bitcoin",    btc: -0.053,    fiat: -1_000, date: "Nov 27"),
+        .init(iconName: "vector-icon-card",             title: "Card Spend",      btc: nil,       fiat:  -10.53, date: "Nov 27"),
+        .init(iconName: "money_topup",                   title: "Card Top-Up",     btc: nil,       fiat:   100,   date: "Nov 27"),
+        .init(iconName: "list-item-icon-paperplane_send", title: "Send Bitcoin",    btc: -0.001,   fiat:  -100,   date: "Nov 27"),
+        .init(iconName: "bitcoin_hand",                  title: "Bought Bitcoin",  btc: 0.001337,  fiat:   133,   date: "Nov 27")
     ]
 
     var body: some View {
@@ -76,7 +76,7 @@ private struct TransactionRow: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 7) {
-            Image(tx.type.iconName)
+            Image(tx.iconName)
                 .resizable()
                 .frame(width: 32, height: 32)
 
@@ -156,18 +156,8 @@ private struct TransactionRow: View {
 
 // MARK: - Model
 private struct Transaction: Identifiable {
-    enum TxType { case send, receive, card
-        var iconName: String {
-            switch self {
-            case .send:    return "tx-out-icon"
-            case .receive: return "tx-in-icon"
-            case .card:    return "vector-icon-card"
-            }
-        }
-    }
-
     let id = UUID()
-    let type: TxType
+    let iconName: String
     let title: String
     let btc: Double?
     let fiat: Double?
