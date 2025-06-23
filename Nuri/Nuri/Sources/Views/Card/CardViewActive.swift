@@ -64,6 +64,8 @@ struct CardViewActive: View {
             }
         }
         .edgesIgnoringSafeArea(.bottom)
+        .navigationBarBackButtonHidden(true)
+        .navigationBarHidden(true)
     }
 
     private func topNavigationBar() -> some View {
@@ -75,9 +77,9 @@ struct CardViewActive: View {
             Spacer()
 
             Button(action: {
-                // Get Card action (hidden in active state?)
+                // Add money action
             }) {
-                Text("Manage")
+                Text("+ Add Money")
                     .font(.custom("Inter", size: 14).weight(.medium))
                     .foregroundColor(.white)
                     .padding(.horizontal, 12)
