@@ -58,7 +58,7 @@ struct CardView: View {
     private func featureList() -> some View {
         VStack(alignment: .leading, spacing: 20) {
             ListItemView(icon: "card_contactless", title: "Free Virtual Visa Card", subtitle: "100% free. No monthly fees.")
-            ListItemView(icon: "bitcoin-icon-v2", title: "Top-Up with Bitcoin", subtitle: "Send BTC to add money.")
+            ListItemView(icon: "bitcoin-recurring", title: "Top-Up with Bitcoin", subtitle: "Send BTC to add money.")
             ListItemView(icon: "wallet", title: "Add to Apple Wallet", subtitle: "Use Card with Tap-To-Pay")
         }
         .padding(.horizontal, 40)
