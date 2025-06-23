@@ -149,31 +149,31 @@ private struct CardDetailsView: View {
                 .fill(Color(hex: "#2C232E"))
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        // Cardholder name
                         Text("Cim Topal")
-                            .font(.custom("Inter", size: 16).weight(.medium))
+                            .font(.custom("Inter", size: 14).weight(.semibold))
                             .foregroundColor(.white)
+
+                        // Label
                         Text("Card number")
-                            .font(.custom("Inter", size: 12))
+                            .font(.custom("Inter", size: 14))
                             .foregroundColor(.white.opacity(0.7))
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: 4) {
-                                Text("Card number")
-                                    .font(.custom("Inter", size: 12))
-                                    .foregroundColor(.white.opacity(0.7))
-                            }
-                            HStack(spacing: 4) {
-                                Text("5354 5655 2079 6981")
-                                    .font(.custom("Inter", size: 14).weight(.semibold))
-                                    .foregroundColor(.white)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                Button(action: {
-                                    UIPasteboard.general.string = "5354 5655 2079 6981"
-                                }) {
-                                    Image("copy-icon")
-                                        .resizable()
-                                        .frame(width: 14, height: 14)
-                                }
+
+                        // Number + copy
+                        HStack(spacing: 4) {
+                            Text("5354 5655 2079 6981")
+                                .font(.custom("Inter", size: 14).weight(.semibold))
+                                .foregroundColor(.white)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.5)
+                                .layoutPriority(1)
+                            Button(action: {
+                                UIPasteboard.general.string = "5354 5655 2079 6981"
+                            }) {
+                                Image("copy-icon")
+                                    .resizable()
+                                    .frame(width: 14, height: 14)
                             }
                         }
                     }
@@ -182,11 +182,12 @@ private struct CardDetailsView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 32, height: 32)
+                        .foregroundColor(.white)
                 }
                 HStack(spacing: 32) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Expiry date")
-                            .font(.custom("Inter", size: 12))
+                            .font(.custom("Inter", size: 14))
                             .foregroundColor(.white.opacity(0.7))
                         HStack(spacing: 4) {
                             Text("03/30")
@@ -203,7 +204,7 @@ private struct CardDetailsView: View {
                     }
                     VStack(alignment: .leading, spacing: 2) {
                         Text("CVV")
-                            .font(.custom("Inter", size: 12))
+                            .font(.custom("Inter", size: 14))
                             .foregroundColor(.white.opacity(0.7))
                         HStack(spacing: 4) {
                             Text("041")
