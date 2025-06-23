@@ -223,6 +223,7 @@ private struct CardMini: View {
         .background(Color(hex: "#2C232E"))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .aspectRatio(1.6, contentMode: .fit)
+        .frame(minHeight: 196)
     }
 }
 
