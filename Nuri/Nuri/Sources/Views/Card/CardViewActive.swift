@@ -12,6 +12,22 @@ struct CardViewActive: View {
                     .padding(.bottom, 30)
                     .padding(.top, 44)
 
+                // Card balance
+                VStack(spacing: 12) {
+                    HStack(spacing: 0) {
+                        Text("€")
+                            .font(.system(size: 40, weight: .semibold))
+                        Text("1,337.00")
+                            .font(.system(size: 40, weight: .semibold))
+                    }
+                    .foregroundColor(Color("PrimaryNuriBlack"))
+
+                    Text("Available Balance")
+                        .font(.custom("Inter", size: 16).weight(.medium))
+                        .foregroundColor(Color(hex: "#6D6D86"))
+                }
+                .padding(.bottom, 30)
+
                 Image("card-flattend")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
