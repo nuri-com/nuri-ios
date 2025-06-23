@@ -156,15 +156,17 @@ private struct CardDetailsView: View {
                         Text("Card number")
                             .font(.custom("Inter", size: 12))
                             .foregroundColor(.white.opacity(0.7))
-                        Text("5354 5655 2079 6981")
-                            .font(.custom("Inter", size: 14).weight(.semibold))
-                            .foregroundColor(.white)
-                        Button(action: {
-                            UIPasteboard.general.string = "5354 5655 2079 6981"
-                        }) {
-                            Image("copy-icon")
-                                .resizable()
-                                .frame(width: 14, height: 14)
+                        HStack(spacing: 4) {
+                            Text("5354 5655 2079 6981")
+                                .font(.custom("Inter", size: 14).weight(.semibold))
+                                .foregroundColor(.white)
+                            Button(action: {
+                                UIPasteboard.general.string = "5354 5655 2079 6981"
+                            }) {
+                                Image("copy-icon")
+                                    .resizable()
+                                    .frame(width: 14, height: 14)
+                            }
                         }
                     }
                     Spacer()
@@ -179,24 +181,35 @@ private struct CardDetailsView: View {
                         Text("Expiry date")
                             .font(.custom("Inter", size: 12))
                             .foregroundColor(.white.opacity(0.7))
-                        Text("03/30")
-                            .font(.custom("Inter", size: 14).weight(.semibold))
-                            .foregroundColor(.white)
-                        Button(action: {
-                            UIPasteboard.general.string = "03/30"
-                        }) {
-                            Image("copy-icon")
-                                .resizable()
-                                .frame(width: 14, height: 14)
+                        HStack(spacing: 4) {
+                            Text("03/30")
+                                .font(.custom("Inter", size: 14).weight(.semibold))
+                                .foregroundColor(.white)
+                            Button(action: {
+                                UIPasteboard.general.string = "03/30"
+                            }) {
+                                Image("copy-icon")
+                                    .resizable()
+                                    .frame(width: 14, height: 14)
+                            }
                         }
                     }
                     VStack(alignment: .leading, spacing: 2) {
                         Text("CVV")
                             .font(.custom("Inter", size: 12))
                             .foregroundColor(.white.opacity(0.7))
-                        Text("041")
-                            .font(.custom("Inter", size: 14).weight(.semibold))
-                            .foregroundColor(.white)
+                        HStack(spacing: 4) {
+                            Text("041")
+                                .font(.custom("Inter", size: 14).weight(.semibold))
+                                .foregroundColor(.white)
+                            Button(action: {
+                                UIPasteboard.general.string = "041"
+                            }) {
+                                Image("copy-icon")
+                                    .resizable()
+                                    .frame(width: 14, height: 14)
+                            }
+                        }
                     }
                     Spacer()
                     Image("visa-logo") // placeholder, ensure asset exists
