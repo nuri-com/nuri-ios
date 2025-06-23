@@ -2,19 +2,21 @@ import SwiftUI
 
 struct BitcoinViewV2: View {
     @State private var isSendViewPresented = false
+    @State private var isTransactionsPresented = false
 
     var body: some View {
         ZStack {
             Color(hex: "#F0F0F0").edgesIgnoringSafeArea(.all)
             VStack {
                 TopNavigationBar()
+                    .padding(.bottom, 30)
                 Spacer()
                 AmountAndButtons(onSendTapped: {
                     isSendViewPresented = true
                 })
                 Spacer()
                 Button(action: {
-                    // Open transactions list
+                    isTransactionsPresented = true
                 }) {
                     Image("link-icon-to-transactions")
                         .resizable()
@@ -30,6 +32,9 @@ struct BitcoinViewV2: View {
                 SendView(isPresented: $isSendViewPresented)
             }
         }
+        .fullScreenCover(isPresented: $isTransactionsPresented) {
+            TransactionsView()
+        }
     }
 }
 
@@ -43,12 +48,12 @@ private struct TopNavigationBar: View {
             Button(action: {
                 // Add action for buying Bitcoin
             }) {
-                Text("+Buy Bitcoin")
-                    .font(.system(size: 14, weight: .medium))
+                Text("+ Buy Bitcoin")
+                    .font(.custom("Inter", size: 14).weight(.medium))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color(hex: "#2C232E"))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color("PrimaryNuriBlack"))
                     .cornerRadius(64)
             }
         }
