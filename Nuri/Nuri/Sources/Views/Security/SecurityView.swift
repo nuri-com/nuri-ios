@@ -131,10 +131,10 @@ private struct SecurityRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.custom("Inter", size: 14).weight(.medium))
+                    .font(.custom("Inter", size: 16).weight(.medium))
                     .foregroundColor(Color("PrimaryNuriBlack"))
                 Text(subtitle)
-                    .font(.custom("Inter", size: 14).weight(.medium))
+                    .font(.custom("Inter", size: 16).weight(.medium))
                     .foregroundColor(subtitleColor)
             }
 
