@@ -29,9 +29,9 @@ struct TransactionsView: View {
                             TransactionRow(tx: tx)
 
                             if index != transactions.count - 1 {
-                                Color.clear.frame(height: 5)             // Top gutter (5 pt)
+                                Color.clear.frame(height: 8)             // Top gutter (8 pt)
                                 Color(hex: "#E0E0E0").frame(height: 1)  // Divider (1 pt)
-                                Color.clear.frame(height: 5)             // Bottom gutter (5 pt)
+                                Color.clear.frame(height: 8)             // Bottom gutter (8 pt)
                             }
                         }
                     }
