@@ -156,16 +156,24 @@ private struct CardDetailsView: View {
                         Text("Card number")
                             .font(.custom("Inter", size: 12))
                             .foregroundColor(.white.opacity(0.7))
-                        HStack(spacing: 4) {
-                            Text("5354 5655 2079 6981")
-                                .font(.custom("Inter", size: 14).weight(.semibold))
-                                .foregroundColor(.white)
-                            Button(action: {
-                                UIPasteboard.general.string = "5354 5655 2079 6981"
-                            }) {
-                                Image("copy-icon")
-                                    .resizable()
-                                    .frame(width: 14, height: 14)
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 4) {
+                                Text("Card number")
+                                    .font(.custom("Inter", size: 12))
+                                    .foregroundColor(.white.opacity(0.7))
+                            }
+                            HStack(spacing: 4) {
+                                Text("5354 5655 2079 6981")
+                                    .font(.custom("Inter", size: 14).weight(.semibold))
+                                    .foregroundColor(.white)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Button(action: {
+                                    UIPasteboard.general.string = "5354 5655 2079 6981"
+                                }) {
+                                    Image("copy-icon")
+                                        .resizable()
+                                        .frame(width: 14, height: 14)
+                                }
                             }
                         }
                     }
@@ -173,8 +181,7 @@ private struct CardDetailsView: View {
                     Image(systemName: "qrcode")
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 48, height: 48)
-                        .foregroundColor(.white)
+                        .frame(width: 32, height: 32)
                 }
                 HStack(spacing: 32) {
                     VStack(alignment: .leading, spacing: 2) {
