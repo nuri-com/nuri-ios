@@ -30,8 +30,9 @@ struct CardViewActive: View {
                 .padding(.bottom, 30)
 
                 if showCardDetails {
-                    CardDetailsView()
+                    CardMini(card: CardModel(holder: "Cim Topal", number: "5354 5655 2079 6981", expiry: "03/30", cvv: "041"))
                         .transition(.opacity)
+                        .padding(.horizontal, 24)
                         .padding(.bottom, 30)
                 } else {
                     Image("card-flattend")
@@ -141,94 +142,86 @@ private struct SmallIconButton: View {
     }
 }
 
-private struct CardDetailsView: View {
+// MARK: - Card detail components
+
+private enum CardTextStyle {
+    case label, value, name
+    var font: Font {
+        switch self {
+        case .label: return .custom("Inter", size: 16)
+        case .value: return .custom("Inter", size: 16).weight(.semibold)
+        case .name:  return .custom("Inter", size: 16).weight(.semibold)
+        }
+    }
+}
+
+private extension Text {
+    func cardStyle(_ style: CardTextStyle) -> some View {
+        self.font(style.font).foregroundColor(.white)
+    }
+}
+
+private struct ValueWithCopy: View {
+    let text: String
+    let style: CardTextStyle
     var body: some View {
-        ZStack {
-            // Card background dark
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(hex: "#2C232E"))
+        HStack(spacing: 4) {
+            Text(text)
+                .cardStyle(style)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .layoutPriority(1)
+            Button(action: { UIPasteboard.general.string = text }) {
+                Image("copy-icon")
+                    .resizable()
+                    .frame(width: 14, height: 14)
+            }
+        }
+    }
+}
+
+private struct CardModel {
+    let holder: String
+    let number: String
+    let expiry: String
+    let cvv: String
+}
+
+private struct CardMini: View {
+    let card: CardModel
+    var body: some View {
+        HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        // Cardholder name
-                        Text("Cim Topal")
-                            .font(.custom("Inter", size: 16).weight(.semibold))
-                            .foregroundColor(.white)
+                // Name
+                Text(card.holder).cardStyle(.name)
 
-                        // Label
-                        Text("Card number")
-                            .font(.custom("Inter", size: 16))
-                            .foregroundColor(.white.opacity(0.7))
+                // Number
+                Text("Card number").cardStyle(.label).foregroundColor(.white.opacity(0.7))
+                ValueWithCopy(text: card.number, style: .value)
 
-                        // Number + copy
-                        HStack(spacing: 4) {
-                            Text("5354 5655 2079 6981")
-                                .font(.custom("Inter", size: 16).weight(.semibold))
-                                .foregroundColor(.white)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.5)
-                                .layoutPriority(1)
-                            Button(action: {
-                                UIPasteboard.general.string = "5354 5655 2079 6981"
-                            }) {
-                                Image("copy-icon")
-                                    .resizable()
-                                    .frame(width: 14, height: 14)
-                            }
-                        }
-                    }
-                    Spacer()
-                    Image(systemName: "qrcode")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 32, height: 32)
-                        .foregroundColor(.white)
-                }
+                // Expiry & CVV
                 HStack(spacing: 32) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Expiry date")
-                            .font(.custom("Inter", size: 16))
-                            .foregroundColor(.white.opacity(0.7))
-                        HStack(spacing: 4) {
-                            Text("03/30")
-                                .font(.custom("Inter", size: 16).weight(.semibold))
-                                .foregroundColor(.white)
-                            Button(action: {
-                                UIPasteboard.general.string = "03/30"
-                            }) {
-                                Image("copy-icon")
-                                    .resizable()
-                                    .frame(width: 14, height: 14)
-                            }
-                        }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Expiry").cardStyle(.label).foregroundColor(.white.opacity(0.7))
+                        ValueWithCopy(text: card.expiry, style: .value)
                     }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("CVV")
-                            .font(.custom("Inter", size: 16))
-                            .foregroundColor(.white.opacity(0.7))
-                        HStack(spacing: 4) {
-                            Text("041")
-                                .font(.custom("Inter", size: 16).weight(.semibold))
-                                .foregroundColor(.white)
-                            Button(action: {
-                                UIPasteboard.general.string = "041"
-                            }) {
-                                Image("copy-icon")
-                                    .resizable()
-                                    .frame(width: 14, height: 14)
-                            }
-                        }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("CVV").cardStyle(.label).foregroundColor(.white.opacity(0.7))
+                        ValueWithCopy(text: card.cvv, style: .value)
                     }
-                    Spacer()
-                    Image("visa-logo") // placeholder, ensure asset exists
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 36, height: 12)
                 }
             }
-            .padding(20)
+            Spacer(minLength: 12)
+            Image(systemName: "qrcode")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 32, height: 32)
+                .foregroundColor(.white)
         }
-        .frame(width: 256, height: 156)
+        .padding(20)
+        .frame(maxWidth: .infinity)
+        .background(Color(hex: "#2C232E"))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 
