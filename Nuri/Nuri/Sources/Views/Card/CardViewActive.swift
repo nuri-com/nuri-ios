@@ -152,18 +152,18 @@ private struct CardDetailsView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         // Cardholder name
                         Text("Cim Topal")
-                            .font(.custom("Inter", size: 14).weight(.semibold))
+                            .font(.custom("Inter", size: 16).weight(.semibold))
                             .foregroundColor(.white)
 
                         // Label
                         Text("Card number")
-                            .font(.custom("Inter", size: 14))
+                            .font(.custom("Inter", size: 16))
                             .foregroundColor(.white.opacity(0.7))
 
                         // Number + copy
                         HStack(spacing: 4) {
                             Text("5354 5655 2079 6981")
-                                .font(.custom("Inter", size: 14).weight(.semibold))
+                                .font(.custom("Inter", size: 16).weight(.semibold))
                                 .foregroundColor(.white)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.5)
@@ -187,11 +187,11 @@ private struct CardDetailsView: View {
                 HStack(spacing: 32) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Expiry date")
-                            .font(.custom("Inter", size: 14))
+                            .font(.custom("Inter", size: 16))
                             .foregroundColor(.white.opacity(0.7))
                         HStack(spacing: 4) {
                             Text("03/30")
-                                .font(.custom("Inter", size: 14).weight(.semibold))
+                                .font(.custom("Inter", size: 16).weight(.semibold))
                                 .foregroundColor(.white)
                             Button(action: {
                                 UIPasteboard.general.string = "03/30"
@@ -204,11 +204,11 @@ private struct CardDetailsView: View {
                     }
                     VStack(alignment: .leading, spacing: 2) {
                         Text("CVV")
-                            .font(.custom("Inter", size: 14))
+                            .font(.custom("Inter", size: 16))
                             .foregroundColor(.white.opacity(0.7))
                         HStack(spacing: 4) {
                             Text("041")
-                                .font(.custom("Inter", size: 14).weight(.semibold))
+                                .font(.custom("Inter", size: 16).weight(.semibold))
                                 .foregroundColor(.white)
                             Button(action: {
                                 UIPasteboard.general.string = "041"
