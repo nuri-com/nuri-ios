@@ -13,7 +13,6 @@ struct CardViewActive: View {
                     .padding(.bottom, 30)
                     .padding(.top, 44)
 
-                // Card balance
                 VStack(spacing: 12) {
                     HStack(spacing: 0) {
                         Text("€")
@@ -42,7 +41,6 @@ struct CardViewActive: View {
                         .padding(.bottom, 30)
                 }
 
-                // Action icons
                 HStack(spacing: 32) {
                     SmallIconButton(icon: showCardDetails ? "eye_hidden" : "eye_hidden", title: "Details") {
                         withAnimation(.easeInOut) {
@@ -50,17 +48,14 @@ struct CardViewActive: View {
                         }
                     }
                     SmallIconButton(icon: "lock_open", title: "Freeze") {
-                        // freeze card
                     }
                     SmallIconButton(icon: "money_topup", title: "Top-Up") {
-                        // top up
                     }
                 }
                 .padding(.bottom, 30)
 
-                // Apple wallet button
                 Button(action: {
-                    // add to wallet
+
                 }) {
                     HStack(spacing: 8) {
                         Image("apple-wallet")
@@ -79,7 +74,6 @@ struct CardViewActive: View {
 
                 Spacer()
 
-                // Link to transactions (matches BitcoinViewV2)
                 Button(action: {
                     isTransactionsPresented = true
                 }) {
@@ -90,7 +84,6 @@ struct CardViewActive: View {
                 .padding(.bottom, 34)
             }
         }
-        .edgesIgnoringSafeArea(.bottom)
         .navigationBarBackButtonHidden(true)
         .navigationBarHidden(true)
         .fullScreenCover(isPresented: $isTransactionsPresented) {
@@ -107,7 +100,6 @@ struct CardViewActive: View {
             Spacer()
 
             Button(action: {
-                // Add money action
             }) {
                 Text("+ Add Money")
                     .font(.custom("Inter", size: 14).weight(.medium))
@@ -192,14 +184,11 @@ private struct CardMini: View {
     var body: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 12) {
-                // Name
                 Text(card.holder).cardStyle(.name)
 
-                // Number
                 Text("Card number").cardStyle(.label).foregroundColor(.white.opacity(0.7))
                 ValueWithCopy(text: card.number, style: .value)
 
-                // Expiry & CVV
                 HStack(spacing: 32) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Expiry").cardStyle(.label).foregroundColor(.white.opacity(0.7))

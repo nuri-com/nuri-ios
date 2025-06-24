@@ -44,28 +44,18 @@ struct TransactionsView: View {
 
     // MARK: - Header
     private var header: some View {
-        HStack {
-            Button(action: { dismiss() }) {
-                Image("vector-back-arrow")
-                    .resizable()
-                    .frame(width: 24, height: 10)
-            }
-            .frame(width: 70, alignment: .leading) // Guarantees centred title
-
-            Spacer(minLength: 0)
-
+        ZStack {
             Text("Transactions")
                 .font(.custom("Inter", size: 16).weight(.semibold))
                 .foregroundColor(Color("PrimaryNuriBlack"))
-
-            Spacer(minLength: 0)
-
-            Button(action: { dismiss() }) {
-                Image("delete-close")
-                    .resizable()
-                    .frame(width: 32, height: 32)
+            HStack {
+                Spacer()
+                Button(action: { dismiss() }) {
+                    Image("delete-close")
+                        .resizable()
+                        .frame(width: 32, height: 32)
+                }
             }
-            .frame(width: 70, alignment: .trailing)
         }
     }
 }
