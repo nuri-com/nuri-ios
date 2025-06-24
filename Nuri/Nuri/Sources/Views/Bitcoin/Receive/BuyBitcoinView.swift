@@ -3,6 +3,8 @@ import PassKit
 
 struct BuyBitcoinView: View {
 
+    @EnvironmentObject var navigation: BitcoinViewNavigation
+
     @State var amount: String = "99.50"
 
     @FocusState private var focusedField: Int?
@@ -25,7 +27,9 @@ struct BuyBitcoinView: View {
                 .foregroundStyle(Color.secondary)
             Spacer()
             NavigationLink("Buy with Apple Pay") {
-                BitcoinPurchasedView()
+                SuccessView(illustration: "hand-plant", title: "Bitcoin purchased!", subtitle: "You've purchased 0.9123 BTC!") {
+                    navigation.isReceiveViewPresented = false
+                }
             }
             .buttonStyle(ProminentBlackButtonStyle())
         }

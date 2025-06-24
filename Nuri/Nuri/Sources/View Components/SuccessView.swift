@@ -1,20 +1,23 @@
 import SwiftUI
 
-struct BitcoinSentView: View {
+struct SuccessView: View {
 
-    @EnvironmentObject var navigation: BitcoinViewNavigation
+    let illustration: String
+    let title: String
+    let subtitle: String
+    let completion: () -> Void
 
     var body: some View {
         VStack(spacing: 16) {
             Spacer()
-            Image("bitcoin-sent")
-            Text("Bitcoin sent!")
+            Image(illustration)
+            Text(title)
                 .font(.brandTitle1)
                 .foregroundColor(Color("PrimaryNuriBlack"))
-            Text("You've sent 0.9123 BTC!")
+            Text(subtitle)
             Spacer()
             Button("Done") {
-                navigation.isSendViewPresented = false
+                completion()
             }
             .buttonStyle(ProminentBlackButtonStyle())
         }

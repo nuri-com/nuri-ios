@@ -5,7 +5,7 @@ struct CardConfirmAddressView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Confirm Address")
-                .font(.title)
+                .font(.brandTitle1)
             Text("Review your address, this is where your card will be sent.")
                 .foregroundStyle(Color.secondary)
             VStack(alignment: .leading, spacing: 8) {
@@ -30,8 +30,10 @@ struct CardConfirmAddressView: View {
             .background(Color.white)
             .clipShape(RoundedRectangle(cornerRadius: 6))
             .padding(.vertical, 16)
-            Button("Order Card") {
+            NavigationLink("Order Card") {
+                SuccessView(illustration: "Visa_on_the_way", title: "Yaay your card is on the way!", subtitle: "Just a few days for your card to reach your address, you will need to activate it before start using it. ") {
 
+                }
             }
             .buttonStyle(ProminentButtonStyle())
             Spacer()

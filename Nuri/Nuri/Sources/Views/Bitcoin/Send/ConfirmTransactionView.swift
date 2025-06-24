@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ConfirmTransactionView: View {
 
+    @EnvironmentObject var navigation: BitcoinViewNavigation
+
     var body: some View {
         VStack(spacing: 16) {
             Text("Confirm Transaction")
@@ -54,7 +56,9 @@ struct ConfirmTransactionView: View {
 
             Spacer()
             NavigationLink("Send") {
-                BitcoinSentView()
+                SuccessView(illustration: "bitcoin-sent", title: "Bitcoin sent!", subtitle: "You've sent 0.9123 BTC!") {
+                    navigation.isSendViewPresented = false
+                }
             }
             .buttonStyle(ProminentButtonStyle())
         }
