@@ -90,9 +90,9 @@ extension LoginViewModel: ASAuthorizationControllerDelegate {
         print("credential: \(authorization.credential.description)")
 
         if let registration = authorization.credential as? ASAuthorizationSecurityKeyPublicKeyCredentialRegistration {
-            print(String(data: registration.credentialID, encoding: .utf8))
+            print(String(data: registration.credentialID, encoding: .utf8) ?? "no credential id")
             print(registration.transports)
-            print(String(data: registration.rawClientDataJSON, encoding: .utf8))
+            print(String(data: registration.rawClientDataJSON, encoding: .utf8) ?? "no raw client data")
             self.challenge = (try? JSONDecoder().decode(ClientData.self, from: registration.rawClientDataJSON)).flatMap({ $0.challenge.data(using: .utf8) })
         } else if let credentialAssertion = authorization.credential as? ASAuthorizationSecurityKeyPublicKeyCredentialAssertion {
             print("A passkey was used to sign in: \(credentialAssertion)")
