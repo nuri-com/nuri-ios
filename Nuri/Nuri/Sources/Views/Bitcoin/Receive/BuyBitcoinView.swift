@@ -24,12 +24,10 @@ struct BuyBitcoinView: View {
                 .font(.footnote)
                 .foregroundStyle(Color.secondary)
             Spacer()
-            PayWithApplePayButton(.buy) {
-
+            NavigationLink("Buy with Apple Pay") {
+                BitcoinPurchasedView()
             }
-            .payWithApplePayButtonStyle(.black)
-            .frame(height: 54)
-            .clipShape(RoundedRectangle(cornerRadius: 32))
+            .buttonStyle(ProminentBlackButtonStyle())
         }
         .padding()
     }
