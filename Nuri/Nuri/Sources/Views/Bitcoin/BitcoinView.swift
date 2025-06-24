@@ -2,6 +2,7 @@ import SwiftUI
 
 final class BitcoinViewNavigation: ObservableObject {
     @Published var isSendViewPresented = false
+    @Published var isReceiveViewPresented = false
     @Published var isTransactionsPresented = false
 }
 
@@ -15,9 +16,21 @@ struct BitcoinView: View {
                 TopNavigationBar()
                     .padding(.bottom, 30)
                 Spacer()
-                AmountAndButtons(onSendTapped: {
-                    navigation.isSendViewPresented = true
-                })
+                VStack(spacing: 21) {
+                    VStack(spacing: 12) {
+                        AmountAndCurrency()
+                        SecondaryCurrencyAndAmount()
+                    }
+                    HStack(spacing: 16) {
+                        PrimaryHalfButton(title: "Receive", icon: "bitcoin_hand") {
+                            navigation.isReceiveViewPresented = true
+                        }
+                        SecondaryHalfButton(title: "Send", icon: "qr_scan") {
+                            navigation.isSendViewPresented = true
+                        }
+                    }
+                    .padding(.vertical, 24)
+                }
                 Spacer()
                 Button(action: {
                     navigation.isTransactionsPresented = true
@@ -36,8 +49,13 @@ struct BitcoinView: View {
             NavigationStack {
                 SendView()
             }
-            .environmentObject(navigation)
         }
+        .sheet(isPresented: $navigation.isReceiveViewPresented) {
+            NavigationStack {
+                ReceiveView()
+            }
+        }
+        .environmentObject(navigation)
         .fullScreenCover(isPresented: $navigation.isTransactionsPresented) {
             TransactionsView()
         }
@@ -66,20 +84,6 @@ private struct TopNavigationBar: View {
     }
 }
 
-private struct AmountAndButtons: View {
-    let onSendTapped: () -> Void
-
-    var body: some View {
-        VStack(spacing: 21) {
-            VStack(spacing: 12) {
-                AmountAndCurrency()
-                SecondaryCurrencyAndAmount()
-            }
-            TwoActionButtons(onSendTapped: onSendTapped)
-        }
-    }
-}
-
 private struct AmountAndCurrency: View {
     var body: some View {
         HStack(spacing: 10) {
@@ -103,18 +107,6 @@ private struct SecondaryCurrencyAndAmount: View {
         }
         .font(.system(size: 16, weight: .medium))
         .foregroundColor(Color(hex: "#6D6D86"))
-    }
-}
-
-private struct TwoActionButtons: View {
-    let onSendTapped: () -> Void
-
-    var body: some View {
-        HStack(spacing: 16) {
-            PrimaryHalfButton(title: "Receive", icon: "bitcoin_hand", action: {})
-            SecondaryHalfButton(title: "Send", icon: "qr_scan", action: onSendTapped)
-        }
-        .padding(.vertical, 24)
     }
 }
 
