@@ -3,11 +3,12 @@ import CodeScanner
 
 struct SendView: View {
 
-    @Binding var isPresented: Bool
+    @EnvironmentObject var navigation: BitcoinViewNavigation
 
     var body: some View {
         GeometryReader { proxy in
             CodeScannerView(codeTypes: [.qr], completion: handleScan)
+                .ignoresSafeArea()
             VStack(spacing: 0) {
                 Rectangle()
                     .fill(Color.black.opacity(0.4))
@@ -46,7 +47,7 @@ struct SendView: View {
                 HStack {
                     Spacer()
                     Button("Cancel") {
-                        isPresented.toggle()
+                        navigation.isSendViewPresented.toggle()
                     }
                 }
             }
@@ -72,5 +73,8 @@ struct SendView: View {
 }
 
 #Preview {
-    SendView(isPresented: .constant(true))
+    Text("Test")
+        .sheet(isPresented: .constant(true)) {
+            SendView()
+        }
 }

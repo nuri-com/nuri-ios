@@ -1,22 +1,26 @@
 import SwiftUI
 
+final class BitcoinViewNavigation: ObservableObject {
+    @Published var isSendViewPresented = false
+    @Published var isTransactionsPresented = false
+}
+
 struct BitcoinView: View {
-    @State private var isSendViewPresented = false
-    @State private var isTransactionsPresented = false
+
+    @StateObject private var navigation = BitcoinViewNavigation()
 
     var body: some View {
         ZStack {
-            Color(hex: "#F0F0F0").edgesIgnoringSafeArea(.all)
             VStack {
                 TopNavigationBar()
                     .padding(.bottom, 30)
                 Spacer()
                 AmountAndButtons(onSendTapped: {
-                    isSendViewPresented = true
+                    navigation.isSendViewPresented = true
                 })
                 Spacer()
                 Button(action: {
-                    isTransactionsPresented = true
+                    navigation.isTransactionsPresented = true
                 }) {
                     Image("link-icon-to-transactions")
                         .resizable()
@@ -27,12 +31,14 @@ struct BitcoinView: View {
             .padding(.top, 44)
             .padding(.bottom, 34)
         }
-        .sheet(isPresented: $isSendViewPresented) {
+        .background(NuriAsset.background.swiftUIColor)
+        .sheet(isPresented: $navigation.isSendViewPresented) {
             NavigationStack {
-                SendView(isPresented: $isSendViewPresented)
+                SendView()
             }
+            .environmentObject(navigation)
         }
-        .fullScreenCover(isPresented: $isTransactionsPresented) {
+        .fullScreenCover(isPresented: $navigation.isTransactionsPresented) {
             TransactionsView()
         }
     }
