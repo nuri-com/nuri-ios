@@ -160,51 +160,6 @@ private struct PrimaryHalfButton: View {
     }
 }
 
-private struct BottomNavigation: View {
-    var body: some View {
-        VStack(spacing: 24) {
-            Image("link-icon-to-transactions")
-                 .resizable()
-                 .frame(width: 13, height: 24)
-                 .rotationEffect(.degrees(90))
-
-            BottomHorizontalTabs()
-        }
-    }
-}
-
-private struct BottomHorizontalTabs: View {
-    var body: some View {
-        HStack(spacing: 0) {
-            TabItem(title: "Bitcoin", icon: "bitcoin-icon", isSelected: true)
-            Spacer()
-            TabItem(title: "Card", icon: "card-icon")
-            Spacer()
-            TabItem(title: "Security", icon: "security-icon")
-        }
-        .frame(height: 54)
-    }
-}
-
-private struct TabItem: View {
-    let title: String
-    let icon: String
-    var isSelected: Bool = false
-
-    var body: some View {
-        VStack(spacing: 4) {
-            Image(icon)
-                .resizable()
-                .renderingMode(.template)
-                .frame(width: 24, height: 24)
-            Text(title)
-                .font(.system(size: 12))
-        }
-        .foregroundColor(isSelected ? Color(hex: "#2C232E") : Color(hex: "#2C232E").opacity(0.5))
-        .frame(width: 75)
-    }
-}
-
 #Preview {
     BitcoinViewV2()
 } 
