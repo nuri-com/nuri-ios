@@ -37,13 +37,19 @@ struct ResidenceCitizenshipUSTaxView: View {
                     // TODO: handle next step in KYC flow
                 }) {
                     Text("Next")
+                        .font(.brandBody)
+                        .foregroundColor(Color("PrimaryNuriBlack"))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 54)
+                        .background(Color("PrimaryNuriLilac"))
+                        .cornerRadius(100)
                 }
-                .buttonStyle(ProminentBlackButtonStyle())
                 .padding(.horizontal, 24)
                 .padding(.bottom, 20)
             }
         }
         .navigationBarBackButtonHidden(false)
+        .toolbar(.hidden, for: .tabBar)
     }
 }
 
