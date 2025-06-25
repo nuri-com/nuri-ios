@@ -17,39 +17,23 @@ struct MainTabBar: View {
                         BitcoinView()
                     }
                 } label: {
-                    Label {
-                        Text("Bitcoin")
-                            .font(.custom("Inter", size: 16))
-                    } icon: {
-                        Image("bitcoin-icon").renderingMode(.template)
-                    }
+                    Label("Bitcoin", image: "bitcoin-icon")
                 }
                 Tab {
                     NavigationStack {
                         CardView()
                     }
                 } label: {
-                    Label {
-                        Text("Card")
-                            .font(.custom("Inter", size: 16))
-                    } icon: {
-                        Image("vector-icon-card").renderingMode(.template)
-                    }
+                    Label("Card", image: "vector-icon-card")
                 }
                 Tab {
                     NavigationStack {
                         SecurityView()
                     }
                 } label: {
-                    Label {
-                        Text("Passkey")
-                            .font(.custom("Inter", size: 16))
-                    } icon: {
-                        Image("passkey").renderingMode(.template)
-                    }
+                    Label("Passkey", image: "passkey")
                 }
             }
-            .tint(.black)
         }
         .ignoresSafeArea(.keyboard)
     }
