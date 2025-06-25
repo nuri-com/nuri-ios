@@ -8,7 +8,7 @@ struct ProminentButtonStyle: ButtonStyle {
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 12)
             .padding(.vertical, 16)
-            .background(isEnabled ? Color.accentColor : NuriAsset.disabledButtonBackground.swiftUIColor)
+            .background((isEnabled ? NuriAsset.primaryNuriLilac : NuriAsset.disabledButtonBackground).swiftUIColor)
             .foregroundStyle(isEnabled ? Color.primary.opacity(configuration.isPressed ? 0.25 : 1) : Color.secondary)
             .font(.brandBody)
             .clipShape(Capsule())

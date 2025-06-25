@@ -1,31 +1,24 @@
 import UIKit
 
-fileprivate let container: ContainerType = Container()
-
 final class AppDelegate: NSObject, UIApplicationDelegate {
 
-    func applicationDidFinishLaunching(_ application: UIApplication) {
-        injectDependencies(into: container)
-    }
-
-    func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession, options: UIScene.ConnectionOptions) -> UISceneConfiguration {
-        return UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
-    }
-}
-
-final class SceneDelegate: NSObject, UISceneDelegate {
-
-    var window: UIWindow?
-
-    private lazy var rootWireframe: RootWireframeType = {
-        container.resolve()
-    }()
-
-    func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
-        guard let windowScene = (scene as? UIWindowScene) else { return }
-        let window = UIWindow(windowScene: windowScene)
-        window.rootViewController = rootWireframe.start()
-        self.window = window
-        window.makeKeyAndVisible()
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+        if let baseFont = UIFont(name: "Inter", size: 14) {
+            let interFont = UIFontMetrics(forTextStyle: .caption1).scaledFont(for: baseFont)
+            UILabel.appearance(whenContainedInInstancesOf: [UITabBar.self]).font = interFont
+            let primary = UIColor(NuriAsset.primaryNuriBlack.swiftUIColor)
+            let normalAttributes: [NSAttributedString.Key: Any] = [
+                .font: interFont,
+                .foregroundColor: primary.withAlphaComponent(0.5)
+            ]
+            let selectedAttributes: [NSAttributedString.Key: Any] = [
+                .font: interFont,
+                .foregroundColor: primary
+            ]
+            UITabBarItem.appearance().setTitleTextAttributes(normalAttributes, for: .normal)
+            UITabBarItem.appearance().setTitleTextAttributes(selectedAttributes, for: .selected)
+            UITabBarItem.appearance().titlePositionAdjustment = UIOffset(horizontal: 0, vertical: 5)
+        }
+        return true
     }
 }
