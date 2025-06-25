@@ -1,0 +1,56 @@
+import SwiftUI
+
+/// 01 - 03 Residence / Citizenship / US Tax
+/// Figma: "Where do you live?" screen (lowered keyboard)
+struct ResidenceCitizenshipUSTaxView: View {
+    @State private var country: String = ""
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        ZStack {
+            Color("Background").edgesIgnoringSafeArea(.all)
+            VStack(spacing: 32) {
+                Spacer().frame(height: 44)
+                Text("Where do you live?")
+                    .font(.brandTitle1)
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(Color("PrimaryNuriBlack"))
+                    .padding(.horizontal, 24)
+
+                // Country text field
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Country of Residence")
+                        .font(.brandBody)
+                        .foregroundColor(Color("PrimaryNuriBlack"))
+                    TextField("Search or type country", text: $country)
+                        .textFieldStyle(.roundedBorder)
+                        .keyboardType(.alphabet)
+                        .autocapitalization(.words)
+                        .disableAutocorrection(true)
+                        .focused($isFocused)
+                }
+                .padding(.horizontal, 24)
+
+                Spacer()
+
+                Button(action: {
+                    // TODO: handle next step in KYC flow
+                }) {
+                    Text("Next")
+                }
+                .buttonStyle(ProminentBlackButtonStyle())
+                .padding(.horizontal, 24)
+                .padding(.bottom, 20)
+            }
+        }
+        .navigationBarBackButtonHidden(false)
+    }
+}
+
+#if DEBUG
+#Preview {
+    NavigationStack {
+        ResidenceCitizenshipUSTaxView()
+    }
+}
+#endif 

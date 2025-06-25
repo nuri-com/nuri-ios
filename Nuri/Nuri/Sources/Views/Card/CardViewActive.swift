@@ -73,9 +73,7 @@ struct CardViewActive: View {
                 .padding(.horizontal, 24)
 
                 // Activate Card button
-                Button(action: {
-                    // TODO: Implement activation logic
-                }) {
+                NavigationLink(destination: ResidenceCitizenshipUSTaxView()) {
                     HStack(spacing: 8) {
                         Image("head")
                             .resizable()
