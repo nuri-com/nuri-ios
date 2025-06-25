@@ -1,8 +1,5 @@
 import SwiftUI
 
-/// Progress bar height constant
-private let progressBarHeight: CGFloat = 4
-
 /// 01 - 03 Residence / Citizenship / US Tax
 /// Figma: "Where do you live?" screen (lowered keyboard)
 struct ResidenceCitizenshipUSTaxView: View {
@@ -10,32 +7,25 @@ struct ResidenceCitizenshipUSTaxView: View {
     @State private var country: String = ""
     @FocusState private var isFocused: Bool
 
-    private let currentStep: Int = 1
-    private let totalSteps: Int = 3
-
     var body: some View {
         ZStack {
             Color("Background").edgesIgnoringSafeArea(.all)
             VStack(spacing: 24) {
-                // Top navigation with back arrow
+                // Top bar with arrow and symmetric layout
                 HStack {
                     Button(action: { dismiss() }) {
-                        Image("vector-back-arrow")
+                        Image("arrow-back")
                             .resizable()
                             .frame(width: 24, height: 24)
                             .foregroundColor(Color("PrimaryNuriBlack"))
                     }
                     Spacer()
+                    // Right placeholder to balance layout
+                    Color.clear
+                        .frame(width: 24, height: 24)
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 44)
-
-                // Progress bar
-                ProgressView(value: Double(currentStep), total: Double(totalSteps))
-                    .progressViewStyle(.linear)
-                    .tint(Color("PrimaryNuriBlack"))
-                    .frame(height: progressBarHeight)
-                    .padding(.horizontal, 24)
 
                 Spacer().frame(height: 44)
                 Text("Where do you live?")
