@@ -27,7 +27,6 @@ struct ResidenceCitizenshipUSTaxView: View {
                 .padding(.horizontal, 24)
                 .padding(.top, 44)
 
-                Spacer().frame(height: 44)
                 Text("Where do you live?")
                     .font(.brandTitle1)
                     .multilineTextAlignment(.center)
