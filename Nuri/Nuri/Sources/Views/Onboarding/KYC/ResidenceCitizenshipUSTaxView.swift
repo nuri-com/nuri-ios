@@ -4,7 +4,15 @@ import SwiftUI
 /// Figma: "Where do you live?" screen (lowered keyboard)
 struct ResidenceCitizenshipUSTaxView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var country: String = ""
+    @State private var selectedCountry: Country? = {
+        // Default country from device locale
+        if let code = Locale.current.regionCode,
+           let name = Locale.current.localizedString(forRegionCode: code) {
+            return Country(name: name)
+        }
+        return nil
+    }()
+    @State private var showCountryPicker = false
     @FocusState private var isFocused: Bool
 
     var body: some View {
@@ -33,19 +41,30 @@ struct ResidenceCitizenshipUSTaxView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 24)
 
-                // Country text field
-                VStack(alignment: .leading, spacing: 8) {
+                // Custom dropdown field
+                VStack(alignment: .leading, spacing: 4) {
                     Text("Country of Residence")
-                        .font(.brandBody)
-                        .foregroundColor(Color("PrimaryNuriBlack"))
-                    TextField("Search or type country", text: $country)
-                        .textFieldStyle(.roundedBorder)
-                        .keyboardType(.alphabet)
-                        .autocapitalization(.words)
-                        .disableAutocorrection(true)
-                        .focused($isFocused)
+                        .font(.brandCaption)
+                        .foregroundColor(Color("PrimaryNuriLilac"))
+                    Button(action: { showCountryPicker = true }) {
+                        HStack {
+                            Text(selectedCountry?.name ?? "Select country")
+                                .foregroundColor(selectedCountry == nil ? Color.secondary : Color("PrimaryNuriBlack"))
+                            Spacer()
+                            Image(systemName: "chevron.down")
+                                .foregroundColor(Color("PrimaryNuriBlack"))
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 16)
+                        .frame(maxWidth: .infinity)
+                        .background(Color("InputBackground"))
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                    }
                 }
                 .padding(.horizontal, 24)
+                .sheet(isPresented: $showCountryPicker) {
+                    CountryPickerSheet(selected: $selectedCountry)
+                }
 
                 Spacer()
 
@@ -75,4 +94,59 @@ struct ResidenceCitizenshipUSTaxView: View {
         ResidenceCitizenshipUSTaxView()
     }
 }
-#endif 
+#endif
+
+/// Simple Country model
+private struct Country: Identifiable, Equatable {
+    let id = UUID()
+    let name: String
+}
+
+// MARK: - Picker sheet
+
+private struct CountryPickerSheet: View {
+    @Environment(\.dismiss) var dismiss
+    @Binding var selected: Country?
+    @State private var searchText = ""
+
+    private var allCountries: [Country] {
+        Locale.isoRegionCodes.compactMap { code in
+            guard let name = Locale.current.localizedString(forRegionCode: code) else { return nil }
+            return Country(name: name)
+        }.sorted { $0.name < $1.name }
+    }
+
+    private var filtered: [Country] {
+        if searchText.isEmpty { return allCountries }
+        return allCountries.filter { $0.name.lowercased().contains(searchText.lowercased()) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List(filtered) { country in
+                HStack {
+                    Text(country.name)
+                    Spacer()
+                    if country == selected {
+                        Image(systemName: "checkmark")
+                            .foregroundColor(Color("PrimaryNuriLilac"))
+                    }
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    selected = country
+                    dismiss()
+                }
+            }
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(Color("PrimaryNuriBlack"))
+                }
+            }
+            .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always))
+        }
+    }
+} 
