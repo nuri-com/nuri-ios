@@ -12,7 +12,15 @@ struct ResidenceCitizenshipUSTaxView: View {
         }
         return nil
     }()
+    @State private var selectedCitizenship: Country? = {
+        if let code = Locale.current.regionCode,
+           let name = Locale.current.localizedString(forRegionCode: code) {
+            return Country(name: name)
+        }
+        return nil
+    }()
     @State private var showCountryPicker = false
+    @State private var showCitizenshipPicker = false
     @FocusState private var isFocused: Bool
 
     var body: some View {
@@ -49,9 +57,15 @@ struct ResidenceCitizenshipUSTaxView: View {
                     showCountryPicker = true
                 }
                 .padding(.horizontal, 24)
-                .sheet(isPresented: $showCountryPicker) {
-                    CountryPickerSheet(selected: $selectedCountry)
+
+                // Citizenship field
+                CountryFieldView(label: "Your citizenship",
+                                 value: selectedCitizenship?.name,
+                                 isActive: showCitizenshipPicker,
+                                 placeholder: "Select citizenship") {
+                    showCitizenshipPicker = true
                 }
+                .padding(.horizontal, 24)
 
                 Spacer()
 
@@ -72,6 +86,12 @@ struct ResidenceCitizenshipUSTaxView: View {
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .tabBar)
+        .sheet(isPresented: $showCountryPicker) {
+            CountryPickerSheet(selected: $selectedCountry)
+        }
+        .sheet(isPresented: $showCitizenshipPicker) {
+            CountryPickerSheet(selected: $selectedCitizenship)
+        }
     }
 }
 
