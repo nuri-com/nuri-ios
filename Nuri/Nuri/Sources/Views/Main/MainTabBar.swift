@@ -12,26 +12,20 @@ struct MainTabBar: View {
     var body: some View {
         VStack(spacing: 0) {
             TabView {
-                Tab {
+                Tab("Bitcoin", image: "bitcoin-icon") {
                     NavigationStack {
                         BitcoinView()
                     }
-                } label: {
-                    Label("Bitcoin", image: "bitcoin-icon")
                 }
-                Tab {
+                Tab("Card", image: "vector-icon-card") {
                     NavigationStack {
                         CardView()
                     }
-                } label: {
-                    Label("Card", image: "vector-icon-card")
                 }
-                Tab {
+                Tab("Passkey", image: "passkey") {
                     NavigationStack {
                         SecurityView()
                     }
-                } label: {
-                    Label("Passkey", image: "passkey")
                 }
             }
         }
