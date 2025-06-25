@@ -42,24 +42,11 @@ struct ResidenceCitizenshipUSTaxView: View {
                     .padding(.horizontal, 24)
 
                 // Custom dropdown field
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Country of Residence")
-                        .font(.brandCaption)
-                        .foregroundColor(Color("PrimaryNuriLilac"))
-                    Button(action: { showCountryPicker = true }) {
-                        HStack {
-                            Text(selectedCountry?.name ?? "Select country")
-                                .foregroundColor(selectedCountry == nil ? Color.secondary : Color("PrimaryNuriBlack"))
-                            Spacer()
-                            Image(systemName: "chevron.down")
-                                .foregroundColor(Color("PrimaryNuriBlack"))
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 16)
-                        .frame(maxWidth: .infinity)
-                        .background(Color("InputBackground"))
-                        .clipShape(RoundedRectangle(cornerRadius: 3))
-                    }
+                CountryFieldView(label: "Country of Residence",
+                                 value: selectedCountry?.name,
+                                 isActive: showCountryPicker,
+                                 placeholder: "Select country") {
+                    showCountryPicker = true
                 }
                 .padding(.horizontal, 24)
                 .sheet(isPresented: $showCountryPicker) {
@@ -147,6 +134,44 @@ private struct CountryPickerSheet: View {
                 }
             }
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always))
+        }
+    }
+}
+
+// MARK: - Country Field
+
+private struct CountryFieldView: View {
+    let label: String
+    let value: String?
+    let isActive: Bool
+    let placeholder: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(label)
+                    .font(.brandCaption)
+                    .foregroundColor(Color("PrimaryNuriLilac"))
+                HStack {
+                    Text(value ?? placeholder)
+                        .font(.brandBody)
+                        .foregroundColor(value == nil ? Color.secondary : Color("PrimaryNuriBlack"))
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .foregroundColor(Color("PrimaryNuriBlack"))
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 16)
+            .frame(maxWidth: .infinity)
+            .background(Color.white)
+            .overlay(
+                Rectangle()
+                    .fill(Color("PrimaryNuriLilac"))
+                    .frame(height: 1), alignment: .bottom
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 3))
         }
     }
 } 
