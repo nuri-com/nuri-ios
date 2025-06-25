@@ -29,8 +29,8 @@ struct ResidenceCitizenshipUSTaxView: View {
 
                 Text("Where do you live?")
                     .font(.brandTitle1)
-                    .multilineTextAlignment(.center)
                     .foregroundColor(Color("PrimaryNuriBlack"))
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 24)
 
                 // Country text field
