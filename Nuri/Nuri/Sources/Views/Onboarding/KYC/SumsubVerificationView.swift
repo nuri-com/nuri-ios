@@ -4,11 +4,16 @@ import SwiftUI
 struct SumsubVerificationView: View {
     @Environment(\.dismiss) private var dismiss
 
-    // Sandbox access token provided by Sumsub (public, safe to embed in client for sandbox only).
-    private let sandboxAccessToken = "sbx:KPfLzjksGrj7tvuDGBo5vb4m.m9h1nVQGvq4HlLuCnWKqLhgoW1QJ9wbn"
-
     @State private var showSDK = false
+    @State private var accessToken: String? = nil
     @State private var verificationResult: Bool? = nil
+
+    private func startVerification() {
+        SumsubService.shared.fetchAccessToken { token in
+            accessToken = token
+            showSDK = token != nil
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -32,7 +37,7 @@ struct SumsubVerificationView: View {
                     EmptyView()
                 }.hidden()
 
-                Button("Start verification") { showSDK = true }
+                Button("Start verification") { startVerification() }
                     .font(.brandBody)
                     .foregroundColor(Color("PrimaryNuriBlack"))
                     .frame(maxWidth: .infinity)
@@ -47,12 +52,18 @@ struct SumsubVerificationView: View {
         .toolbar(.hidden, for: .tabBar)
     }
 
-    private var sdkView: some View {
-        SumsubView(accessToken: sandboxAccessToken) { approved in
-            verificationResult = approved
-            dismiss()
+    @ViewBuilder private var sdkView: some View {
+        if let token = accessToken {
+            SumsubView(accessToken: token) { approved in
+                verificationResult = approved
+                dismiss()
+            }
+            .ignoresSafeArea()
+        } else {
+            ProgressView()
+                .onAppear { startVerification() }
+                .ignoresSafeArea()
         }
-        .ignoresSafeArea()
     }
 
     private var topBar: some View {

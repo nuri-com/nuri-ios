@@ -31,7 +31,8 @@ let project = Project(
                 "NSMicrophoneUsageDescription": "Microphone access is needed for video verification",
                 "NSPhotoLibraryUsageDescription": "Photo library access is needed if you choose an existing image of your ID",
                 "NSLocationWhenInUseUsageDescription": "Location is used to enhance identity verification",
-                "NSLocationTemporaryUsageDescriptionDictionary": .dictionary(["DocumentVerification": "Location is required to confirm you are in an allowed country"])
+                "NSLocationTemporaryUsageDescriptionDictionary": .dictionary(["DocumentVerification": "Location is required to confirm you are in an allowed country"]),
+                "NSFaceIDUsageDescription": "Face ID is used to confirm your identity during liveness verification"
             ]),
             sources: ["Nuri/Sources/**"],
             resources: ["Nuri/Resources/**"],

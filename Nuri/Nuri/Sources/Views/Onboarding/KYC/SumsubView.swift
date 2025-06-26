@@ -63,10 +63,11 @@ private final class SumsubHostController: UIViewController {
             self?.onResult?(false)
         }
 
-        // TODO: Provide real refresh token logic here
+        // Refresh expired access tokens via the service
         sdk.tokenExpirationHandler { onComplete in
-            // Fetch new token from backend then call onComplete(newToken)
-            onComplete(nil)
+            SumsubService.shared.fetchAccessToken { newToken in
+                onComplete(newToken)
+            }
         }
     }
 
