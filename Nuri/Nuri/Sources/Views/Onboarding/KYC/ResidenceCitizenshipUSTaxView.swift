@@ -36,15 +36,17 @@ struct ResidenceCitizenshipUSTaxView: View {
 
                 Spacer()
 
-                Button("Next") { }
-                    .font(.brandBody)
-                    .foregroundColor(Color("PrimaryNuriBlack"))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 54)
-                    .background(Color("PrimaryNuriLilac"))
-                    .cornerRadius(100)
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 20)
+                NavigationLink(destination: SumsubVerificationView()) {
+                    Text("Next")
+                        .font(.brandBody)
+                        .foregroundColor(Color("PrimaryNuriBlack"))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 54)
+                        .background(Color("PrimaryNuriLilac"))
+                        .cornerRadius(100)
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 20)
             }
         }
         .navigationBarBackButtonHidden(true)
