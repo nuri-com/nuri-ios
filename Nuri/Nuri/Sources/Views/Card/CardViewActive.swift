@@ -5,130 +5,120 @@ struct CardViewActive: View {
     @State private var showCardDetails = false
 
     var body: some View {
-        ZStack {
-            Color("Background").edgesIgnoringSafeArea(.all)
-            VStack(spacing: 0) {
-                topNavigationBar()
+        VStack(spacing: 0) {
+            Spacer()
+            VStack(spacing: 12) {
+                HStack(spacing: 0) {
+                    Text("€")
+                        .font(.system(size: 40, weight: .semibold))
+                    Text("1,337.00")
+                        .font(.system(size: 40, weight: .semibold))
+                }
+                .foregroundColor(Color("PrimaryNuriBlack"))
+
+                Text("Available Balance")
+                    .font(.custom("Inter", size: 16).weight(.medium))
+                    .foregroundColor(Color(hex: "#6D6D86"))
+            }
+            .padding(.bottom, 30)
+
+            if showCardDetails {
+                CardMini(card: CardModel(holder: "Cim Topal", number: "5354 5655 2079 6981", expiry: "03/30", cvv: "041"))
+                    .transition(.opacity)
                     .padding(.horizontal, 24)
                     .padding(.bottom, 30)
-                    .padding(.top, 44)
-
-                VStack(spacing: 12) {
-                    HStack(spacing: 0) {
-                        Text("€")
-                            .font(.system(size: 40, weight: .semibold))
-                        Text("1,337.00")
-                            .font(.system(size: 40, weight: .semibold))
-                    }
-                    .foregroundColor(Color("PrimaryNuriBlack"))
-
-                    Text("Available Balance")
-                        .font(.custom("Inter", size: 16).weight(.medium))
-                        .foregroundColor(Color(hex: "#6D6D86"))
-                }
-                .padding(.bottom, 30)
-
-                if showCardDetails {
-                    CardMini(card: CardModel(holder: "Cim Topal", number: "5354 5655 2079 6981", expiry: "03/30", cvv: "041"))
-                        .transition(.opacity)
-                        .padding(.horizontal, 24)
-                        .padding(.bottom, 30)
-                } else {
-                    Image("card-flattend")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 256)
-                        .padding(.bottom, 30)
-                }
-
-                HStack(spacing: 32) {
-                    SmallIconButton(icon: showCardDetails ? "eye_hidden" : "eye_hidden", title: "Details") {
-                        withAnimation(.easeInOut) {
-                            showCardDetails.toggle()
-                        }
-                    }
-                    SmallIconButton(icon: "lock_open", title: "Freeze") {
-                    }
-                    SmallIconButton(icon: "money_topup", title: "Top-Up") {
-                    }
-                }
-                .padding(.bottom, 30)
-
-                Button(action: {
-
-                }) {
-                    HStack(spacing: 8) {
-                        Image("apple-wallet")
-                            .resizable()
-                            .frame(width: 32, height: 32)
-                        Text("Add to Apple Wallet")
-                            .font(.brandBody)
-                            .foregroundColor(.white)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 54)
-                    .background(Color("PrimaryNuriBlack"))
-                    .cornerRadius(100)
-                }
-                .padding(.horizontal, 24)
-
-                // Activate Card button
-                NavigationLink(destination: ResidenceCitizenshipUSTaxView()) {
-                    HStack(spacing: 8) {
-                        Image("head")
-                            .resizable()
-                            .renderingMode(.template)
-                            .foregroundColor(Color("PrimaryNuriBlack"))
-                            .frame(width: 24, height: 24)
-                        Text("Activate Card")
-                            .font(.brandBody)
-                            .foregroundColor(Color("PrimaryNuriBlack"))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 54)
-                    .background(Color("PrimaryNuriLilac"))
-                    .cornerRadius(100)
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 16)
-
-                Spacer()
-
-                Button(action: {
-                    isTransactionsPresented = true
-                }) {
-                    Image("link-icon-to-transactions")
-                        .resizable()
-                        .frame(width: 24, height: 13)
-                }
-                .padding(.bottom, 34)
+            } else {
+                Image("card-flattend")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 256)
+                    .padding(.bottom, 30)
             }
-        }
-        .navigationBarBackButtonHidden(true)
-        .navigationBarHidden(true)
-        .fullScreenCover(isPresented: $isTransactionsPresented) {
-            TransactionsView()
-        }
-    }
 
-    private func topNavigationBar() -> some View {
-        HStack {
-            Image("nuri-logo-svg-correct")
-                .resizable()
-                .frame(width: 24, height: 24)
+            HStack(spacing: 32) {
+                SmallIconButton(icon: showCardDetails ? "eye_hidden" : "eye_hidden", title: "Details") {
+                    withAnimation(.easeInOut) {
+                        showCardDetails.toggle()
+                    }
+                }
+                SmallIconButton(icon: "lock_open", title: "Freeze") {
+                }
+                SmallIconButton(icon: "money_topup", title: "Top-Up") {
+                }
+            }
+            .padding(.bottom, 30)
+
+            Button(action: {
+
+            }) {
+                HStack(spacing: 8) {
+                    Image("apple-wallet")
+                        .resizable()
+                        .frame(width: 32, height: 32)
+                    Text("Add to Apple Wallet")
+                        .font(.brandBody)
+                        .foregroundColor(.white)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 54)
+                .background(Color("PrimaryNuriBlack"))
+                .cornerRadius(100)
+            }
+            .padding(.horizontal, 24)
+
+            // Activate Card button
+            NavigationLink(destination: ResidenceCitizenshipUSTaxView()) {
+                HStack(spacing: 8) {
+                    Image("head")
+                        .resizable()
+                        .renderingMode(.template)
+                        .foregroundColor(Color("PrimaryNuriBlack"))
+                        .frame(width: 24, height: 24)
+                    Text("Activate Card")
+                        .font(.brandBody)
+                        .foregroundColor(Color("PrimaryNuriBlack"))
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 54)
+                .background(Color("PrimaryNuriLilac"))
+                .cornerRadius(100)
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 16)
 
             Spacer()
 
             Button(action: {
+                isTransactionsPresented = true
             }) {
-                Text("+ Add Money")
-                    .font(.custom("Inter", size: 14).weight(.medium))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color("PrimaryNuriBlack"))
-                    .cornerRadius(64)
+                Image("link-icon-to-transactions")
+                    .resizable()
+                    .frame(width: 24, height: 13)
             }
+            .padding(.bottom, 34)
+            Spacer()
+        }
+        .background(NuriAsset.background.swiftUIColor)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Image("nuri-logo-svg")
+                    .resizable()
+                    .frame(width: 24, height: 24)
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink(destination: EmptyView()) {
+                    Text("+ Add Money")
+                        .font(.custom("Inter", size: 14).weight(.medium))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color("PrimaryNuriBlack"))
+                        .cornerRadius(64)
+                }
+            }
+        }
+        .fullScreenCover(isPresented: $isTransactionsPresented) {
+            TransactionsView()
         }
     }
 }
@@ -240,4 +230,4 @@ private struct CardMini: View {
 #Preview {
     CardViewActive()
 }
-#endif 
+#endif

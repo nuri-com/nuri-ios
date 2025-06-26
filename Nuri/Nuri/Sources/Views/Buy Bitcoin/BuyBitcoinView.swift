@@ -1,0 +1,66 @@
+import SwiftUI
+import PassKit
+
+struct BuyBitcoinView: View {
+
+    @Binding var isPresented: Bool
+
+    var formatter: NumberFormatter {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 8
+        return formatter
+    }
+
+    @State var amount: Double? = 0
+
+    @FocusState private var focusedField: Int?
+
+    private let exchangeRate: Double = 91458.62
+
+    var body: some View {
+        VStack {
+            Spacer()
+            HStack(spacing: 8) {
+                Text("€")
+                    .font(.system(size: 40, weight: .semibold))
+                TextField("0", value: $amount, format: .number)
+                    .setWidthAccordingTo(text: "\((amount ?? 0))")
+                    .focused($focusedField, equals: 1)
+                    .font(.system(size: 40, weight: .semibold))
+                    .keyboardType(.decimalPad)
+            }
+            Text("~ \(formatter.string(from: NSNumber(value: (amount ?? 0) / exchangeRate))!) BTC")
+                .font(.footnote)
+                .foregroundStyle(Color.secondary)
+            Spacer()
+            NavigationLink("Buy with Apple Pay") {
+                SuccessView(illustration: "hand-plant", title: "Bitcoin purchased!", subtitle: "You've purchased 0.9123 BTC!") {
+                    isPresented = false
+                }
+            }
+            .buttonStyle(ProminentBlackButtonStyle())
+        }
+        .padding()
+        .background(NuriAsset.background.swiftUIColor)
+        .navigationTitle("Buy Bitcoin")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem {
+                Button("Cancel") {
+                    isPresented = false
+                }
+            }
+        }
+        .onAppear {
+            focusedField = 1
+        }
+    }
+}
+
+#Preview {
+    NavigationStack {
+        BuyBitcoinView(isPresented: .constant(true))
+    }
+}

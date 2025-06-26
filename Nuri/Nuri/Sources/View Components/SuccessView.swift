@@ -22,6 +22,6 @@ struct SuccessView: View {
             .buttonStyle(ProminentBlackButtonStyle())
         }
         .padding()
-        .background(NuriAsset.accentColor.swiftUIColor)
+        .background(NuriAsset.primaryNuriLilac.swiftUIColor)
     }
 }

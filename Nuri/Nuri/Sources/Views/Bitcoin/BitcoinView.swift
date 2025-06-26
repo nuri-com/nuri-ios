@@ -4,6 +4,7 @@ final class BitcoinViewNavigation: ObservableObject {
     @Published var isSendViewPresented = false
     @Published var isReceiveViewPresented = false
     @Published var isTransactionsPresented = false
+    @Published var isBuyBitcoinPresented = false
 }
 
 struct BitcoinView: View {
@@ -13,8 +14,6 @@ struct BitcoinView: View {
     var body: some View {
         ZStack {
             VStack {
-                TopNavigationBar()
-                    .padding(.bottom, 30)
                 Spacer()
                 VStack(spacing: 21) {
                     VStack(spacing: 12) {
@@ -55,30 +54,33 @@ struct BitcoinView: View {
                 ReceiveView()
             }
         }
+        .sheet(isPresented: $navigation.isBuyBitcoinPresented) {
+            NavigationStack {
+                BuyBitcoinView(isPresented: $navigation.isBuyBitcoinPresented)
+            }
+        }
         .environmentObject(navigation)
         .fullScreenCover(isPresented: $navigation.isTransactionsPresented) {
             TransactionsView()
         }
-    }
-}
-
-private struct TopNavigationBar: View {
-    var body: some View {
-        HStack {
-            Image("nuri-logo-svg")
-                .resizable()
-                .frame(width: 24, height: 24)
-            Spacer()
-            Button(action: {
-                // Add action for buying Bitcoin
-            }) {
-                Text("+ Buy Bitcoin")
-                    .font(.custom("Inter", size: 14).weight(.medium))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color("PrimaryNuriBlack"))
-                    .cornerRadius(64)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Image("nuri-logo-svg")
+                    .resizable()
+                    .frame(width: 24, height: 24)
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    navigation.isBuyBitcoinPresented = true
+                } label: {
+                    Text("+ Buy Bitcoin")
+                        .font(.custom("Inter", size: 14).weight(.medium))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color("PrimaryNuriBlack"))
+                        .cornerRadius(64)
+                }
             }
         }
     }
