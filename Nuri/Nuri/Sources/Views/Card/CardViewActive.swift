@@ -72,6 +72,26 @@ struct CardViewActive: View {
                 }
                 .padding(.horizontal, 24)
 
+                // Activate Card button
+                NavigationLink(destination: ResidenceCitizenshipUSTaxView()) {
+                    HStack(spacing: 8) {
+                        Image("head")
+                            .resizable()
+                            .renderingMode(.template)
+                            .foregroundColor(Color("PrimaryNuriBlack"))
+                            .frame(width: 24, height: 24)
+                        Text("Activate Card")
+                            .font(.brandBody)
+                            .foregroundColor(Color("PrimaryNuriBlack"))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 54)
+                    .background(Color("PrimaryNuriLilac"))
+                    .cornerRadius(100)
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 16)
+
                 Spacer()
 
                 Button(action: {

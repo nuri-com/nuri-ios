@@ -28,6 +28,7 @@ struct MainTabBar: View {
                     }
                 }
             }
+            .tint(.black)
         }
         .ignoresSafeArea(.keyboard)
     }

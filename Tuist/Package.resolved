@@ -1,5 +1,5 @@
 {
-  "originHash" : "13d363ac9ef964499882d5938089d5d7dc708b77ddedc86b023b84a9b8376d1f",
+  "originHash" : "534e9aebddd9b9d5703dd0cc54ce374ded204c13eec2b052834a4919892464f5",
   "pins" : [
     {
       "identity" : "codescanner",
@@ -8,6 +8,33 @@
       "state" : {
         "revision" : "5e886430238944c7200fc9e10dbf2d9550dba865",
         "version" : "2.5.2"
+      }
+    },
+    {
+      "identity" : "idensicmobilesdk-ios",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/SumSubstance/IdensicMobileSDK-iOS",
+      "state" : {
+        "revision" : "de2d8f77baaa5b1bb2ca475d4b6fffa21529be67",
+        "version" : "1.36.0"
+      }
+    },
+    {
+      "identity" : "openssl",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/krzyzanowskim/OpenSSL",
+      "state" : {
+        "revision" : "623c84da314e85363236507ca38a4bde65df21c3",
+        "version" : "3.3.3001"
+      }
+    },
+    {
+      "identity" : "twilio-video-ios",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/twilio/twilio-video-ios",
+      "state" : {
+        "revision" : "a896521ecf73844731f00ed62f7d5afa487e0b3a",
+        "version" : "5.9.0"
       }
     }
   ],
