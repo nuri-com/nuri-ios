@@ -32,8 +32,7 @@ struct SetupCardExplanationView: View {
                     .padding(padding)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.accentColor)
+            .background(NuriAsset.primaryNuriLilac.swiftUIColor)
         }
     }
-
 }
