@@ -1,9 +1,13 @@
 import SwiftUI
 import PassKit
 
+final class BuyBitcoinViewNavigation: ObservableObject {
+    var isBuyBitcoinViewPresented: Bool = false
+}
+
 struct BuyBitcoinView: View {
 
-    @EnvironmentObject var navigation: BitcoinViewNavigation
+    @EnvironmentObject var navigation: BuyBitcoinViewNavigation
 
     @State var amount: String = "99.50"
 
@@ -28,15 +32,18 @@ struct BuyBitcoinView: View {
             Spacer()
             NavigationLink("Buy with Apple Pay") {
                 SuccessView(illustration: "hand-plant", title: "Bitcoin purchased!", subtitle: "You've purchased 0.9123 BTC!") {
-                    navigation.isReceiveViewPresented = false
+                    navigation.isBuyBitcoinViewPresented = false
                 }
             }
             .buttonStyle(ProminentBlackButtonStyle())
         }
         .padding()
+        .background(NuriAsset.background.swiftUIColor)
     }
 }
 
 #Preview {
-    BuyBitcoinView()
+    NavigationStack {
+        BuyBitcoinView()
+    }
 }
