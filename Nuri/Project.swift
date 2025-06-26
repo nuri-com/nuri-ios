@@ -46,7 +46,7 @@ let project = Project(
             dependencies: [
                 .project(target: "Authentication", path: "../Authentication"),
                 .external(name: "CodeScanner"),
-                .product(name: "IdensicMobileSDK", package: "IdensicMobileSDK-iOS"),
+                .external(name: "IdensicMobileSDK"),
             ],
             settings: .settings(
                 base: .init()
