@@ -27,7 +27,11 @@ let project = Project(
                 ]),
                 "UILaunchStoryboardName": "LaunchScreen",
                 "ITSAppUsesNonExemptEncryption": .boolean(false),
-                "NSCameraUsageDescription": "Scan QR codes for bitcoin addresses"
+                "NSCameraUsageDescription": "Camera access is needed to scan your documents and QR codes",
+                "NSMicrophoneUsageDescription": "Microphone access is needed for video verification",
+                "NSPhotoLibraryUsageDescription": "Photo library access is needed if you choose an existing image of your ID",
+                "NSLocationWhenInUseUsageDescription": "Location is used to enhance identity verification",
+                "NSLocationTemporaryUsageDescriptionDictionary": .dictionary(["DocumentVerification": "Location is required to confirm you are in an allowed country"])
             ]),
             sources: ["Nuri/Sources/**"],
             resources: ["Nuri/Resources/**"],
@@ -42,10 +46,13 @@ let project = Project(
             dependencies: [
                 .project(target: "Authentication", path: "../Authentication"),
                 .external(name: "CodeScanner"),
+                .external(name: "IdensicMobileSDK"),
             ],
             settings: .settings(
-                base: .init()
-                    .automaticCodeSigning(devTeam: "7NF2K7X2U6")
+                base: .init([
+                    "ENABLE_BITCODE": "NO"
+                ])
+                .automaticCodeSigning(devTeam: "7NF2K7X2U6")
             )
         )
     ]
