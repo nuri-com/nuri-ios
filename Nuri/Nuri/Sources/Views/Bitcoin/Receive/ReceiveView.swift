@@ -28,7 +28,7 @@ struct ReceiveView: View {
             .clipShape(RoundedRectangle(cornerRadius: 6))
             .padding(.vertical, 16)
             NavigationLink("Buy Bitcoin") {
-                BuyBitcoinView()
+                BuyBitcoinView(isPresented: $navigation.isReceiveViewPresented)
             }
             .buttonStyle(ProminentButtonStyle())
             Spacer()

@@ -1,49 +1,66 @@
 import SwiftUI
 import PassKit
 
-final class BuyBitcoinViewNavigation: ObservableObject {
-    var isBuyBitcoinViewPresented: Bool = false
-}
-
 struct BuyBitcoinView: View {
 
-    @EnvironmentObject var navigation: BuyBitcoinViewNavigation
+    @Binding var isPresented: Bool
 
-    @State var amount: String = "99.50"
+    var formatter: NumberFormatter {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 8
+        return formatter
+    }
+
+    @State var amount: Double? = 0
 
     @FocusState private var focusedField: Int?
 
+    private let exchangeRate: Double = 91458.62
+
     var body: some View {
         VStack {
-            Text("Buy Bitcoin")
-                .font(.brandTitle1)
-                .foregroundColor(Color("PrimaryNuriBlack"))
             Spacer()
             HStack(spacing: 8) {
                 Text("€")
                     .font(.system(size: 40, weight: .semibold))
-                TextFieldDynamicWidth(title: "0.00", text: $amount)
-                .focused($focusedField, equals: 1)
-                .font(.system(size: 40, weight: .semibold))
+                TextField("0", value: $amount, format: .number)
+                    .setWidthAccordingTo(text: "\((amount ?? 0))")
+                    .focused($focusedField, equals: 1)
+                    .font(.system(size: 40, weight: .semibold))
+                    .keyboardType(.decimalPad)
             }
-            Text("~ 0.002 BTC")
+            Text("~ \(formatter.string(from: NSNumber(value: (amount ?? 0) / exchangeRate))!) BTC")
                 .font(.footnote)
                 .foregroundStyle(Color.secondary)
             Spacer()
             NavigationLink("Buy with Apple Pay") {
                 SuccessView(illustration: "hand-plant", title: "Bitcoin purchased!", subtitle: "You've purchased 0.9123 BTC!") {
-                    navigation.isBuyBitcoinViewPresented = false
+                    isPresented = false
                 }
             }
             .buttonStyle(ProminentBlackButtonStyle())
         }
         .padding()
         .background(NuriAsset.background.swiftUIColor)
+        .navigationTitle("Buy Bitcoin")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem {
+                Button("Cancel") {
+                    isPresented = false
+                }
+            }
+        }
+        .onAppear {
+            focusedField = 1
+        }
     }
 }
 
 #Preview {
     NavigationStack {
-        BuyBitcoinView()
+        BuyBitcoinView(isPresented: .constant(true))
     }
 }

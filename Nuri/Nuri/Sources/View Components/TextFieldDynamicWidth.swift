@@ -1,18 +1,19 @@
 import SwiftUI
 
-struct TextFieldDynamicWidth: View {
+struct TextFieldDynamicWidth<T: CustomStringConvertible>: View {
     let title: String
-    @Binding var text: String
+    @Binding var text: T
+    let formatter: Formatter
 
     @State private var textRect = CGRect()
 
     var body: some View {
         ZStack {
-            Text(text == "" ? title : text)
+            Text(text.description == "" ? title : text.description)
                 .background(GlobalGeometryGetter(rect: $textRect))
                 .layoutPriority(1)
                 .opacity(0)
-            TextField(title, text: $text)
+            TextField(title, value: $text, formatter: formatter)
                 .frame(width: textRect.width)
         }
     }
