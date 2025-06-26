@@ -2,53 +2,40 @@ import SwiftUI
 
 struct CardView: View {
     var body: some View {
-        ZStack {
-            Color("Background").edgesIgnoringSafeArea(.all)
-            VStack(spacing: 0) {
-                topNavigationBar()
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 30)
-
-                Image("card-flattend")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 256)
-                    .padding(.bottom, 30)
-
-                Text("Nuri Card for Apple Pay")
-                    .font(.brandTitle1)
-                    .foregroundColor(Color("PrimaryNuriBlack"))
-                    .multilineTextAlignment(.center)
-                    .padding(.bottom, 30)
-
-                featureList()
-                    .padding(.bottom, 30)
-
-                actionButton()
-                
-                Spacer()
-            }
-            .padding(.top, 44)
-        }
-        .edgesIgnoringSafeArea(.bottom)
-    }
-
-    private func topNavigationBar() -> some View {
-        HStack {
-            Image("nuri-logo-svg-correct")
-                .resizable()
-                .frame(width: 24, height: 24)
-
+        VStack(spacing: 0) {
             Spacer()
-
-            NavigationLink(destination: CardViewActive()) {
-                Text("+ Get Card")
-                    .font(.custom("Inter", size: 14).weight(.medium))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color("PrimaryNuriBlack"))
-                    .cornerRadius(64)
+            Image("card-flattend")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 256)
+                .padding(.bottom, 30)
+            Text("Nuri Card for Apple Pay")
+                .font(.brandTitle1)
+                .foregroundColor(Color("PrimaryNuriBlack"))
+                .multilineTextAlignment(.center)
+                .padding(.bottom, 30)
+            featureList()
+                .padding(.bottom, 30)
+            actionButton()
+            Spacer()
+        }
+        .background(NuriAsset.background.swiftUIColor)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Image("nuri-logo-svg")
+                    .resizable()
+                    .frame(width: 24, height: 24)
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink(destination: CardViewActive()) {
+                    Text("+ Get Card")
+                        .font(.custom("Inter", size: 14).weight(.medium))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color("PrimaryNuriBlack"))
+                        .cornerRadius(64)
+                }
             }
         }
     }

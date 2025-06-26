@@ -5,93 +5,73 @@ struct SecurityView: View {
     @State private var iCloudBackupEnabled: Bool = true
 
     var body: some View {
-        ZStack {
-            Color(hex: "#F0F0F0").edgesIgnoringSafeArea(.all)
-            VStack(spacing: 0) {
-                topNavigationBar()
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 34)
-                    .padding(.top, 44)
-
-                ScrollView {
-                    VStack(spacing: 21) {
-                        Text("Security")
-                            .font(.brandTitle1)
+        VStack(spacing: 21) {
+            Spacer()
+            Text("Security")
+                .font(.brandTitle1)
+                .foregroundColor(Color("PrimaryNuriBlack"))
+                .multilineTextAlignment(.center)
+            VStack(spacing: 12) {
+                SecurityRow(
+                    icon: "passkey-new",
+                    title: "Passkey",
+                    subtitle: "Account is secured with Apple iCloud Passkey.",
+                    subtitleColor: Color(hex: "#02542d"),
+                    trailing: AnyView(
+                        Toggle("", isOn: $passkeyEnabled)
+                            .labelsHidden()
+                            .tint(Color("PrimaryNuriLilac"))
+                    )
+                )
+                SecurityRow(
+                    icon: "icloud-download",
+                    title: "iCloud Backup",
+                    subtitle: "A Passkey encrypted backup of your Key is in your iCloud.",
+                    subtitleColor: Color(hex: "#02542d"),
+                    trailing: AnyView(
+                        Toggle("", isOn: $iCloudBackupEnabled)
+                            .labelsHidden()
+                            .tint(Color("PrimaryNuriLilac"))
+                    )
+                )
+                SecurityRow(
+                    icon: "touch-id",
+                    title: "Add Hardware Key",
+                    subtitle: "Secure your account with a Nuri key, Yubikey, Hardware Wallet, and more.",
+                    subtitleColor: Color(hex: "#6D6D86"),
+                    trailing: AnyView(
+                        Image(systemName: "chevron.right")
                             .foregroundColor(Color("PrimaryNuriBlack"))
-                            .multilineTextAlignment(.center)
-
-                        VStack(spacing: 12) {
-                            SecurityRow(
-                                icon: "passkey-new",
-                                title: "Passkey",
-                                subtitle: "Account is secured with Apple iCloud Passkey.",
-                                subtitleColor: Color(hex: "#02542d"),
-                                trailing: AnyView(
-                                    Toggle("", isOn: $passkeyEnabled)
-                                        .labelsHidden()
-                                        .tint(Color("PrimaryNuriLilac"))
-                                )
-                            )
-
-                            SecurityRow(
-                                icon: "icloud-download",
-                                title: "iCloud Backup",
-                                subtitle: "A Passkey encrypted backup of your Key is in your iCloud.",
-                                subtitleColor: Color(hex: "#02542d"),
-                                trailing: AnyView(
-                                    Toggle("", isOn: $iCloudBackupEnabled)
-                                        .labelsHidden()
-                                        .tint(Color("PrimaryNuriLilac"))
-                                )
-                            )
-
-                            SecurityRow(
-                                icon: "touch-id",
-                                title: "Add Hardware Key",
-                                subtitle: "Secure your account with a Nuri key, Yubikey, Hardware Wallet, and more.",
-                                subtitleColor: Color(hex: "#6D6D86"),
-                                trailing: AnyView(
-                                    Image(systemName: "chevron.right")
-                                        .foregroundColor(Color("PrimaryNuriBlack"))
-                                )
-                            )
-                        }
-                        .padding(.horizontal, 16)
-
-                        actionButton()
-                            .padding(.top, 24)
-                    }
+                    )
+                )
+            }
+            .padding(.horizontal, 16)
+            actionButton()
+                .padding(.top, 24)
+            Spacer()
+        }
+        .background(NuriAsset.background.swiftUIColor)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Image("nuri-logo-svg")
+                    .resizable()
+                    .frame(width: 24, height: 24)
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink(destination: EmptyView()) {
+                    Text("+ Add Key")
+                        .font(.custom("Inter", size: 14).weight(.medium))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color("PrimaryNuriBlack"))
+                        .cornerRadius(64)
                 }
-
-                Spacer(minLength: 0)
             }
         }
-        .edgesIgnoringSafeArea(.bottom)
     }
 
     // MARK: - Components
-
-    private func topNavigationBar() -> some View {
-        HStack {
-            Image("nuri-logo-svg-correct")
-                .resizable()
-                .frame(width: 24, height: 24)
-
-            Spacer()
-
-            Button(action: {
-                // Add Key action
-            }) {
-                Text("+Add Key")
-                    .font(.custom("Inter", size: 14).weight(.medium))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color("PrimaryNuriBlack"))
-                    .cornerRadius(64)
-            }
-        }
-    }
 
     private func actionButton() -> some View {
         Button(action: {
@@ -153,4 +133,4 @@ struct SecurityView_Previews: PreviewProvider {
         SecurityView()
     }
 }
-#endif 
+#endif

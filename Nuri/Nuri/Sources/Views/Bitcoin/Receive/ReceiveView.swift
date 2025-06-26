@@ -4,7 +4,7 @@ struct ReceiveView: View {
 
     @EnvironmentObject var navigation: BitcoinViewNavigation
 
-private let address = "bc1q87rj40hdu23kzwyz5aq89fj84wrrf6h757r0y5kpxhnez2q8uvnq0gjqfl"
+    private let address = "bc1q87rj40hdu23kzwyz5aq89fj84wrrf6h757r0y5kpxhnez2q8uvnq0gjqfl"
 
     var body: some View {
         VStack(spacing: 16) {
