@@ -4,8 +4,8 @@ import SwiftUI
 struct SumsubVerificationView: View {
     @Environment(\.dismiss) private var dismiss
 
-    // Replace with real token from backend
-    private let dummyAccessToken = "YOUR_ACCESS_TOKEN"
+    // Sandbox access token provided by Sumsub (public, safe to embed in client for sandbox only).
+    private let sandboxAccessToken = "sbx:KPfLzjksGrj7tvuDGBo5vb4m.m9h1nVQGvq4HlLuCnWKqLhgoW1QJ9wbn"
 
     @State private var showSDK = false
     @State private var verificationResult: Bool? = nil
@@ -48,7 +48,7 @@ struct SumsubVerificationView: View {
     }
 
     private var sdkView: some View {
-        SumsubView(accessToken: dummyAccessToken) { approved in
+        SumsubView(accessToken: sandboxAccessToken) { approved in
             verificationResult = approved
             dismiss()
         }
