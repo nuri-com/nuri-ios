@@ -49,9 +49,7 @@ let project = Project(
                 .external(name: "IdensicMobileSDK"),
             ],
             settings: .settings(
-                base: .init([
-                    "ENABLE_BITCODE": "NO"
-                ])
+                base: .init()
                 .automaticCodeSigning(devTeam: "7NF2K7X2U6")
             )
         )
