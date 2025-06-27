@@ -20,39 +20,37 @@ struct BuyBitcoinView: View {
     private let exchangeRate: Double = 91458.62
 
     var body: some View {
-        VStack {
-            Spacer()
-            HStack(spacing: 8) {
-                Text("€")
-                    .font(.system(size: 40, weight: .semibold))
-                TextField("0", value: $amount, format: .number)
-                    .setWidthAccordingTo(text: "\((amount ?? 0))")
-                    .focused($focusedField, equals: 1)
-                    .font(.system(size: 40, weight: .semibold))
-                    .keyboardType(.decimalPad)
-            }
-            Text("~ \(formatter.string(from: NSNumber(value: (amount ?? 0) / exchangeRate))!) BTC")
-                .font(.footnote)
-                .foregroundStyle(Color.secondary)
-            Spacer()
-            NavigationLink("Buy with Apple Pay") {
-                SuccessView(illustration: "hand-plant", title: "Bitcoin purchased!", subtitle: "You've purchased 0.9123 BTC!") {
-                    isPresented = false
+        VStack(spacing: 0) {
+            NuriHeader<AnyView, AnyView>.logo(
+                title: "Buy Bitcoin",
+                onClose: { isPresented = false }
+            )
+
+            VStack {
+                Spacer()
+                HStack(spacing: 8) {
+                    Text("€")
+                        .font(.system(size: 40, weight: .semibold))
+                    TextField("0", value: $amount, format: .number)
+                        .setWidthAccordingTo(text: "\((amount ?? 0))")
+                        .focused($focusedField, equals: 1)
+                        .font(.system(size: 40, weight: .semibold))
+                        .keyboardType(.decimalPad)
                 }
+                Text("~ \(formatter.string(from: NSNumber(value: (amount ?? 0) / exchangeRate))!) BTC")
+                    .font(.footnote)
+                    .foregroundStyle(Color.secondary)
+                Spacer()
+                NavigationLink("Buy with Apple Pay") {
+                    SuccessView(illustration: "hand-plant", title: "Bitcoin purchased!", subtitle: "You've purchased 0.9123 BTC!") {
+                        isPresented = false
+                    }
+                }
+                .buttonStyle(ProminentBlackButtonStyle())
             }
-            .buttonStyle(ProminentBlackButtonStyle())
+            .padding()
         }
-        .padding()
         .background(NuriAsset.background.swiftUIColor)
-        .navigationTitle("Buy Bitcoin")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem {
-                Button("Cancel") {
-                    isPresented = false
-                }
-            }
-        }
         .onAppear {
             focusedField = 1
         }

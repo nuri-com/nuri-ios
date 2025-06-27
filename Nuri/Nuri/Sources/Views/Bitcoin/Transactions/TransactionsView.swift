@@ -17,11 +17,7 @@ struct TransactionsView: View {
             Color(hex: "#F0F0F0").ignoresSafeArea()
 
             VStack(spacing: 0) {
-                header
-                    .padding(.top, 44) // Status-bar + custom spacing
-                    .padding(.horizontal, 24)
-                    .frame(height: 44)
-                    .padding(.bottom, 28) // Space between header & first row
+                NuriHeader<AnyView, AnyView>.logo(title: "Transactions", onClose: { dismiss() })
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
@@ -38,23 +34,6 @@ struct TransactionsView: View {
                 }
 
                 Spacer(minLength: 0)
-            }
-        }
-    }
-
-    // MARK: - Header
-    private var header: some View {
-        ZStack {
-            Text("Transactions")
-                .font(.custom("Inter", size: 16).weight(.semibold))
-                .foregroundColor(Color("PrimaryNuriBlack"))
-            HStack {
-                Spacer()
-                Button(action: { dismiss() }) {
-                    Image("delete-close")
-                        .resizable()
-                        .frame(width: 32, height: 32)
-                }
             }
         }
     }

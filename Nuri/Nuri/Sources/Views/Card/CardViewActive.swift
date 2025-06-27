@@ -6,6 +6,29 @@ struct CardViewActive: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Unified header
+            NuriHeader<AnyView, AnyView>(title: "") {
+                AnyView(
+                    Image("HeaderLogo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 24, height: 24)
+                        .frame(width: 32, height: 32)
+                )
+            } trailing: {
+                AnyView(
+                    NavigationLink(destination: EmptyView()) {
+                        Text("+ Add Money")
+                            .font(.custom("Inter", size: 14).weight(.medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color("PrimaryNuriBlack"))
+                            .cornerRadius(64)
+                    }
+                )
+            }
+
             Spacer()
             VStack(spacing: 12) {
                 HStack(spacing: 0) {
@@ -99,24 +122,8 @@ struct CardViewActive: View {
             Spacer()
         }
         .background(NuriAsset.background.swiftUIColor)
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Image("nuri-logo-svg")
-                    .resizable()
-                    .frame(width: 24, height: 24)
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink(destination: EmptyView()) {
-                    Text("+ Add Money")
-                        .font(.custom("Inter", size: 14).weight(.medium))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color("PrimaryNuriBlack"))
-                        .cornerRadius(64)
-                }
-            }
-        }
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .fullScreenCover(isPresented: $isTransactionsPresented) {
             TransactionsView()
         }

@@ -41,20 +41,13 @@ struct SendView: View {
                 .buttonStyle(ProminentButtonStyle())
             }
             .padding()
-            ZStack {
-                Text("Send Bitcoin")
-                    .frame(maxWidth: .infinity, alignment: .center)
-                HStack {
-                    Spacer()
-                    Button("Cancel") {
-                        navigation.isSendViewPresented.toggle()
-                    }
-                }
+            VStack(spacing: 0) {
+                NuriHeader<AnyView, AnyView>.logo(
+                    title: "Send Bitcoin",
+                    onClose: { navigation.isSendViewPresented = false }
+                )
+                Spacer()
             }
-            .padding()
-            .font(.headline)
-            .frame(maxWidth: .infinity)
-            .foregroundStyle(Color.white)
         }
     }
 

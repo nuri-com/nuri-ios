@@ -3,41 +3,40 @@ import SwiftUI
 struct CardView: View {
     var body: some View {
         VStack(spacing: 0) {
-            Spacer()
-            Image("card-flattend")
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 256)
-                .padding(.bottom, 30)
-            Text("Nuri Card for Apple Pay")
-                .font(.brandTitle1)
-                .foregroundColor(Color("PrimaryNuriBlack"))
-                .multilineTextAlignment(.center)
-                .padding(.bottom, 30)
+            // Unified header
+            NuriHeader<AnyView, AnyView>(title: "") {
+                AnyView(
+                    Image("HeaderLogo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 24, height: 24)
+                        .frame(width: 32, height: 32)
+                )
+            } trailing: {
+                AnyView(
+                    NavigationLink(destination: CardViewActive()) {
+                        Text("+ Get Card")
+                            .font(.custom("Inter", size: 14).weight(.medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color("PrimaryNuriBlack"))
+                            .cornerRadius(64)
+                    }
+                )
+            }
+
+            NuriCardIllustration()
+            NuriTitleWithSubtitle(title: "Nuri Card for Apple Pay", subtitle: "")
+                .padding(.top, 30)
             featureList()
                 .padding(.bottom, 30)
             actionButton()
             Spacer()
         }
         .background(NuriAsset.background.swiftUIColor)
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Image("nuri-logo-svg")
-                    .resizable()
-                    .frame(width: 24, height: 24)
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink(destination: CardViewActive()) {
-                    Text("+ Get Card")
-                        .font(.custom("Inter", size: 14).weight(.medium))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color("PrimaryNuriBlack"))
-                        .cornerRadius(64)
-                }
-            }
-        }
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
     }
 
     private func featureList() -> some View {
@@ -51,20 +50,7 @@ struct CardView: View {
 
     private func actionButton() -> some View {
         NavigationLink(destination: CardViewActive()) {
-            HStack(spacing: 8) {
-                Image("card_contactless")
-                    .resizable()
-                    .renderingMode(.template)
-                    .foregroundColor(Color("PrimaryNuriBlack"))
-                    .frame(width: 24, height: 24)
-                Text("Get Card")
-                    .font(.brandBody)
-            }
-            .foregroundColor(Color("PrimaryNuriBlack"))
-            .frame(maxWidth: .infinity)
-            .frame(height: 54)
-            .background(Color("PrimaryNuriLilac"))
-            .cornerRadius(100)
+            NuriButton(icon: "card_contactless", title: "Get Card", style: .primary)
         }
         .padding(.horizontal, 24)
     }

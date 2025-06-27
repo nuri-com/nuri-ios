@@ -13,35 +13,42 @@ struct BitcoinView: View {
 
     var body: some View {
         ZStack {
-            VStack {
-                Spacer()
-                VStack(spacing: 21) {
-                    VStack(spacing: 12) {
-                        AmountAndCurrency()
-                        SecondaryCurrencyAndAmount()
-                    }
-                    HStack(spacing: 16) {
-                        PrimaryHalfButton(title: "Receive", icon: "bitcoin_hand") {
-                            navigation.isReceiveViewPresented = true
+            VStack(spacing: 0) {
+                NuriHeader<AnyView, AnyView>.logoAndCTA(
+                    title: "",
+                    cta: "+ Buy Bitcoin",
+                    onCTA: { navigation.isBuyBitcoinPresented = true }
+                )
+
+                VStack {
+                    Spacer()
+                    VStack(spacing: 21) {
+                        VStack(spacing: 12) {
+                            AmountAndCurrency()
+                            SecondaryCurrencyAndAmount()
                         }
-                        SecondaryHalfButton(title: "Send", icon: "qr_scan") {
-                            navigation.isSendViewPresented = true
+                        HStack(spacing: 16) {
+                            PrimaryHalfButton(title: "Receive", icon: "bitcoin_hand") {
+                                navigation.isReceiveViewPresented = true
+                            }
+                            SecondaryHalfButton(title: "Send", icon: "qr_scan") {
+                                navigation.isSendViewPresented = true
+                            }
                         }
+                        .padding(.vertical, 24)
                     }
-                    .padding(.vertical, 24)
+                    Spacer()
+                    Button(action: {
+                        navigation.isTransactionsPresented = true
+                    }) {
+                        Image("link-icon-to-transactions")
+                            .resizable()
+                            .frame(width: 24, height: 13)
+                    }
                 }
-                Spacer()
-                Button(action: {
-                    navigation.isTransactionsPresented = true
-                }) {
-                    Image("link-icon-to-transactions")
-                        .resizable()
-                        .frame(width: 24, height: 13)
-                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 34)
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 44)
-            .padding(.bottom, 34)
         }
         .background(NuriAsset.background.swiftUIColor)
         .sheet(isPresented: $navigation.isSendViewPresented) {
@@ -62,26 +69,6 @@ struct BitcoinView: View {
         .environmentObject(navigation)
         .fullScreenCover(isPresented: $navigation.isTransactionsPresented) {
             TransactionsView()
-        }
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Image("nuri-logo-svg")
-                    .resizable()
-                    .frame(width: 24, height: 24)
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    navigation.isBuyBitcoinPresented = true
-                } label: {
-                    Text("+ Buy Bitcoin")
-                        .font(.custom("Inter", size: 14).weight(.medium))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color("PrimaryNuriBlack"))
-                        .cornerRadius(64)
-                }
-            }
         }
     }
 }
