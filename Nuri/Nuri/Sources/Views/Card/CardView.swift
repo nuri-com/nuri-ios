@@ -26,7 +26,7 @@ struct CardView: View {
                 )
             }
 
-            VStack(spacing: 30) {
+            VStack(spacing: 24) {
                 NuriCardIllustration()
                 NuriTitleWithSubtitle(title: "Nuri Card for Apple Pay", subtitle: "")
                 featureList()
