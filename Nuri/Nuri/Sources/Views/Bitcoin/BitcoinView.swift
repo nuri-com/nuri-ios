@@ -22,7 +22,7 @@ struct BitcoinView: View {
 
                 VStack {
                     Spacer()
-                    VStack(spacing: 21) {
+                    VStack(spacing: 12) {
                         VStack(spacing: 4) {
                             AmountAndCurrency()
                             SecondaryCurrencyAndAmount()
@@ -35,7 +35,7 @@ struct BitcoinView: View {
                                 navigation.isSendViewPresented = true
                             }
                         }
-                        .padding(.top, 12)
+                        .padding(.top, 0)
                         .padding(.bottom, 24)
                     }
                     Spacer()
