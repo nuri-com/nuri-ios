@@ -5,6 +5,7 @@ struct CardViewActive: View {
     @State private var showCardDetails = false
     @State private var isLargeQRPresented = false
     @State private var isCardFrozen = false
+    @State private var isTopUpPresented = false
 
     private let btcAddress = "bc1qsmd4xz68a7fhwvhjkd0cawx4uvs9a43746xld4yh0spfmwefpr5qc9wvv6"
 
@@ -60,6 +61,7 @@ struct CardViewActive: View {
                     isCardFrozen.toggle()
                 }
                 SmallIconButton(icon: "money_topup", title: "Top-Up") {
+                    isTopUpPresented = true
                 }
             }
             .padding(.bottom, 30)
@@ -119,6 +121,11 @@ struct CardViewActive: View {
         .toolbar(.hidden, for: .navigationBar)
         .fullScreenCover(isPresented: $isTransactionsPresented) {
             TransactionsView()
+        }
+        .sheet(isPresented: $isTopUpPresented) {
+            NavigationStack {
+                TopUpCardView(isPresented: $isTopUpPresented)
+            }
         }
         .fullScreenCover(isPresented: $isLargeQRPresented) {
             GeometryReader { geo in
