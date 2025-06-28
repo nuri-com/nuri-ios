@@ -14,10 +14,7 @@ struct BuyBitcoinView: View {
     }
 
     @State private var amountText: String = "21"
-
-    private var amountValue: Double {
-        Double(amountText.replacingOccurrences(of: ",", with: ".")) ?? 0
-    }
+    @State private var isPrimaryBTC = false // false = EUR primary
 
     @FocusState private var isFieldFocused: Bool
 
@@ -33,7 +30,7 @@ struct BuyBitcoinView: View {
             VStack {
                 Spacer()
                 HStack(spacing: 8) {
-                    Text("€")
+                    Text(isPrimaryBTC ? "₿" : "€ ")
                         .font(.system(size: 40, weight: .semibold))
                     TextField("0", text: $amountText)
                         .setWidthAccordingTo(text: amountText)
@@ -48,8 +45,15 @@ struct BuyBitcoinView: View {
                                 amountText = filtered
                             }
                         }
+                    Button(action: toggleCurrency) {
+                        Image("transfer_vertical")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 24, height: 24)
+                    }
+                    .buttonStyle(.plain)
                 }
-                Text("~ \(formatter.string(from: NSNumber(value: amountValue / exchangeRate))!) BTC")
+                Text(secondaryText())
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Color.secondary)
                 Spacer()
@@ -65,6 +69,34 @@ struct BuyBitcoinView: View {
         .onAppear {
             isFieldFocused = true
         }
+    }
+
+    private func secondaryText() -> String {
+        if isPrimaryBTC {
+            let eur = amountValue * exchangeRate
+            return "~ € " + formatter.string(from: NSNumber(value: eur))!
+        } else {
+            let btc = amountValue / exchangeRate
+            return "~ " + formatter.string(from: NSNumber(value: btc))! + " BTC"
+        }
+    }
+
+    private func toggleCurrency() {
+        let current = amountValue
+        if isPrimaryBTC {
+            // BTC -> EUR
+            let eur = current * exchangeRate
+            amountText = formatter.string(from: NSNumber(value: eur)) ?? ""
+        } else {
+            // EUR -> BTC
+            let btc = current / exchangeRate
+            amountText = formatter.string(from: NSNumber(value: btc)) ?? ""
+        }
+        isPrimaryBTC.toggle()
+    }
+
+    private var amountValue: Double {
+        Double(amountText.replacingOccurrences(of: ",", with: ".")) ?? 0
     }
 }
 
