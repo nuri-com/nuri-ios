@@ -43,18 +43,15 @@ struct CardView: View {
         VStack(spacing: 0) {
             NuriMenuRow(icon: "card_contactless",
                         title: "Free Virtual Visa Card",
-                        subtitle: "100% free. No monthly fees.",
-                        subtitleColor: Color(hex: "#02542d"))
+                        subtitle: "100% free. No monthly fees.")
 
             NuriMenuRow(icon: "bitcoin-recurring",
                         title: "Top-Up with Bitcoin",
-                        subtitle: "Send BTC to add money.",
-                        subtitleColor: Color(hex: "#02542d"))
+                        subtitle: "Send BTC to add money.")
 
             NuriMenuRow(icon: "wallet",
                         title: "Add to Apple Wallet",
-                        subtitle: "Use Card with Tap-To-Pay",
-                        subtitleColor: Color(hex: "#02542d"))
+                        subtitle: "Use Card with Tap-To-Pay")
         }
         .padding(.horizontal, 16)
     }
