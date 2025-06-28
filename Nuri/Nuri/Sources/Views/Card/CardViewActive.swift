@@ -59,11 +59,10 @@ struct CardViewActive: View {
             }
 
             HStack(spacing: 32) {
-                SmallIconButton(icon: showCardDetails ? "eye_hidden" : "eye_hidden", title: "Details") {
-                    withAnimation(.easeInOut) {
-                        showCardDetails.toggle()
-                    }
-                }
+                NuriSmallIconToggle(isActive: $showCardDetails,
+                                    label: "Details",
+                                    iconActive: "eye",  // open eye
+                                    iconInactive: "eye_hidden")
                 SmallIconButton(icon: "lock_open", title: "Freeze") {
                 }
                 SmallIconButton(icon: "money_topup", title: "Top-Up") {
@@ -126,27 +125,6 @@ struct CardViewActive: View {
         .toolbar(.hidden, for: .navigationBar)
         .fullScreenCover(isPresented: $isTransactionsPresented) {
             TransactionsView()
-        }
-    }
-}
-
-private struct SmallIconButton: View {
-    let icon: String
-    let title: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 4) {
-                Image(icon)
-                    .resizable()
-                    .renderingMode(.template)
-                    .foregroundColor(Color("PrimaryNuriBlack"))
-                    .frame(width: 32, height: 32)
-                Text(title)
-                    .font(.custom("Inter", size: 14).weight(.medium))
-                    .foregroundColor(Color("PrimaryNuriBlack"))
-            }
         }
     }
 }
