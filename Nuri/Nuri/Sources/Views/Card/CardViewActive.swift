@@ -3,6 +3,9 @@ import SwiftUI
 struct CardViewActive: View {
     @State private var isTransactionsPresented = false
     @State private var showCardDetails = false
+    @State private var isLargeQRPresented = false
+
+    private let btcAddress = "bc1qsmd4xz68a7fhwvhjkd0cawx4uvs9a43746xld4yh0spfmwefpr5qc9wvv6"
 
     var body: some View {
         VStack(spacing: 0) {
@@ -34,7 +37,7 @@ struct CardViewActive: View {
             .padding(.bottom, 30)
 
             if showCardDetails {
-                CardMini(card: CardModel(holder: "Cim Topal", number: "5354 5655 2079 6981", expiry: "03/30", cvv: "041"))
+                CardMini(card: CardModel(holder: "Cim Topal", number: "5354 5655 2079 6981", expiry: "03/30", cvv: "041"), qrAddress: btcAddress, onQRTap: { isLargeQRPresented = true })
                     .transition(.opacity)
                     .padding(.horizontal, 40)
                     .padding(.bottom, 30)
@@ -111,6 +114,17 @@ struct CardViewActive: View {
         .fullScreenCover(isPresented: $isTransactionsPresented) {
             TransactionsView()
         }
+        .fullScreenCover(isPresented: $isLargeQRPresented) {
+            VStack {
+                QRCodeImage(text: btcAddress)
+                    .frame(width: 250, height: 250)
+                    .onAppear { UIPasteboard.general.string = btcAddress }
+                    .onTapGesture { isLargeQRPresented = false }
+                Text("Bitcoin address copied to clipboard")
+                    .font(.headline)
+                    .padding()
+            }
+        }
     }
 }
 
@@ -161,6 +175,8 @@ private struct CardModel {
 
 private struct CardMini: View {
     let card: CardModel
+    let qrAddress: String
+    let onQRTap: () -> Void
     var body: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 12) {
@@ -181,11 +197,9 @@ private struct CardMini: View {
                 }
             }
             Spacer(minLength: 12)
-            Image(systemName: "qrcode")
-                .resizable()
-                .scaledToFit()
+            QRCodeImage(text: qrAddress)
                 .frame(width: 32, height: 32)
-                .foregroundColor(.white)
+                .onTapGesture { onQRTap() }
         }
         .padding(20)
         .frame(maxWidth: .infinity)
