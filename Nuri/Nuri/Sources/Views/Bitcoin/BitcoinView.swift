@@ -35,7 +35,7 @@ struct BitcoinView: View {
                                 navigation.isSendViewPresented = true
                             }
                         }
-                        .padding(.top, 8)
+                        .padding(.top, 16)
                         .padding(.bottom, 24)
                     }
                     Spacer()
@@ -92,7 +92,7 @@ private struct AmountAndCurrency: View {
 private struct SecondaryCurrencyAndAmount: View {
     var body: some View {
         HStack(spacing: 0) {
-            Text("€")
+            Text("€ ")
             Text("11.23")
         }
         .font(.system(size: 16, weight: .medium))
