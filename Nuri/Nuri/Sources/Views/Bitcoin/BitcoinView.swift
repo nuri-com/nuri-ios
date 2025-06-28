@@ -10,6 +10,7 @@ final class BitcoinViewNavigation: ObservableObject {
 struct BitcoinView: View {
 
     @StateObject private var navigation = BitcoinViewNavigation()
+    @State private var isPrimaryBTC = true
 
     var body: some View {
         ZStack {
@@ -24,8 +25,8 @@ struct BitcoinView: View {
                     Spacer()
                     VStack(spacing: 8) {
                         VStack(spacing: 4) {
-                            AmountAndCurrency()
-                            SecondaryCurrencyAndAmount()
+                            AmountAndCurrency(isPrimaryBTC: $isPrimaryBTC)
+                            SecondaryCurrencyAndAmount(isPrimaryBTC: $isPrimaryBTC)
                         }
                         HStack(spacing: 16) {
                             PrimaryHalfButton(title: "Receive", icon: "bitcoin_hand") {
@@ -75,35 +76,49 @@ struct BitcoinView: View {
 }
 
 private struct AmountAndCurrency: View {
+    @Binding var isPrimaryBTC: Bool
+
     var body: some View {
         HStack(spacing: 8) {
-            Image("bitcoin-recurring")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 24, height: 24)
             HStack(spacing: 10) {
-                Text("₿")
+                if isPrimaryBTC {
+                    Text("₿")
+                        .font(.brandTitle1)
+                    HStack(spacing: 0) {
+                        Text("0.0000")
+                            .foregroundColor(Color.gray.opacity(0.55))
+                        Text("1337")
+                    }
                     .font(.brandTitle1)
-                HStack(spacing: 0) {
-                    Text("0.0000")
-                        .foregroundColor(Color.gray.opacity(0.55))
-                    Text("1337")
+                } else {
+                    Text("€")
+                        .font(.brandTitle1)
+                    Text("11.23")
                 }
-                .font(.brandTitle1)
             }
-            Image("transfer_vertical")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 24, height: 24)
+
+            Button(action: { isPrimaryBTC.toggle() }) {
+                Image("transfer_vertical")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 24, height: 24)
+            }
+            .buttonStyle(.plain)
         }
     }
 }
 
 private struct SecondaryCurrencyAndAmount: View {
+    @Binding var isPrimaryBTC: Bool
+
     var body: some View {
         HStack(spacing: 0) {
-            Text("€ ")
-            Text("11.23")
+            if isPrimaryBTC {
+                Text("€ ")
+                Text("11.23")
+            } else {
+                Text("₿ 0.00001337")
+            }
         }
         .font(.system(size: 16, weight: .medium))
         .foregroundColor(Color(hex: "#6D6D86"))
