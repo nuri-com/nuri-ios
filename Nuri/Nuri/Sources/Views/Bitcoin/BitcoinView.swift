@@ -76,15 +76,23 @@ struct BitcoinView: View {
 
 private struct AmountAndCurrency: View {
     var body: some View {
-        HStack(spacing: 10) {
-            Text("₿")
+        HStack(spacing: 8) {
+            Image("bitcoin-recurring")
+                .resizable()
+                .frame(width: 32, height: 32)
+            HStack(spacing: 10) {
+                Text("₿")
+                    .font(.brandTitle1)
+                HStack(spacing: 0) {
+                    Text("0.0000")
+                        .foregroundColor(Color.gray.opacity(0.55))
+                    Text("1337")
+                }
                 .font(.brandTitle1)
-            HStack(spacing: 0) {
-                Text("0.0000")
-                    .foregroundColor(Color.gray.opacity(0.55))
-                Text("1337")
             }
-            .font(.brandTitle1)
+            Image("transfer_vertical")
+                .resizable()
+                .frame(width: 32, height: 32)
         }
     }
 }
