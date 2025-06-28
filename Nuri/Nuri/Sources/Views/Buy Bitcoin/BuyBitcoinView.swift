@@ -7,6 +7,7 @@ struct BuyBitcoinView: View {
 
     var formatter: NumberFormatter {
         let formatter = NumberFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.numberStyle = .decimal
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 8
@@ -39,10 +40,11 @@ struct BuyBitcoinView: View {
                         .keyboardType(.decimalPad)
                         .tint(Color("PrimaryNuriLilac"))
                         .onChange(of: amountText) { newValue in
-                            // allow only digits and decimal separators
-                            let filtered = newValue.filter { "0123456789,.".contains($0) }
-                            if filtered != newValue {
-                                amountText = filtered
+                            // Map comma to dot and allow digits + dot only
+                            var sanitized = newValue.replacingOccurrences(of: ",", with: ".")
+                            sanitized = sanitized.filter { "0123456789.".contains($0) }
+                            if sanitized != newValue {
+                                amountText = sanitized
                             }
                         }
                     Button(action: toggleCurrency) {
