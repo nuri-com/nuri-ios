@@ -53,7 +53,7 @@ struct CardViewActive: View {
 
             HStack(spacing: 32) {
                 NuriSmallIconToggle(isActive: $showCardDetails,
-                                    label: "Details",
+                                    label: showCardDetails ? "Hide" : "Show",
                                     iconActive: "eye",  // open eye
                                     iconInactive: "eye_hidden")
                 SmallIconButton(icon: isCardFrozen ? "lock" : "lock_open", title: isCardFrozen ? "Unfreeze" : "Freeze") {
