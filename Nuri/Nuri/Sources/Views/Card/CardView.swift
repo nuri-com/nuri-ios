@@ -26,9 +26,11 @@ struct CardView: View {
                 )
             }
 
-            VStack(spacing: 24) {
+            VStack(spacing: 0) {
                 NuriCardIllustration()
+                    .padding(.bottom, 24)
                 NuriTitleWithSubtitle(title: "Nuri Card for Apple Pay", subtitle: "")
+                    .padding(.bottom, 12)
                 featureList()
                 NavigationLink(destination: CardViewActive()) {
                     NuriButton(icon: "card_contactless", title: "Get Card", style: .primary)
