@@ -83,19 +83,19 @@ private struct AmountAndCurrency: View {
             HStack(spacing: 10) {
                 if isPrimaryBTC {
                     Text("₿")
-                        .font(.brandTitle1)
                     HStack(spacing: 0) {
                         Text("0.0000")
                             .foregroundColor(Color.gray.opacity(0.55))
                         Text("1337")
                     }
-                    .font(.brandTitle1)
                 } else {
-                    Text("€")
-                        .font(.brandTitle1)
-                    Text("11.23")
+                    HStack(spacing: 0) {
+                        Text("€")
+                        Text("11.23")
+                    }
                 }
             }
+            .font(.brandTitle1)
 
             Button(action: { isPrimaryBTC.toggle() }) {
                 Image("transfer_vertical")
