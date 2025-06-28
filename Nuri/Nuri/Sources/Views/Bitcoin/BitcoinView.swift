@@ -35,7 +35,7 @@ struct BitcoinView: View {
                                 navigation.isSendViewPresented = true
                             }
                         }
-                        .padding(.top, 0)
+                        .padding(.top, 8)
                         .padding(.bottom, 24)
                     }
                     Spacer()
