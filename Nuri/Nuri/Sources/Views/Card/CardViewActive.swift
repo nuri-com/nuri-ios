@@ -4,6 +4,7 @@ struct CardViewActive: View {
     @State private var isTransactionsPresented = false
     @State private var showCardDetails = false
     @State private var isLargeQRPresented = false
+    @State private var isCardFrozen = false
 
     private let btcAddress = "bc1qsmd4xz68a7fhwvhjkd0cawx4uvs9a43746xld4yh0spfmwefpr5qc9wvv6"
 
@@ -36,13 +37,17 @@ struct CardViewActive: View {
             NuriTitleWithSubtitle(title: "€1,337.00", subtitle: "Available Balance")
             .padding(.bottom, 30)
 
+            let cardOpacity = isCardFrozen ? 0.4 : 1.0
+
             if showCardDetails {
                 CardMini(card: CardModel(holder: "Cim Topal", number: "5354 5655 2079 6981", expiry: "03/30", cvv: "041"), qrAddress: btcAddress, onQRTap: { isLargeQRPresented = true })
                     .transition(.opacity)
+                    .opacity(cardOpacity)
                     .padding(.horizontal, 40)
                     .padding(.bottom, 30)
             } else {
                 NuriCardIllustration()
+                    .opacity(cardOpacity)
                     .padding(.bottom, 30)
             }
 
@@ -51,7 +56,8 @@ struct CardViewActive: View {
                                     label: "Details",
                                     iconActive: "eye",  // open eye
                                     iconInactive: "eye_hidden")
-                SmallIconButton(icon: "lock_open", title: "Freeze") {
+                SmallIconButton(icon: isCardFrozen ? "lock" : "lock_open", title: isCardFrozen ? "Unfreeze" : "Freeze") {
+                    isCardFrozen.toggle()
                 }
                 SmallIconButton(icon: "money_topup", title: "Top-Up") {
                 }
