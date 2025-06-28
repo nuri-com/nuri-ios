@@ -60,7 +60,7 @@ struct CardView: View {
         NavigationLink(destination: CardViewActive()) {
             NuriButton(icon: "card_contactless", title: "Get Card", style: .primary)
         }
-        .padding(.horizontal, 40)
+        .padding(.horizontal, 24)
     }
 }
 
