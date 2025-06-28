@@ -45,7 +45,7 @@ struct BuyBitcoinView: View {
                 NavigationLink(destination: SuccessView(illustration: "hand-plant", title: "Bitcoin purchased!", subtitle: "You've purchased 0.9123 BTC!") {
                     isPresented = false
                 }) {
-                    NuriButton(icon: "apple-wallet", title: "Buy with Apple Pay", style: .primary)
+                    NuriButton(icon: "bitcoin-circle", title: "Buy with Apple Pay", style: .primary)
                 }
             }
             .padding()
