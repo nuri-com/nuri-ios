@@ -23,7 +23,7 @@ struct BitcoinView: View {
                 VStack {
                     Spacer()
                     VStack(spacing: 21) {
-                        VStack(spacing: 12) {
+                        VStack(spacing: 4) {
                             AmountAndCurrency()
                             SecondaryCurrencyAndAmount()
                         }
@@ -83,7 +83,7 @@ private struct AmountAndCurrency: View {
                     .foregroundColor(Color.gray.opacity(0.55))
                 Text("1337")
             }
-            .font(.system(size: 40, weight: .semibold))
+            .font(.system(size: 34, weight: .semibold))
         }
     }
 }
