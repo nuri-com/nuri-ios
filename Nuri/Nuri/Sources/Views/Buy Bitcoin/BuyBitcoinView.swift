@@ -36,6 +36,7 @@ struct BuyBitcoinView: View {
                         .focused($focusedField, equals: 1)
                         .font(.system(size: 40, weight: .semibold))
                         .keyboardType(.decimalPad)
+                        .tint(Color("PrimaryNuriLilac"))
                 }
                 Text("~ \(formatter.string(from: NSNumber(value: (amount ?? 0) / exchangeRate))!) BTC")
                     .font(.footnote)
