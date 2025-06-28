@@ -19,7 +19,7 @@ public struct NuriMenuRow<Trailing: View>: View {
         icon: String,
         title: String,
         subtitle: String,
-        subtitleColor: Color = Color(hex: "#6D6D86"),
+        subtitleColor: Color = Color("TextSecondary"),
         @ViewBuilder trailing: () -> Trailing
     ) {
         self.icon = icon
@@ -59,7 +59,7 @@ public extension NuriMenuRow where Trailing == EmptyView {
         icon: String,
         title: String,
         subtitle: String,
-        subtitleColor: Color = Color(hex: "#6D6D86")
+        subtitleColor: Color = Color("TextSecondary")
     ) {
         self.init(icon: icon, title: title, subtitle: subtitle, subtitleColor: subtitleColor) {
             EmptyView()
