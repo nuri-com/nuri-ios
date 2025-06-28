@@ -18,6 +18,16 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             UITabBarItem.appearance().setTitleTextAttributes(normalAttributes, for: .normal)
             UITabBarItem.appearance().setTitleTextAttributes(selectedAttributes, for: .selected)
             UITabBarItem.appearance().titlePositionAdjustment = UIOffset(horizontal: 0, vertical: 5)
+
+            // Customise TabBar background to match app background and remove top divider
+            let tabBarAppearance = UITabBarAppearance()
+            tabBarAppearance.configureWithOpaqueBackground()
+            tabBarAppearance.backgroundColor = UIColor(NuriAsset.background.swiftUIColor)
+            tabBarAppearance.shadowColor = .clear // remove divider
+
+            UITabBar.appearance().standardAppearance = tabBarAppearance
+            // Since iOS 15 `scrollEdgeAppearance` controls the translucent state when scrolled to edge
+            UITabBar.appearance().scrollEdgeAppearance = tabBarAppearance
         }
         return true
     }
