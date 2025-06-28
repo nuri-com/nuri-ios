@@ -39,7 +39,7 @@ struct BuyBitcoinView: View {
                         .tint(Color("PrimaryNuriLilac"))
                 }
                 Text("~ \(formatter.string(from: NSNumber(value: (amount ?? 0) / exchangeRate))!) BTC")
-                    .font(.footnote)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Color.secondary)
                 Spacer()
                 NavigationLink("Buy with Apple Pay") {
