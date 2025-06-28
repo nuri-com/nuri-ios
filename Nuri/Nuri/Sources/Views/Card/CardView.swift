@@ -26,15 +26,26 @@ struct CardView: View {
                 )
             }
 
-            NuriCardIllustration()
-            NuriTitleWithSubtitle(title: "Nuri Card for Apple Pay", subtitle: "")
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 30) {
+                    NuriCardIllustration()
+                    NuriTitleWithSubtitle(title: "Nuri Card for Apple Pay", subtitle: "")
+                    featureList()
+                }
                 .padding(.top, 30)
-            featureList()
-                .padding(.bottom, 30)
-            actionButton()
-            Spacer()
+                .padding(.bottom, 100) // ensures scrollable content doesn't hide behind button
+            }
         }
         .background(NuriAsset.background.swiftUIColor)
+        // Primary action fixed to bottom, always visible above keyboard/safe area
+        .safeAreaInset(edge: .bottom) {
+            NavigationLink(destination: CardViewActive()) {
+                NuriButton(icon: "card_contactless", title: "Get Card", style: .primary)
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 12) // gap from content above equals row spacing
+            .padding(.bottom, 34) // match previous bottom spacing across screens
+        }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
     }
@@ -54,13 +65,6 @@ struct CardView: View {
                         subtitle: "Use Card with Tap-To-Pay")
         }
         .padding(.horizontal, 16)
-    }
-
-    private func actionButton() -> some View {
-        NavigationLink(destination: CardViewActive()) {
-            NuriButton(icon: "card_contactless", title: "Get Card", style: .primary)
-        }
-        .padding(.horizontal, 24)
     }
 }
 
