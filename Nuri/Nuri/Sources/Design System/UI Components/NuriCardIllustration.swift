@@ -10,6 +10,6 @@ public struct NuriCardIllustration: View {
             .resizable()
             .aspectRatio(contentMode: .fit)
             .frame(maxWidth: .infinity)
-            .padding(.horizontal, 24) // matches button horizontal padding
+            .padding(.horizontal, 40) // matches menu row icon alignment (16 container + 24 row)
     }
 } 
