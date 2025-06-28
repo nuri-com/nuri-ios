@@ -40,12 +40,23 @@ struct CardView: View {
     }
 
     private func featureList() -> some View {
-        VStack(alignment: .leading, spacing: 20) {
-            ListItemView(icon: "card_contactless", title: "Free Virtual Visa Card", subtitle: "100% free. No monthly fees.")
-            ListItemView(icon: "bitcoin-recurring", title: "Top-Up with Bitcoin", subtitle: "Send BTC to add money.")
-            ListItemView(icon: "wallet", title: "Add to Apple Wallet", subtitle: "Use Card with Tap-To-Pay")
+        VStack(spacing: 0) {
+            NuriMenuRow(icon: "card_contactless",
+                        title: "Free Virtual Visa Card",
+                        subtitle: "100% free. No monthly fees.",
+                        subtitleColor: Color(hex: "#02542d"))
+
+            NuriMenuRow(icon: "bitcoin-recurring",
+                        title: "Top-Up with Bitcoin",
+                        subtitle: "Send BTC to add money.",
+                        subtitleColor: Color(hex: "#02542d"))
+
+            NuriMenuRow(icon: "wallet",
+                        title: "Add to Apple Wallet",
+                        subtitle: "Use Card with Tap-To-Pay",
+                        subtitleColor: Color(hex: "#02542d"))
         }
-        .padding(.horizontal, 40)
+        .padding(.horizontal, 16)
     }
 
     private func actionButton() -> some View {
@@ -53,29 +64,6 @@ struct CardView: View {
             NuriButton(icon: "card_contactless", title: "Get Card", style: .primary)
         }
         .padding(.horizontal, 24)
-    }
-}
-
-private struct ListItemView: View {
-    let icon: String
-    let title: String
-    let subtitle: String
-
-    var body: some View {
-        HStack(spacing: 16) {
-            Image(icon)
-                .resizable()
-                .frame(width: 40, height: 40)
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.custom("Inter", size: 16).weight(.regular))
-                    .foregroundColor(Color("PrimaryNuriBlack"))
-                Text(subtitle)
-                    .font(.custom("Inter", size: 16).weight(.regular))
-                    .foregroundColor(Color(hex: "#02542d"))
-            }
-        }
     }
 }
 
