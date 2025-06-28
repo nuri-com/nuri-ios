@@ -27,7 +27,7 @@ struct CardView: View {
             }
 
             NuriCardIllustration()
-            NuriTitleWithSubtitle(title: "Nuri Card\nfor Apple Pay", subtitle: "")
+            NuriTitleWithSubtitle(title: "Nuri Card for Apple Pay", subtitle: "")
                 .padding(.top, 30)
             featureList()
                 .padding(.bottom, 30)

@@ -25,6 +25,7 @@ public struct NuriTitleWithSubtitle: View {
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.horizontal, 24)  // match primary button side insets
     }
 }
 
