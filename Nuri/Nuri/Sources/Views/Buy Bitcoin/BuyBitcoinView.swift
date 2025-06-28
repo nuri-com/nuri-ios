@@ -13,7 +13,7 @@ struct BuyBitcoinView: View {
         return formatter
     }
 
-    @State var amount: Double? = 0
+    @State private var amount: Double? = 21
 
     @FocusState private var focusedField: Int?
 
