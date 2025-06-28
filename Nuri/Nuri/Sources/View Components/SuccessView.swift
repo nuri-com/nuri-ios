@@ -28,5 +28,7 @@ struct SuccessView: View {
         }
         .padding()
         .background(NuriAsset.primaryNuriLilac.swiftUIColor)
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
     }
 }
