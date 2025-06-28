@@ -22,7 +22,7 @@ struct BitcoinView: View {
 
                 VStack {
                     Spacer()
-                    VStack(spacing: 12) {
+                    VStack(spacing: 8) {
                         VStack(spacing: 4) {
                             AmountAndCurrency()
                             SecondaryCurrencyAndAmount()
