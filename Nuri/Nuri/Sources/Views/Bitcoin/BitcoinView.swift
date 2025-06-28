@@ -11,6 +11,7 @@ struct BitcoinView: View {
 
     @StateObject private var navigation = BitcoinViewNavigation()
     @State private var isPrimaryBTC = true
+    @State private var isBalanceHidden = false
 
     var body: some View {
         ZStack {
@@ -25,8 +26,11 @@ struct BitcoinView: View {
                     Spacer()
                     VStack(spacing: 8) {
                         VStack(spacing: 4) {
-                            AmountAndCurrency(isPrimaryBTC: $isPrimaryBTC)
-                            SecondaryCurrencyAndAmount(isPrimaryBTC: $isPrimaryBTC)
+                            AmountAndCurrency(isPrimaryBTC: $isPrimaryBTC, isBalanceHidden: $isBalanceHidden)
+                            SecondaryCurrencyAndAmount(isPrimaryBTC: $isPrimaryBTC, isBalanceHidden: $isBalanceHidden)
+                        }
+                        .onTapGesture {
+                            isBalanceHidden.toggle()
                         }
                         HStack(spacing: 16) {
                             PrimaryHalfButton(title: "Receive", icon: "bitcoin_hand") {
@@ -77,25 +81,31 @@ struct BitcoinView: View {
 
 private struct AmountAndCurrency: View {
     @Binding var isPrimaryBTC: Bool
+    @Binding var isBalanceHidden: Bool
 
     var body: some View {
         HStack(spacing: 8) {
-            HStack(spacing: 10) {
-                if isPrimaryBTC {
-                    Text("₿")
-                    HStack(spacing: 0) {
-                        Text("0.0000")
-                            .foregroundColor(Color.gray.opacity(0.55))
-                        Text("1337")
-                    }
-                } else {
-                    HStack(spacing: 0) {
-                        Text("€ ")
-                        Text("11.23")
+            if isBalanceHidden {
+                Text("********")
+                    .font(.brandTitle1)
+            } else {
+                HStack(spacing: 10) {
+                    if isPrimaryBTC {
+                        Text("₿")
+                        HStack(spacing: 0) {
+                            Text("0.0000")
+                                .foregroundColor(Color.gray.opacity(0.55))
+                            Text("1337")
+                        }
+                    } else {
+                        HStack(spacing: 0) {
+                            Text("€ ")
+                            Text("11.23")
+                        }
                     }
                 }
+                .font(.brandTitle1)
             }
-            .font(.brandTitle1)
 
             Button(action: { isPrimaryBTC.toggle() }) {
                 Image("transfer_vertical")
@@ -110,14 +120,21 @@ private struct AmountAndCurrency: View {
 
 private struct SecondaryCurrencyAndAmount: View {
     @Binding var isPrimaryBTC: Bool
+    @Binding var isBalanceHidden: Bool
 
     var body: some View {
-        HStack(spacing: 0) {
-            if isPrimaryBTC {
-                Text("€ ")
-                Text("11.23")
+        Group {
+            if isBalanceHidden {
+                Text("********")
             } else {
-                Text("₿ 0.00001337")
+                HStack(spacing: 0) {
+                    if isPrimaryBTC {
+                        Text("€ ")
+                        Text("11.23")
+                    } else {
+                        Text("₿ 0.00001337")
+                    }
+                }
             }
         }
         .font(.system(size: 16, weight: .medium))
