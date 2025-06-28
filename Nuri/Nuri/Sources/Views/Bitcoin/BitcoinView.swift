@@ -90,7 +90,7 @@ private struct AmountAndCurrency: View {
                     }
                 } else {
                     HStack(spacing: 0) {
-                        Text("€")
+                        Text("€ ")
                         Text("11.23")
                     }
                 }
