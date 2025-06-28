@@ -31,6 +31,7 @@ struct CardView: View {
                     .padding(.bottom, 16)
                 NuriTitleWithSubtitle(title: "Nuri Card for Apple Pay", subtitle: "")
                 featureList()
+                    .padding(.bottom,8)
                 NavigationLink(destination: CardViewActive()) {
                     NuriButton(icon: "card_contactless", title: "Get Card", style: .primary)
                 }
@@ -48,7 +49,7 @@ struct CardView: View {
         VStack(spacing: 0) {
             NuriMenuRow(icon: "card_contactless",
                         title: "Free Virtual Visa Card",
-                        subtitle: "100% free. No monthly fees.")
+                        subtitle: "No monthly fees.")
 
             NuriMenuRow(icon: "bitcoin-recurring",
                         title: "Top-Up with Bitcoin",
@@ -56,7 +57,7 @@ struct CardView: View {
 
             NuriMenuRow(icon: "wallet",
                         title: "Add to Apple Wallet",
-                        subtitle: "Use Card with Tap-To-Pay")
+                        subtitle: "Use with Tap-To-Pay")
         }
         .padding(.horizontal, 16)
     }
