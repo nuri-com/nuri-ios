@@ -16,37 +16,27 @@ struct SecurityView: View {
             // Body content fills the remaining space below the header
             VStack(spacing: 0) {
                 VStack(spacing: 12) {
-                    SecurityRow(
-                        icon: "passkey-new",
-                        title: "Passkey",
-                        subtitle: "Account is secured with Apple iCloud Passkey.",
-                        subtitleColor: Color(hex: "#6D6D86"),
-                        trailing: AnyView(
-                            Image(systemName: "chevron.right")
-                                .foregroundColor(Color("PrimaryNuriBlack"))
-                        )
-                    )
-                    SecurityRow(
-                        icon: "icloud-download",
-                        title: "iCloud Backup",
-                        subtitle: "We automatically saved a recovery key to iCloud.",
-                        subtitleColor: Color(hex: "#6D6D86"),
-                        trailing: AnyView(
-                            Toggle("", isOn: $iCloudBackupEnabled)
-                                .labelsHidden()
-                                .tint(Color("PrimaryNuriLilac"))
-                        )
-                    )
-                    SecurityRow(
-                        icon: "touch-id",
-                        title: "Add Hardware Key",
-                        subtitle: "Add a Nuri or Yubikey security key to your Account.",
-                        subtitleColor: Color(hex: "#6D6D86"),
-                        trailing: AnyView(
-                            Image(systemName: "chevron.right")
-                                .foregroundColor(Color("PrimaryNuriBlack"))
-                        )
-                    )
+                    NuriMenuRow(icon: "passkey-new",
+                                title: "Passkey",
+                                subtitle: "Account is secured with Apple iCloud Passkey.") {
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(Color("PrimaryNuriBlack"))
+                    }
+
+                    NuriMenuRow(icon: "icloud-download",
+                                title: "iCloud Backup",
+                                subtitle: "We automatically saved a recovery key to iCloud.") {
+                        Toggle("", isOn: $iCloudBackupEnabled)
+                            .labelsHidden()
+                            .tint(Color("PrimaryNuriLilac"))
+                    }
+
+                    NuriMenuRow(icon: "touch-id",
+                                title: "Add Hardware Key",
+                                subtitle: "Add a Nuri or Yubikey security key to your Account.") {
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(Color("PrimaryNuriBlack"))
+                    }
                 }
                 .padding(.horizontal, 16)
 
@@ -83,37 +73,6 @@ struct SecurityView: View {
             .background(Color("PrimaryNuriLilac"))
             .cornerRadius(32)
         }
-        .padding(.horizontal, 24)
-    }
-}
-
-private struct SecurityRow: View {
-    let icon: String
-    let title: String
-    let subtitle: String
-    var subtitleColor: Color = Color(hex: "#02542d")
-    let trailing: AnyView
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 8) {
-            Image(icon)
-                .resizable()
-                .frame(width: 32, height: 32)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.custom("Inter", size: 16).weight(.medium))
-                    .foregroundColor(Color("PrimaryNuriBlack"))
-                Text(subtitle)
-                    .font(.custom("Inter", size: 16).weight(.medium))
-                    .foregroundColor(subtitleColor)
-            }
-
-            Spacer()
-
-            trailing
-        }
-        .padding(.vertical, 12)
         .padding(.horizontal, 24)
     }
 }
