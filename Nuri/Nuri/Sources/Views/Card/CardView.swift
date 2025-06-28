@@ -30,7 +30,6 @@ struct CardView: View {
                 NuriCardIllustration()
                     .padding(.bottom, 16)
                 NuriTitleWithSubtitle(title: "Nuri Card for Apple Pay", subtitle: "")
-                    .padding(.bottom, 4)
                 featureList()
                 NavigationLink(destination: CardViewActive()) {
                     NuriButton(icon: "card_contactless", title: "Get Card", style: .primary)
@@ -40,7 +39,7 @@ struct CardView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 34)
         }
-        .background(NuriAsset.background.swiftUIColor)
+        .background(NuriAsset.background.swiftUIColor.ignoresSafeArea())
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
     }
