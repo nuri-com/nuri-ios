@@ -73,6 +73,10 @@ struct BuyBitcoinView: View {
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Color.secondary)
                 Spacer()
+                // Current BTC price label
+                Text("1 BTC ≈ € " + String(format: "%0.2f", exchangeRate))
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(Color(hex: "#6D6D86"))
                 NavigationLink(destination: SuccessView(illustration: "hand-plant", title: "Bitcoin purchased!", subtitle: "You've purchased 0.9123 BTC!") {
                     isPresented = false
                 }) {
