@@ -4,24 +4,8 @@ struct CardViewActive: View {
     @State private var isTransactionsPresented = false
     @State private var showCardDetails = false
     @State private var isLargeQRPresented = false
-    @State private var showSnackbar = false
-    @State private var snackbarTitle: String = ""
-    @State private var snackbarDescription: String = ""
 
     private let btcAddress = "bc1qsmd4xz68a7fhwvhjkd0cawx4uvs9a43746xld4yh0spfmwefpr5qc9wvv6"
-
-    private func copied(_ description: String) {
-        snackbarTitle = "Copied"
-        snackbarDescription = description
-        withAnimation(.easeInOut) {
-            showSnackbar = true
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            withAnimation(.easeInOut) {
-                showSnackbar = false
-            }
-        }
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -53,7 +37,7 @@ struct CardViewActive: View {
             .padding(.bottom, 30)
 
             if showCardDetails {
-                CardMini(card: CardModel(holder: "Cim Topal", number: "5354 5655 2079 6981", expiry: "03/30", cvv: "041"), qrAddress: btcAddress, onQRTap: { isLargeQRPresented = true }, onCopy: { copied("Copied to clipboard") })
+                CardMini(card: CardModel(holder: "Cim Topal", number: "5354 5655 2079 6981", expiry: "03/30", cvv: "041"), qrAddress: btcAddress, onQRTap: { isLargeQRPresented = true })
                     .transition(.opacity)
                     .padding(.horizontal, 40)
                     .padding(.bottom, 30)
@@ -125,18 +109,6 @@ struct CardViewActive: View {
             Spacer()
         }
         .background(NuriAsset.background.swiftUIColor)
-        .overlay(
-            VStack {
-                if showSnackbar {
-                    NuriSnackbar(style: .success,
-                                 title: snackbarTitle,
-                                 description: snackbarDescription)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                        .zIndex(1)
-                }
-                Spacer()
-            }
-            .animation(.easeInOut, value: showSnackbar), alignment: .bottom)
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .fullScreenCover(isPresented: $isTransactionsPresented) {
@@ -185,7 +157,6 @@ private extension Text {
 private struct ValueWithCopy: View {
     let text: String
     let style: CardTextStyle
-    let onCopy: () -> Void
     var body: some View {
         HStack(spacing: 4) {
             Text(text)
@@ -193,8 +164,7 @@ private struct ValueWithCopy: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
                 .layoutPriority(1)
-            Button(action: { UIPasteboard.general.string = text
-                onCopy() }) {
+            Button(action: { UIPasteboard.general.string = text }) {
                 Image("copy-icon")
                     .resizable()
                     .frame(width: 14, height: 14)
@@ -214,23 +184,22 @@ private struct CardMini: View {
     let card: CardModel
     let qrAddress: String
     let onQRTap: () -> Void
-    let onCopy: () -> Void
     var body: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 12) {
                 Text(card.holder).cardStyle(.name)
 
                 Text("Card number").cardStyle(.label).foregroundColor(.white.opacity(0.7))
-                ValueWithCopy(text: card.number, style: .value, onCopy: onCopy)
+                ValueWithCopy(text: card.number, style: .value)
 
                 HStack(spacing: 32) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Expiry").cardStyle(.label).foregroundColor(.white.opacity(0.7))
-                        ValueWithCopy(text: card.expiry, style: .value, onCopy: onCopy)
+                        ValueWithCopy(text: card.expiry, style: .value)
                     }
                     VStack(alignment: .leading, spacing: 4) {
                         Text("CVV").cardStyle(.label).foregroundColor(.white.opacity(0.7))
-                        ValueWithCopy(text: card.cvv, style: .value, onCopy: onCopy)
+                        ValueWithCopy(text: card.cvv, style: .value)
                     }
                 }
             }
