@@ -13,9 +13,13 @@ struct BuyBitcoinView: View {
         return formatter
     }
 
-    @State private var amount: Double? = 21
+    @State private var amountText: String = "21"
 
-    @FocusState private var focusedField: Int?
+    private var amountValue: Double {
+        Double(amountText.replacingOccurrences(of: ",", with: ".")) ?? 0
+    }
+
+    @FocusState private var isFieldFocused: Bool
 
     private let exchangeRate: Double = 91458.62
 
@@ -31,14 +35,21 @@ struct BuyBitcoinView: View {
                 HStack(spacing: 8) {
                     Text("€")
                         .font(.system(size: 40, weight: .semibold))
-                    TextField("0", value: $amount, format: .number)
-                        .setWidthAccordingTo(text: "\((amount ?? 0))")
-                        .focused($focusedField, equals: 1)
+                    TextField("0", text: $amountText)
+                        .setWidthAccordingTo(text: amountText)
+                        .focused($isFieldFocused)
                         .font(.system(size: 40, weight: .semibold))
                         .keyboardType(.decimalPad)
                         .tint(Color("PrimaryNuriLilac"))
+                        .onChange(of: amountText) { newValue in
+                            // allow only digits and decimal separators
+                            let filtered = newValue.filter { "0123456789,.".contains($0) }
+                            if filtered != newValue {
+                                amountText = filtered
+                            }
+                        }
                 }
-                Text("~ \(formatter.string(from: NSNumber(value: (amount ?? 0) / exchangeRate))!) BTC")
+                Text("~ \(formatter.string(from: NSNumber(value: amountValue / exchangeRate))!) BTC")
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Color.secondary)
                 Spacer()
@@ -52,7 +63,7 @@ struct BuyBitcoinView: View {
         }
         .background(NuriAsset.background.swiftUIColor)
         .onAppear {
-            focusedField = 1
+            isFieldFocused = true
         }
     }
 }
