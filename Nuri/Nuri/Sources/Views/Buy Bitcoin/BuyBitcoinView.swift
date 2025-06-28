@@ -14,12 +14,12 @@ struct BuyBitcoinView: View {
         return formatter
     }
 
-    @State private var amountText: String = "21"
-    @State private var isPrimaryBTC = false // false = EUR primary
+    @State private var amountText: String = "0.001"
+    @State private var isPrimaryBTC = true // start with BTC primary
 
     @FocusState private var isFieldFocused: Bool
 
-    private let exchangeRate: Double = 91458.62
+    @State private var exchangeRate: Double = 91458.62 // will update from API
 
     var body: some View {
         VStack(spacing: 0) {
@@ -84,13 +84,17 @@ struct BuyBitcoinView: View {
         .background(NuriAsset.background.swiftUIColor)
         .onAppear {
             isFieldFocused = true
+            Task {
+                await fetchPrice()
+            }
         }
     }
 
     private func secondaryText() -> String {
         if isPrimaryBTC {
             let eur = amountValue * exchangeRate
-            return "~ € " + formatter.string(from: NSNumber(value: eur))!
+            let twoDec = String(format: "%0.2f", eur)
+            return "~ € " + twoDec
         } else {
             let btc = amountValue / exchangeRate
             return "~ " + formatter.string(from: NSNumber(value: btc))! + " BTC"
@@ -109,7 +113,7 @@ struct BuyBitcoinView: View {
         if isPrimaryBTC {
             // BTC -> EUR (2 decimals)
             let eur = current * exchangeRate
-            amountText = formatter.string(from: NSNumber(value: eur)) ?? ""
+            amountText = String(format: "%0.2f", eur)
         } else {
             // EUR -> BTC (8 decimals)
             let btc = current / exchangeRate
@@ -120,6 +124,23 @@ struct BuyBitcoinView: View {
 
     private var amountValue: Double {
         Double(amountText.replacingOccurrences(of: ",", with: ".")) ?? 0
+    }
+
+    // MARK: - Networking
+
+    private func fetchPrice() async {
+        guard let url = URL(string: "https://mempool.space/api/v1/prices") else { return }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            if let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let eur = dict["EUR"] as? Double {
+                DispatchQueue.main.async {
+                    exchangeRate = eur
+                }
+            }
+        } catch {
+            print("Price fetch failed", error)
+        }
     }
 }
 
