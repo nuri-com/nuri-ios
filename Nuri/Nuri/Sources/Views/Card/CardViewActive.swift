@@ -30,19 +30,7 @@ struct CardViewActive: View {
             }
 
             Spacer()
-            VStack(spacing: 12) {
-                HStack(spacing: 0) {
-                    Text("€")
-                        .font(.system(size: 40, weight: .semibold))
-                    Text("1,337.00")
-                        .font(.system(size: 40, weight: .semibold))
-                }
-                .foregroundColor(Color("PrimaryNuriBlack"))
-
-                Text("Available Balance")
-                    .font(.custom("Inter", size: 16).weight(.medium))
-                    .foregroundColor(Color(hex: "#6D6D86"))
-            }
+            NuriTitleWithSubtitle(title: "€1,337.00", subtitle: "Available Balance")
             .padding(.bottom, 30)
 
             if showCardDetails {
