@@ -42,7 +42,7 @@ public struct NuriButton: View {
                 .resizable()
                 .renderingMode(.template)
                 .foregroundColor(Color("PrimaryNuriBlack"))
-                .frame(width: 24, height: 24)
+                .frame(width: 32, height: 32)
             Text(title)
                 .font(.brandBody)
                 .foregroundColor(Color("PrimaryNuriBlack"))
