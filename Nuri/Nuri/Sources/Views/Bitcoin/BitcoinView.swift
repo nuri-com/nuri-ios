@@ -79,6 +79,7 @@ private struct AmountAndCurrency: View {
         HStack(spacing: 8) {
             Image("bitcoin-recurring")
                 .resizable()
+                .scaledToFit()
                 .frame(width: 32, height: 32)
             HStack(spacing: 10) {
                 Text("₿")
@@ -92,6 +93,7 @@ private struct AmountAndCurrency: View {
             }
             Image("transfer_vertical")
                 .resizable()
+                .scaledToFit()
                 .frame(width: 32, height: 32)
         }
     }
