@@ -40,9 +40,23 @@ struct BuyBitcoinView: View {
                         .keyboardType(.decimalPad)
                         .tint(Color("PrimaryNuriLilac"))
                         .onChange(of: amountText) { newValue in
-                            // Map comma to dot and allow digits + dot only
                             var sanitized = newValue.replacingOccurrences(of: ",", with: ".")
+                            // keep digits and dot
                             sanitized = sanitized.filter { "0123456789.".contains($0) }
+                            // allow only one dot
+                            if let firstDot = sanitized.firstIndex(of: ".") {
+                                let afterFirst = sanitized.index(after: firstDot)
+                                sanitized = sanitized.prefix(upTo: afterFirst) + sanitized[afterFirst...].replacingOccurrences(of: ".", with: "")
+                            }
+                            // limit fraction length
+                            if let dotIndex = sanitized.firstIndex(of: ".") {
+                                let fractionStart = sanitized.index(after: dotIndex)
+                                let fraction = sanitized[fractionStart...]
+                                let limit = isPrimaryBTC ? 8 : 2
+                                if fraction.count > limit {
+                                    sanitized = String(sanitized[..<sanitized.index(dotIndex, offsetBy: limit + 1)])
+                                }
+                            }
                             if sanitized != newValue {
                                 amountText = sanitized
                             }
@@ -85,12 +99,19 @@ struct BuyBitcoinView: View {
 
     private func toggleCurrency() {
         let current = amountValue
+        let limit = isPrimaryBTC ? 2 : 8 // because we will toggle afterwards
+        let formatter = NumberFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = limit
+        formatter.numberStyle = .decimal
+
         if isPrimaryBTC {
-            // BTC -> EUR
+            // BTC -> EUR (2 decimals)
             let eur = current * exchangeRate
             amountText = formatter.string(from: NSNumber(value: eur)) ?? ""
         } else {
-            // EUR -> BTC
+            // EUR -> BTC (8 decimals)
             let btc = current / exchangeRate
             amountText = formatter.string(from: NSNumber(value: btc)) ?? ""
         }
