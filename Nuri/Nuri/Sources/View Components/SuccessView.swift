@@ -9,6 +9,11 @@ struct SuccessView: View {
 
     var body: some View {
         VStack(spacing: 16) {
+            // Header with logo and close button
+            NuriHeader<AnyView, AnyView>.logo(
+                title: "",
+                onClose: { completion() }
+            )
             Spacer()
             Image(illustration)
             Text(title)
