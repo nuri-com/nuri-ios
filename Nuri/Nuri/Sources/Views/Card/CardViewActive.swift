@@ -211,6 +211,27 @@ private struct CardMini: View {
     }
 }
 
+private struct SmallIconButton: View {
+    let icon: String
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(icon)
+                    .resizable()
+                    .renderingMode(.template)
+                    .foregroundColor(Color("PrimaryNuriBlack"))
+                    .frame(width: 32, height: 32)
+                Text(title)
+                    .font(.custom("Inter", size: 14).weight(.medium))
+                    .foregroundColor(Color("PrimaryNuriBlack"))
+            }
+        }
+    }
+}
+
 #if DEBUG
 #Preview {
     CardViewActive()
