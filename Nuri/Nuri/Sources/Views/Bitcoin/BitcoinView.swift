@@ -77,13 +77,13 @@ private struct AmountAndCurrency: View {
     var body: some View {
         HStack(spacing: 10) {
             Text("₿")
-                .font(.system(size: 40, weight: .semibold))
+                .font(.brandTitle1)
             HStack(spacing: 0) {
                 Text("0.0000")
                     .foregroundColor(Color.gray.opacity(0.55))
                 Text("1337")
             }
-            .font(.system(size: 34, weight: .semibold))
+            .font(.brandTitle1)
         }
     }
 }
