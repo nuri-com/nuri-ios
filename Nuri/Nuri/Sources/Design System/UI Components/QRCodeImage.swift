@@ -23,9 +23,11 @@ public struct QRCodeImage: View {
     private func generateQRCode() -> UIImage? {
         filter.message = Data(text.utf8)
         filter.correctionLevel = "M"
-        if let outputImage = filter.outputImage,
-           let cgimg = context.createCGImage(outputImage.transformed(by: CGAffineTransform(scaleX: 5, y: 5)), from: outputImage.extent) {
-            return UIImage(cgImage: cgimg)
+        if let outputImage = filter.outputImage {
+            let scaled = outputImage.transformed(by: CGAffineTransform(scaleX: 10, y: 10))
+            if let cgimg = context.createCGImage(scaled, from: scaled.extent) {
+                return UIImage(cgImage: cgimg)
+            }
         }
         return nil
     }
