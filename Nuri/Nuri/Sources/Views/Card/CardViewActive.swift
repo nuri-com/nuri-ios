@@ -36,13 +36,10 @@ struct CardViewActive: View {
             if showCardDetails {
                 CardMini(card: CardModel(holder: "Cim Topal", number: "5354 5655 2079 6981", expiry: "03/30", cvv: "041"))
                     .transition(.opacity)
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, 40)
                     .padding(.bottom, 30)
             } else {
-                Image("card-flattend")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 256)
+                NuriCardIllustration()
                     .padding(.bottom, 30)
             }
 
