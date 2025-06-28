@@ -73,7 +73,7 @@ struct SecurityView: View {
             .background(Color("PrimaryNuriLilac"))
             .cornerRadius(32)
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, 40)
     }
 }
 
