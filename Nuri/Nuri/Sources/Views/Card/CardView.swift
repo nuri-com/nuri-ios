@@ -35,17 +35,16 @@ struct CardView: View {
                 .padding(.top, 30)
                 .padding(.bottom, 100) // ensures scrollable content doesn't hide behind button
             }
-        }
-        .background(NuriAsset.background.swiftUIColor)
-        // Primary action fixed to bottom, always visible above keyboard/safe area
-        .safeAreaInset(edge: .bottom) {
+
+            // Primary action button
             NavigationLink(destination: CardViewActive()) {
                 NuriButton(icon: "card_contactless", title: "Get Card", style: .primary)
             }
             .padding(.horizontal, 24)
-            .padding(.top, 12) // gap from content above equals row spacing
-            .padding(.bottom, 34) // match previous bottom spacing across screens
+            .padding(.top, 30)
+            .padding(.bottom, 34)
         }
+        .background(NuriAsset.background.swiftUIColor)
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
     }
