@@ -115,14 +115,21 @@ struct CardViewActive: View {
             TransactionsView()
         }
         .fullScreenCover(isPresented: $isLargeQRPresented) {
-            VStack {
-                QRCodeImage(text: btcAddress)
-                    .frame(width: 250, height: 250)
-                    .onAppear { UIPasteboard.general.string = btcAddress }
-                    .onTapGesture { isLargeQRPresented = false }
-                Text("Bitcoin address copied to clipboard")
-                    .font(.headline)
-                    .padding()
+            GeometryReader { geo in
+                VStack(spacing: 24) {
+                    Spacer()
+                    QRCodeImage(text: btcAddress)
+                        .frame(width: min(geo.size.width, geo.size.height) * 0.8,
+                               height: min(geo.size.width, geo.size.height) * 0.8)
+                        .onAppear { UIPasteboard.general.string = btcAddress }
+                        .onTapGesture { isLargeQRPresented = false }
+                    Text("Bitcoin address copied to clipboard")
+                        .font(.headline)
+                        .padding()
+                    Spacer()
+                }
+                .frame(width: geo.size.width, height: geo.size.height)
+                .background(Color.white.opacity(0.95).ignoresSafeArea())
             }
         }
     }
@@ -198,7 +205,7 @@ private struct CardMini: View {
             }
             Spacer(minLength: 12)
             QRCodeImage(text: qrAddress)
-                .frame(width: 32, height: 32)
+                .frame(width: 48, height: 48)
                 .onTapGesture { onQRTap() }
         }
         .padding(20)
