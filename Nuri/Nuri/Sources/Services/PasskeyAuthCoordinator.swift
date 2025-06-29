@@ -24,7 +24,11 @@ final class PasskeyAuthCoordinator: NSObject {
                 switch result {
                 case .success:
                     print("✅ [Passkey] native login successful")
-                    completion?(.success(()))
+                    Task {
+                        do { try await WalletProvisioner.ensureWallets() }
+                        catch { print("⚠️ Wallet provisioning error", error) }
+                        completion?(.success(()))
+                    }
                 case .failure(let error):
                     print("❌ [Passkey] login error", error)
                     completion?(.failure(error))
@@ -47,7 +51,11 @@ final class PasskeyAuthCoordinator: NSObject {
                 switch result {
                 case .success:
                     print("✅ [Passkey] native signup successful")
-                    completion?(.success(()))
+                    Task {
+                        do { try await WalletProvisioner.ensureWallets() }
+                        catch { print("⚠️ Wallet provisioning error", error) }
+                        completion?(.success(()))
+                    }
                 case .failure(let error):
                     print("❌ [Passkey] signup error", error)
                     completion?(.failure(error))
@@ -61,7 +69,11 @@ final class PasskeyAuthCoordinator: NSObject {
         start(relyingParty: relyingParty) { [weak self] result in
             switch result {
             case .success:
-                completion?(.success(()))
+                Task {
+                    do { try await WalletProvisioner.ensureWallets() }
+                    catch { print("⚠️ Wallet provisioning error", error) }
+                    completion?(.success(()))
+                }
 
             case .failure(let error):
                 if let passErr = error as? PasskeyError, case .noCredentialFound = passErr {
