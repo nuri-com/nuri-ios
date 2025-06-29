@@ -62,13 +62,16 @@ final class LoginViewModel: NSObject, ObservableObject, LoginViewModelType, Logi
     }
 
     private func startPasskeyLogin() {
-        guard let challenge else { return }
-        let securityKeyProvider = ASAuthorizationSecurityKeyPublicKeyCredentialProvider(relyingPartyIdentifier: "nuri.com")
-        let securityKeyRequest = securityKeyProvider.createCredentialAssertionRequest(challenge: challenge)
-        let authController = ASAuthorizationController(authorizationRequests: [securityKeyRequest])
-        authController.delegate = self
-        authController.presentationContextProvider = self
-        authController.performRequests()
+        PasskeyAuthCoordinator.shared.start { [weak self] result in
+            switch result {
+            case .success:
+                DispatchQueue.main.async {
+                    self?.delegate?.didFinish(screen: .login)
+                }
+            case .failure(let error):
+                print("Passkey auth failed: \(error)")
+            }
+        }
     }
 
     func toViewModel() -> LoginViewModel {

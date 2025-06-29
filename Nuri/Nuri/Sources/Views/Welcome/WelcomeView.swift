@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct WelcomeView: View {
 
@@ -21,10 +22,36 @@ struct WelcomeView: View {
                 }
                 VStack {
                     Spacer()
-                    Button("Login with Passkey") {
-                        isUserLoggedIn = true
+                    Button("Login with Passkey (Native)") {
+                        PasskeyAuthCoordinator.shared.start { result in
+                            switch result {
+                            case .success:
+                                DispatchQueue.main.async {
+                                    isUserLoggedIn = true
+                                }
+                            case .failure(let error):
+                                print("❌ Passkey login failed:", error)
+                            }
+                        }
                     }
                     .buttonStyle(ProminentButtonStyle())
+
+                    Button("Login with Passkey (Web – In-App)") {
+                        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                           let root = scene.windows.first?.rootViewController {
+                            PrivyPasskeyWebViewController.present(over: root) { result in
+                                switch result {
+                                case .success:
+                                    DispatchQueue.main.async { isUserLoggedIn = true }
+                                case .failure(let error):
+                                    print("❌ WebView passkey failed:", error)
+                                case .cancelled:
+                                    print("⚪️ WebView cancelled")
+                                }
+                            }
+                        }
+                    }
+                    .buttonStyle(ProminentBlackButtonStyle())
                 }
                 .padding(32)
             }

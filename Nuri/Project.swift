@@ -7,7 +7,7 @@ let project = Project(
             name: "Nuri",
             destinations: .iOS,
             product: .app,
-            bundleId: "com.nuri.nuri-ios",
+            bundleId: "com.nuri.passkeytest",
             deploymentTargets: .iOS("18.0"),
             infoPlist: .extendingDefault(with: [
                 "UIUserInterfaceStyle": "Light",
@@ -32,7 +32,13 @@ let project = Project(
                 "NSPhotoLibraryUsageDescription": "Photo library access is needed if you choose an existing image of your ID",
                 "NSLocationWhenInUseUsageDescription": "Location is used to enhance identity verification",
                 "NSLocationTemporaryUsageDescriptionDictionary": .dictionary(["DocumentVerification": "Location is required to confirm you are in an allowed country"]),
-                "NSFaceIDUsageDescription": "Face ID is used to confirm your identity during liveness verification"
+                "NSFaceIDUsageDescription": "Face ID is used to confirm your identity during liveness verification",
+                "CFBundleURLTypes": .array([
+                    .dictionary([
+                        "CFBundleTypeRole": "Viewer",
+                        "CFBundleURLSchemes": .array(["nuriwallet"])
+                    ])
+                ])
             ]),
             sources: ["Nuri/Sources/**"],
             resources: ["Nuri/Resources/**"],
@@ -42,16 +48,20 @@ let project = Project(
                 ]),
                 "com.apple.developer.associated-domains": .array([
                     "webcredentials:nuri.com"
-                ])
+                ]),
+                "application-identifier": "MH2SRQ3N27.com.nuri.passkeytest"
             ]),
             dependencies: [
                 .project(target: "Authentication", path: "../Authentication"),
-                .external(name: "CodeScanner"),
                 .external(name: "IdensicMobileSDK"),
+                .external(name: "Privy"),
             ],
             settings: .settings(
-                base: .init()
-                .automaticCodeSigning(devTeam: "7NF2K7X2U6")
+                base: [
+                    "CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION": "YES",
+                    "DEVELOPMENT_TEAM": "MH2SRQ3N27"
+                ],
+                defaultSettings: .recommended
             )
         )
     ]

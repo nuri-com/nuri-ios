@@ -76,12 +76,7 @@ struct ReceiveView: View {
         }
         .background(NuriAsset.background.swiftUIColor)
         .task {
-            do {
-                let addr = try await PortalService.shared.ensureBitcoinWallet()
-                address = addr
-            } catch {
-                address = "Error fetching address"
-            }
+            // TODO: Integrate BTC address retrieval via Privy once wallet support is in place
             isLoading = false
         }
     }

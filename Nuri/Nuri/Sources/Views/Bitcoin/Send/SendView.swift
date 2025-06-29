@@ -1,5 +1,5 @@
 import SwiftUI
-import CodeScanner
+// CodeScanner temporarily disabled while we stabilise build.
 
 struct SendView: View {
 
@@ -7,7 +7,7 @@ struct SendView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            CodeScannerView(codeTypes: [.qr], completion: handleScan)
+            Color.black.opacity(0.95) // Placeholder for camera preview
                 .ignoresSafeArea()
             VStack(spacing: 0) {
                 Rectangle()
@@ -51,18 +51,8 @@ struct SendView: View {
         }
     }
 
-    private func handleScan(result: Result<ScanResult, ScanError>) {
-        switch result {
-        case .success(let result):
-            if BitcoinAddressValidator().isValid(address: result.string) {
-                print("✅ Scanning result is valid: \(result.string)")
-            } else {
-                print("❌ Scanning result is not valid bitcoin address: \(result.string)")
-            }
-        case .failure(let error):
-            print("❌ Scanning failed: \(error.localizedDescription)")
-        }
-    }
+    // Scanner temporarily disabled
+    private func handleScanPlaceholder() {}
 }
 
 #Preview {
