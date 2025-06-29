@@ -12,7 +12,7 @@ struct WalletProvisioner {
         guard let user = PrivyManager.currentUser else { return }
 
         // 1. Ethereum
-        if (user.ethereumWallets?.isEmpty ?? true) {
+        if user.embeddedEthereumWallets.isEmpty {
             _ = try await user.createEthereumWallet(allowAdditional: false)
             print("✅ Created Ethereum wallet")
         }
