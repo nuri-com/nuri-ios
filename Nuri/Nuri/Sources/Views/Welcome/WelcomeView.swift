@@ -45,6 +45,11 @@ struct WelcomeView: View {
                         }
                     }
                     .buttonStyle(ProminentButtonStyle())
+
+                    Button("Skip Login") {
+                        isUserLoggedIn = true
+                    }
+                    .buttonStyle(ProminentButtonStyle())
                 }
                 .padding(32)
             }
