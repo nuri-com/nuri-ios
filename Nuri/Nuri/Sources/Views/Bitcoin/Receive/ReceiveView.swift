@@ -3,8 +3,8 @@ import SwiftUI
 struct ReceiveView: View {
 
     @EnvironmentObject var navigation: BitcoinViewNavigation
-
-    private let address = "bc1q87rj40hdu23kzwyz5aq89fj84wrrf6h757r0y5kpxhnez2q8uvnq0gjqfl"
+    @State private var address: String = ""
+    @State private var isLoading = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -15,24 +15,45 @@ struct ReceiveView: View {
 
             VStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Spacer()
-                        Image("qr-code")
-                            .resizable()
-                            .frame(width: 200, height: 200)
-                            .padding(16)
-                        Spacer()
+                    // Show QR only if we have a plausible BTC address
+                    if Self.isBitcoinAddress(address) {
+                        HStack {
+                            Spacer()
+                            Image("qr-code")
+                                .resizable()
+                                .frame(width: 200, height: 200)
+                                .padding(16)
+                            Spacer()
+                        }
+                    } else {
+                        HStack {
+                            Spacer()
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle())
+                                .frame(width: 50, height: 50)
+                                .padding(16)
+                            Spacer()
+                        }
                     }
                     Divider()
                     Text("Bitcoin Address")
                         .foregroundStyle(Color.secondary)
                     HStack {
-                        Text(address.withZeroWidthSpaces)
+                        if isLoading {
+                            ProgressView()
+                        } else if Self.isBitcoinAddress(address) {
+                            Text(address.withZeroWidthSpaces)
+                        } else {
+                            Text("Address not available yet")
+                                .foregroundStyle(Color.secondary)
+                        }
                         Spacer()
-                        Button {
-                            UIPasteboard.general.string = address
-                        } label: {
-                            Image("copy-icon-black")
+                        if Self.isBitcoinAddress(address) {
+                            Button {
+                                UIPasteboard.general.string = address
+                            } label: {
+                                Image("copy-icon-black")
+                            }
                         }
                     }
                 }
@@ -54,6 +75,21 @@ struct ReceiveView: View {
             .padding(32)
         }
         .background(NuriAsset.background.swiftUIColor)
+        .task {
+            do {
+                let addr = try await PortalService.shared.ensureBitcoinWallet()
+                address = addr
+            } catch {
+                address = "Error fetching address"
+            }
+            isLoading = false
+        }
+    }
+
+    // MARK: - Helpers
+    private static func isBitcoinAddress(_ address: String) -> Bool {
+        let lower = address.lowercased()
+        return lower.hasPrefix("bc1") || lower.hasPrefix("tb1") || lower.hasPrefix("1") || lower.hasPrefix("3")
     }
 }
 
