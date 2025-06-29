@@ -16,11 +16,5 @@ struct WalletProvisioner {
             _ = try await user.createEthereumWallet(allowAdditional: false)
             print("✅ Created Ethereum wallet")
         }
-
-        // 2. Bitcoin Taproot
-        if (user.bitcoinWallets?.isEmpty ?? true) {
-            _ = try await user.createBitcoinWallet(chainType: .bitcoinTaproot, allowAdditional: false)
-            print("✅ Created Bitcoin Taproot wallet")
-        }
     }
 } 
