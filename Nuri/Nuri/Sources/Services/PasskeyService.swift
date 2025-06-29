@@ -105,6 +105,15 @@ final class PasskeyService: NSObject {
                     options = try JSONDecoder().decode(PublicKeyCredentialRequestOptions.self, from: data)
                 }
 
+                // If Privy returned no allowedCredentials we know the user has no passkey yet – shortcut.
+                if options.allowCredentials?.isEmpty ?? true {
+                    PasskeyService.dbg("No credentials on device → trigger registration")
+                    DispatchQueue.main.async {
+                        completion(.failure(PasskeyError.noCredentialFound))
+                    }
+                    return
+                }
+
                 // 2) Present Apple passkey sheet.
                 self.performAssertion(with: options, rpId: options.rpId, anchor: window) { result in
                     switch result {
