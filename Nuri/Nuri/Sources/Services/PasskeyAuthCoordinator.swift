@@ -3,6 +3,7 @@ import AuthenticationServices
 import PrivySDK
 import SwiftUI
 import UIKit
+import WalletProvisioner
 
 final class PasskeyAuthCoordinator: NSObject {
     static let shared = PasskeyAuthCoordinator()
