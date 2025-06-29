@@ -45,91 +45,35 @@ final class PasskeyService: NSObject {
     }
 
     // MARK: – Public API
-    /// Triggers a passkey login (or signup) with the given relying party.
-    /// - Parameters:
-    ///   - relyingParty: e.g. "https://nuri.com"
-    ///   - window:       The window that should present the Face-ID sheet.
-    ///   - completion:   Called on the main queue.
-    func login(relyingParty: String,
-               presentationAnchor window: ASPresentationAnchor,
-               completion: @escaping (Result<Void, Error>) -> Void) {
+    /// Triggers a passkey login (or registration if none exists) with the given relying party.
+    ///
+    /// If no passkey exists, registration is triggered. Otherwise, sign-in is performed.
+    func loginOrRegister(relyingParty: String,
+                        presentationAnchor window: ASPresentationAnchor,
+                        completion: @escaping (Result<Void, Error>) -> Void) {
         let appId = PrivyManager.appId
         let clientId = PrivyManager.clientId
 
-        PasskeyService.dbg("Starting login. appId:", appId, "clientId:", clientId)
+        PasskeyService.dbg("Starting loginOrRegister. appId:", appId, "clientId:", clientId)
 
-        // 1) Download challenge (PublicKeyCredentialRequestOptions) from Privy.
-        let challengeURL = URL(string: "https://auth.privy.io/api/v1/passkeys/authenticate/init")!
-
-        var req = URLRequest(url: challengeURL)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        // Privy headers that the backend expects (mirrors js-sdk-core / expo)
-        req.setValue(appId, forHTTPHeaderField: "privy-app-id")
-        req.setValue(clientId, forHTTPHeaderField: "privy-client-id")
-        req.setValue("expo:0.53.9", forHTTPHeaderField: "privy-client")
-        req.setValue(Bundle.main.bundleIdentifier ?? "", forHTTPHeaderField: "x-native-app-identifier")
-
-        let body: [String: Any] = [
-            "relying_party": relyingParty
-        ]
-        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
-
-        if let json = String(data: req.httpBody ?? Data(), encoding: .utf8) {
-            PasskeyService.dbg("➡️ Challenge request body:", json)
-        }
-
-        URLSession.shared.dataTask(with: req) { [weak self] data, resp, err in
-            guard let self = self else { return }
-
-            if let http = resp as? HTTPURLResponse {
-                PasskeyService.dbg("⬅️ Challenge response status:", http.statusCode)
-            }
-
-            if let err = err {
-                return completion(.failure(err))
-            }
-
-            guard let data = data,
-                  let raw = String(data: data, encoding: .utf8) else {
-                return completion(.failure(PasskeyError.invalidChallengeResponse))
-            }
-
-            do {
-                // Privy wraps the request options inside a top-level "options" key.
-                let options: PublicKeyCredentialRequestOptions
-                if let envelope = try? JSONDecoder().decode(ChallengeEnvelope.self, from: data) {
-                    options = envelope.options
+        // 1) Fetch assertion options (authenticate/init)
+        Self.fetchAssertionOptions(relyingParty: relyingParty, appId: appId, clientId: clientId) { result in
+            switch result {
+            case .failure(let error):
+                completion(.failure(error))
+            case .success(let options):
+                // 2) Check if any passkeys exist for this user
+                if options.allowCredentials == nil || options.allowCredentials?.isEmpty == true {
+                    // No passkey: trigger registration
+                    PasskeyService.dbg("No passkey found (allowCredentials nil or empty), triggering registration")
+                    self.signup(relyingParty: relyingParty, presentationAnchor: window, completion: completion)
                 } else {
-                    options = try JSONDecoder().decode(PublicKeyCredentialRequestOptions.self, from: data)
+                    // Passkey exists: trigger sign-in
+                    PasskeyService.dbg("Passkey found, triggering sign-in")
+                    self.login(relyingParty: relyingParty, presentationAnchor: window, completion: completion)
                 }
-
-                // 2) Present Apple passkey sheet.
-                self.performAssertion(with: options, rpId: options.rpId, anchor: window) { result in
-                    switch result {
-                    case .success(let assertionJSON):
-                        // 3) Verify with Privy.
-                        self.verifyCredential(assertionJSON: assertionJSON,
-                                               challenge: options.challenge,
-                                               relyingParty: relyingParty,
-                                               appId: appId,
-                                               clientId: clientId) { verifyResult in
-                            DispatchQueue.main.async {
-                                completion(verifyResult)
-                            }
-                        }
-                    case .failure(let error):
-                        DispatchQueue.main.async {
-                            completion(.failure(error))
-                        }
-                    }
-                }
-            } catch {
-                PasskeyService.dbg("❌ Challenge decode failed. Raw:", raw)
-                completion(.failure(PasskeyError.invalidChallengeResponse))
             }
-        }.resume()
+        }
     }
 
     /// Triggers a passkey **registration** with the given relying party.
@@ -208,6 +152,43 @@ final class PasskeyService: NSObject {
         }.resume()
     }
 
+    /// Triggers a passkey sign-in with the given relying party.
+    func login(relyingParty: String,
+               presentationAnchor window: ASPresentationAnchor,
+               completion: @escaping (Result<Void, Error>) -> Void) {
+        let appId = PrivyManager.appId
+        let clientId = PrivyManager.clientId
+
+        PasskeyService.dbg("Starting login. appId:", appId, "clientId:", clientId)
+
+        Self.fetchAssertionOptions(relyingParty: relyingParty, appId: appId, clientId: clientId) { [weak self] result in
+            guard let self = self else { return }
+            switch result {
+            case .failure(let error):
+                completion(.failure(error))
+            case .success(let options):
+                self.performAssertion(with: options, rpId: options.rpId, anchor: window) { result in
+                    switch result {
+                    case .success(let assertionJSON):
+                        self.verifyCredential(assertionJSON: assertionJSON,
+                                             challenge: options.challenge,
+                                             relyingParty: relyingParty,
+                                             appId: appId,
+                                             clientId: clientId) { verifyResult in
+                            DispatchQueue.main.async {
+                                completion(verifyResult)
+                            }
+                        }
+                    case .failure(let error):
+                        DispatchQueue.main.async {
+                            completion(.failure(error))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: – Private helpers
     private func performAssertion(with options: PublicKeyCredentialRequestOptions,
                                   rpId: String,
@@ -255,27 +236,37 @@ final class PasskeyService: NSObject {
         var body: [String: Any] = [
             "relying_party": relyingParty,
             "challenge": challenge,
-            "authenticator_response": assertionJSON
+            "assertion": assertionJSON
         ]
         verifyReq.httpBody = try? JSONSerialization.data(withJSONObject: body)
-
-        if let json = String(data: verifyReq.httpBody ?? Data(), encoding: .utf8) { PasskeyService.dbg("➡️ Verify request body:", json) }
 
         URLSession.shared.dataTask(with: verifyReq) { data, resp, err in
             if let http = resp as? HTTPURLResponse {
                 PasskeyService.dbg("⬅️ Verify response status:", http.statusCode)
+                if let fields = http.allHeaderFields as? [String: String],
+                   let url = verifyReq.url {
+                    let cookies = HTTPCookie.cookies(withResponseHeaderFields: fields, for: url)
+                    for cookie in cookies {
+                        PasskeyService.dbg("🍪 Set-Cookie:", cookie)
+                        HTTPCookieStorage.shared.setCookie(cookie)
+                    }
+                }
+            }
+            if let err = err {
+                completion(.failure(err)); return
+            }
+            guard let data = data else {
+                completion(.failure(PasskeyError.verificationFailed("No data"))); return
+            }
+            if let http = resp as? HTTPURLResponse {
                 if (200...299).contains(http.statusCode) {
                     DispatchQueue.main.async { completion(.success(())) }
                     return
                 }
-                if http.statusCode == 404 {
-                    return completion(.failure(PasskeyError.noCredentialFound))
-                }
             }
-            if let err = err { return completion(.failure(err)) }
-            let msg = data.flatMap { String(data: $0, encoding: .utf8) } ?? "Unknown error"
-            PasskeyService.dbg("❌ Verify failed. Body:", msg)
-            return completion(.failure(PasskeyError.verificationFailed(msg)))
+            // Try to extract error message
+            let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
+            completion(.failure(PasskeyError.verificationFailed(msg ?? "Unknown error")))
         }.resume()
     }
 
@@ -324,29 +315,79 @@ final class PasskeyService: NSObject {
         verifyReq.setValue("expo:0.53.9", forHTTPHeaderField: "privy-client")
         verifyReq.setValue(Bundle.main.bundleIdentifier ?? "", forHTTPHeaderField: "x-native-app-identifier")
 
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "relying_party": relyingParty,
             "challenge": challenge,
-            "attestation_response": attestationJSON
+            "attestation": attestationJSON
         ]
         verifyReq.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
-        if let json = String(data: verifyReq.httpBody ?? Data(), encoding: .utf8) {
-            PasskeyService.dbg("➡️ Register verify body:", json)
-        }
-
         URLSession.shared.dataTask(with: verifyReq) { data, resp, err in
             if let http = resp as? HTTPURLResponse {
-                PasskeyService.dbg("⬅️ Register verify status:", http.statusCode)
+                PasskeyService.dbg("⬅️ Register verify response status:", http.statusCode)
+                if let fields = http.allHeaderFields as? [String: String],
+                   let url = verifyReq.url {
+                    let cookies = HTTPCookie.cookies(withResponseHeaderFields: fields, for: url)
+                    for cookie in cookies {
+                        PasskeyService.dbg("🍪 Set-Cookie:", cookie)
+                        HTTPCookieStorage.shared.setCookie(cookie)
+                    }
+                }
+            }
+            if let err = err {
+                completion(.failure(err)); return
+            }
+            guard let data = data else {
+                completion(.failure(PasskeyError.verificationFailed("No data"))); return
+            }
+            if let http = resp as? HTTPURLResponse {
                 if (200...299).contains(http.statusCode) {
                     DispatchQueue.main.async { completion(.success(())) }
                     return
                 }
             }
-            if let err = err { return completion(.failure(err)) }
-            let msg = data.flatMap { String(data: $0, encoding: .utf8) } ?? "Unknown error"
-            PasskeyService.dbg("❌ Register verify failed. Body:", msg)
-            return completion(.failure(PasskeyError.verificationFailed(msg)))
+            // Try to extract error message
+            let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
+            completion(.failure(PasskeyError.verificationFailed(msg ?? "Unknown error")))
+        }.resume()
+    }
+
+    // MARK: - Private helpers
+    /// Fetches assertion options from Privy (authenticate/init)
+    private static func fetchAssertionOptions(relyingParty: String, appId: String, clientId: String, completion: @escaping (Result<PublicKeyCredentialRequestOptions, Error>) -> Void) {
+        let challengeURL = URL(string: "https://auth.privy.io/api/v1/passkeys/authenticate/init")!
+        var req = URLRequest(url: challengeURL)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(appId, forHTTPHeaderField: "privy-app-id")
+        req.setValue(clientId, forHTTPHeaderField: "privy-client-id")
+        req.setValue("expo:0.53.9", forHTTPHeaderField: "privy-client")
+        req.setValue(Bundle.main.bundleIdentifier ?? "", forHTTPHeaderField: "x-native-app-identifier")
+        let body: [String: Any] = ["relying_party": relyingParty]
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        PasskeyService.dbg("[fetchAssertionOptions] relying_party:", relyingParty)
+        URLSession.shared.dataTask(with: req) { data, resp, err in
+            if let err = err {
+                completion(.failure(err)); return
+            }
+            guard let data = data else {
+                completion(.failure(PasskeyError.invalidChallengeResponse)); return
+            }
+            do {
+                let raw = String(data: data, encoding: .utf8) ?? "<no data>"
+                PasskeyService.dbg("[fetchAssertionOptions] raw backend response:", raw)
+                // Privy wraps the request options inside a top-level "options" key.
+                let options: PublicKeyCredentialRequestOptions
+                if let envelope = try? JSONDecoder().decode(ChallengeEnvelope.self, from: data) {
+                    options = envelope.options
+                } else {
+                    options = try JSONDecoder().decode(PublicKeyCredentialRequestOptions.self, from: data)
+                }
+                PasskeyService.dbg("[fetchAssertionOptions] allowCredentials count:", options.allowCredentials?.count ?? -1)
+                completion(.success(options))
+            } catch {
+                completion(.failure(PasskeyError.invalidChallengeResponse))
+            }
         }.resume()
     }
 }
@@ -474,4 +515,5 @@ private final class RegistrationDelegate: NSObject, ASAuthorizationControllerDel
     }
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) { completion(.failure(error)) }
 }
+// ... existing code ... 
 // ... existing code ... 

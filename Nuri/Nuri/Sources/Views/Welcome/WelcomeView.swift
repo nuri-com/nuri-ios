@@ -22,15 +22,25 @@ struct WelcomeView: View {
                 }
                 VStack {
                     Spacer()
-                    Button("Continue with Passkey") {
-                        PasskeyAuthCoordinator.shared.signInOrRegister { result in
+                    Button("Sign In with Passkey") {
+                        PasskeyAuthCoordinator.shared.start { result in
                             switch result {
                             case .success:
-                                DispatchQueue.main.async {
-                                    isUserLoggedIn = true
-                                }
+                                DispatchQueue.main.async { isUserLoggedIn = true }
                             case .failure(let error):
-                                print("❌ Passkey flow failed:", error)
+                                print("❌ Passkey sign-in failed:", error)
+                            }
+                        }
+                    }
+                    .buttonStyle(ProminentButtonStyle())
+
+                    Button("Create Passkey") {
+                        PasskeyAuthCoordinator.shared.register { result in
+                            switch result {
+                            case .success:
+                                DispatchQueue.main.async { isUserLoggedIn = true }
+                            case .failure(let error):
+                                print("❌ Passkey registration failed:", error)
                             }
                         }
                     }
