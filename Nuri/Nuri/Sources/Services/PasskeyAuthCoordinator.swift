@@ -32,6 +32,29 @@ final class PasskeyAuthCoordinator: NSObject {
             }
         }
     }
+
+    /// Launches the **native** passkey registration sheet to create a new credential.
+    func register(relyingParty: String = "https://nuri.com", completion: ((Result<Void, Error>) -> Void)? = nil) {
+        Task { @MainActor in
+            guard let window = UIApplication.shared.connectedScenes
+                    .compactMap({ ($0 as? UIWindowScene)?.windows.first })
+                    .first else {
+                completion?(.failure(NSError(domain: "Passkey", code: -1, userInfo: [NSLocalizedDescriptionKey: "No window"])))
+                return
+            }
+
+            PasskeyService.shared.signup(relyingParty: relyingParty, presentationAnchor: window) { result in
+                switch result {
+                case .success:
+                    print("✅ [Passkey] native signup successful")
+                    completion?(.success(()))
+                case .failure(let error):
+                    print("❌ [Passkey] signup error", error)
+                    completion?(.failure(error))
+                }
+            }
+        }
+    }
 }
 
 // ASWebAuthenticationSession no longer needed – leaving the protocol conformance removed. 

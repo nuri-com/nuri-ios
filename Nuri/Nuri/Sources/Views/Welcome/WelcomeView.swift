@@ -36,18 +36,15 @@ struct WelcomeView: View {
                     }
                     .buttonStyle(ProminentButtonStyle())
 
-                    Button("Login with Passkey (Web – In-App)") {
-                        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                           let root = scene.windows.first?.rootViewController {
-                            PrivyPasskeyWebViewController.present(over: root) { result in
-                                switch result {
-                                case .success:
-                                    DispatchQueue.main.async { isUserLoggedIn = true }
-                                case .failure(let error):
-                                    print("❌ WebView passkey failed:", error)
-                                case .cancelled:
-                                    print("⚪️ WebView cancelled")
+                    Button("Register with Passkey") {
+                        PasskeyAuthCoordinator.shared.register { result in
+                            switch result {
+                            case .success:
+                                DispatchQueue.main.async {
+                                    isUserLoggedIn = true
                                 }
+                            case .failure(let error):
+                                print("❌ Passkey registration failed:", error)
                             }
                         }
                     }
