@@ -9,6 +9,7 @@ public enum PasskeyError: LocalizedError {
     case appleAuthorizationFailed
     case verificationFailed(String)
     case missingPrivyCredentials
+    case noCredentialFound
     
     public var errorDescription: String? {
         switch self {
@@ -20,6 +21,8 @@ public enum PasskeyError: LocalizedError {
             return "Privy rejected the credential: \(msg)"
         case .missingPrivyCredentials:
             return "Privy appId / clientId not configured."
+        case .noCredentialFound:
+            return "No existing passkey found for this device."
         }
     }
 }
@@ -264,6 +267,9 @@ final class PasskeyService: NSObject {
                 if (200...299).contains(http.statusCode) {
                     DispatchQueue.main.async { completion(.success(())) }
                     return
+                }
+                if http.statusCode == 404 {
+                    return completion(.failure(PasskeyError.noCredentialFound))
                 }
             }
             if let err = err { return completion(.failure(err)) }

@@ -55,6 +55,24 @@ final class PasskeyAuthCoordinator: NSObject {
             }
         }
     }
+
+    /// Attempts to sign-in; if the device holds no compatible passkey it automatically falls back to registration.
+    func signInOrRegister(relyingParty: String = "https://nuri.com", completion: ((Result<Void, Error>) -> Void)? = nil) {
+        start(relyingParty: relyingParty) { [weak self] result in
+            switch result {
+            case .success:
+                completion?(.success(()))
+
+            case .failure(let error):
+                if let passErr = error as? PasskeyError, case .noCredentialFound = passErr {
+                    // No passkey – create one and finish.
+                    self?.register(relyingParty: relyingParty, completion: completion)
+                } else {
+                    completion?(.failure(error))
+                }
+            }
+        }
+    }
 }
 
 // ASWebAuthenticationSession no longer needed – leaving the protocol conformance removed. 
