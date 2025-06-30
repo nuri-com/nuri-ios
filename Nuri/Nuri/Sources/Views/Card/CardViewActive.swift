@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct CardViewActive: View {
     @State private var isTransactionsPresented = false
@@ -6,6 +7,8 @@ struct CardViewActive: View {
     @State private var isLargeQRPresented = false
     @State private var isCardFrozen = false
     @State private var isTopUpPresented = false
+    @State private var isShareSheetPresented = false
+    @State private var qrImage: UIImage? = nil
 
     private let btcAddress = "bc1qsmd4xz68a7fhwvhjkd0cawx4uvs9a43746xld4yh0spfmwefpr5qc9wvv6"
 
@@ -135,18 +138,43 @@ struct CardViewActive: View {
             GeometryReader { geo in
                 VStack(spacing: 24) {
                     Spacer()
-                    QRCodeImage(text: btcAddress)
-                        .frame(width: min(geo.size.width, geo.size.height) * 0.8,
-                               height: min(geo.size.width, geo.size.height) * 0.8)
-                        .onAppear { UIPasteboard.general.string = btcAddress }
-                        .onTapGesture { isLargeQRPresented = false }
+                    ZStack {
+                        QRCodeImage(text: btcAddress)
+                            .frame(width: min(geo.size.width, geo.size.height) * 0.8,
+                                   height: min(geo.size.width, geo.size.height) * 0.8)
+                            .onAppear {
+                                UIPasteboard.general.string = btcAddress
+                                let renderer = ImageRenderer(content:
+                                    QRCodeImage(text: btcAddress)
+                                        .frame(width: 300, height: 300)
+                                )
+                                if let uiImage = renderer.uiImage {
+                                    qrImage = uiImage
+                                }
+                            }
+                            .onTapGesture { isLargeQRPresented = false }
+                    }
                     Text("Bitcoin address copied to clipboard")
                         .font(.headline)
                         .padding()
+                    Button(action: {
+                        isShareSheetPresented = true
+                    }) {
+                        NuriButton(icon: "share", title: "Share Address", style: .primary)
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 8)
                     Spacer()
                 }
                 .frame(width: geo.size.width, height: geo.size.height)
                 .background(Color.white.opacity(0.95).ignoresSafeArea())
+                .sheet(isPresented: $isShareSheetPresented) {
+                    if let qrImage = qrImage {
+                        ShareSheet(activityItems: [qrImage, btcAddress])
+                    } else {
+                        ShareSheet(activityItems: [btcAddress])
+                    }
+                }
             }
         }
     }
@@ -260,3 +288,16 @@ private struct SmallIconButton: View {
     CardViewActive()
 }
 #endif
+
+// ShareSheet helper for SwiftUI
+struct ShareSheet: UIViewControllerRepresentable {
+    var activityItems: [Any]
+    var applicationActivities: [UIActivity]? = nil
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let controller = UIActivityViewController(activityItems: activityItems, applicationActivities: applicationActivities)
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
