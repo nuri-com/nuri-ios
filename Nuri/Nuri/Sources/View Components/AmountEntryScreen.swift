@@ -111,6 +111,11 @@ public struct AmountEntryScreen: View {
         .background(NuriAsset.background.swiftUIColor)
         .onAppear {
             isFieldFocused = true
+            if exchangeRate == 0 && primarySymbol == "₿" {
+                Task {
+                    await fetchPrice()
+                }
+            }
         }
     }
 
@@ -167,6 +172,22 @@ public struct AmountEntryScreen: View {
         }
         if sanitized != newValue {
             amountText = sanitized
+        }
+    }
+
+    // MARK: - Networking (simple mempool.space price)
+    private func fetchPrice() async {
+        guard let url = URL(string: "https://mempool.space/api/v1/prices") else { return }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            if let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let eur = dict["EUR"] as? Double {
+                await MainActor.run {
+                    exchangeRate = eur
+                }
+            }
+        } catch {
+            print("Price fetch failed", error)
         }
     }
 }
