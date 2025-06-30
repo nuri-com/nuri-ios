@@ -14,7 +14,7 @@ struct BuyBitcoinView: View {
         return formatter
     }
 
-    @State private var amountText: String = "0.001"
+    @State private var amountText: String = ""
     @State private var isPrimaryBTC = true // start with BTC primary
 
     @FocusState private var isFieldFocused: Bool
