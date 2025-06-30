@@ -26,7 +26,8 @@ final class SumsubService {
         #if DEBUG
         print("[SumsubService] Fetching access token…")
         #endif
-        let userId     = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
+        // Use a fresh random ID each run so the sandbox flow starts clean.
+        let userId     = UUID().uuidString
         lastUserId = userId
         let levelName  = "id-and-liveness"
         let ttlInSecs  = 10 * 60           // 10 minutes
