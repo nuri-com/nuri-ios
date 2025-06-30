@@ -22,7 +22,9 @@ struct CardViewActive: View {
                 )
             } trailing: {
                 AnyView(
-                    NavigationLink(destination: EmptyView()) {
+                    Button(action: {
+                        isTopUpPresented = true
+                    }) {
                         Text("+ Add Money")
                             .font(.custom("Inter", size: 14).weight(.medium))
                             .foregroundColor(.white)
