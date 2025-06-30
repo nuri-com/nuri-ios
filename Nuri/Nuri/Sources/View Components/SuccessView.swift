@@ -1,34 +1,55 @@
 import SwiftUI
 
 struct SuccessView: View {
-
     let illustration: String
     let title: String
     let subtitle: String
-    let completion: () -> Void
+    let onDone: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(spacing: 16) {
-            // Header with logo and close button
-            NuriHeader<AnyView, AnyView>.logo(
-                title: "",
-                onClose: { completion() }
+        Screen(header: {
+            AnyView(
+                NuriHeader<AnyView, AnyView>.logo(title: "", onClose: {
+                    onDone()
+                    dismiss()
+                })
             )
-            Spacer()
-            Image(illustration)
-            Text(title)
-                .font(.brandTitle1)
-                .foregroundColor(Color("PrimaryNuriBlack"))
-            Text(subtitle)
-            Spacer()
-            Button("Done") {
-                completion()
+        }, content: {
+            VStack(spacing: 0) {
+                Spacer()
+
+                Image(illustration)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 150, height: 150)
+                    .padding(.bottom, 48)
+
+                Text(title)
+                    .font(.brandTitle1)
+                    .foregroundColor(Color("TextPrimary"))
+                    .multilineTextAlignment(.center)
+                    .padding(.bottom, 12)
+
+                Text(subtitle)
+                    .font(.brandBody)
+                    .foregroundColor(Color("TextSecondary"))
+                    .multilineTextAlignment(.center)
+
+                Spacer()
+                Spacer()
             }
-            .buttonStyle(ProminentBlackButtonStyle())
-        }
-        .padding()
-        .background(NuriAsset.primaryNuriLilac.swiftUIColor)
-        .navigationBarBackButtonHidden(true)
-        .toolbar(.hidden, for: .navigationBar)
+            .padding(.horizontal, 24)
+
+            Button(action: {
+                onDone()
+                dismiss()
+            }) {
+                NuriButton(icon: "normal-check", title: "Done", style: .primary)
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 34)
+        })
     }
 }

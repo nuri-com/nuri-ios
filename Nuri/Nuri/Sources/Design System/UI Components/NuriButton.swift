@@ -22,7 +22,7 @@ public struct NuriButton: View {
         }
     }
 
-    private let icon: String
+    private let icon: String?
     private let title: String
     private let style: Style
 
@@ -30,7 +30,7 @@ public struct NuriButton: View {
     private let height: CGFloat = 54
     private let cornerRadius: CGFloat = 100
 
-    public init(icon: String, title: String, style: Style = .primary) {
+    public init(icon: String? = nil, title: String, style: Style = .primary) {
         self.icon = icon
         self.title = title
         self.style = style
@@ -38,11 +38,14 @@ public struct NuriButton: View {
 
     public var body: some View {
         HStack(spacing: 8) {
-            Image(icon)
-                .resizable()
-                .renderingMode(.template)
-                .foregroundColor(Color("PrimaryNuriBlack"))
-                .frame(width: 32, height: 32)
+            if let icon = icon {
+                Image(icon)
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .foregroundColor(Color("PrimaryNuriBlack"))
+                    .frame(width: 24, height: 24)
+            }
             Text(title)
                 .font(.brandBody)
                 .foregroundColor(Color("PrimaryNuriBlack"))

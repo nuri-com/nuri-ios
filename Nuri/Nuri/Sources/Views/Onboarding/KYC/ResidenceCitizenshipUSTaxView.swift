@@ -4,20 +4,44 @@ import SwiftUI
 struct ResidenceCitizenshipUSTaxView: View {
     @Environment(\.dismiss) private var dismiss
 
+    // Struct to hold data for the success screen, making it identifiable
+    struct SuccessInfo: Identifiable {
+        let id = UUID()
+        let userName: String?
+    }
+
     // Selected values
     @State private var selectedCountry: Country? = Country.default
     @State private var selectedCitizenship: Country? = Country.default
 
-    // Sheet controls
+    // Sheet controls & Sumsub
     @State private var showCountryPicker = false
     @State private var showCitizenshipPicker = false
+    @State private var showSDK = false
+    @State private var accessToken: String?
+    @State private var verificationResult: Bool?
+    @State private var successInfo: SuccessInfo? // Replaces showSuccess and userName
+
+    private func startVerification() {
+        SumsubService.shared.fetchAccessToken { token in
+            accessToken = token
+            showSDK = token != nil
+        }
+    }
 
     var body: some View {
-        ZStack {
-            Color("Background").edgesIgnoringSafeArea(.all)
+        Screen(header: {
+            NuriHeader<AnyView, EmptyView>(title: "", leading: {
+                AnyView(Button(action: { dismiss() }) {
+                    Image("arrow-back")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 24, height: 24)
+                        .frame(width: 32, height: 32)
+                })
+            }, trailing: { EmptyView() })
+        }, content: {
             VStack(spacing: 24) {
-                topBar
-
                 Text("Where do you live?")
                     .font(.brandTitle1)
                     .foregroundColor(Color("PrimaryNuriBlack"))
@@ -36,20 +60,14 @@ struct ResidenceCitizenshipUSTaxView: View {
 
                 Spacer()
 
-                NavigationLink(destination: SumsubVerificationView()) {
-                    Text("Next")
-                        .font(.brandBody)
-                        .foregroundColor(Color("PrimaryNuriBlack"))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 54)
-                        .background(Color("PrimaryNuriLilac"))
-                        .cornerRadius(100)
+                // Button to trigger verification
+                Button(action: { startVerification() }) {
+                    NuriButton(icon: "head", title: "Start verification", style: .primary)
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 20)
             }
-        }
-        .navigationBarBackButtonHidden(true)
+        })
         .toolbar(.hidden, for: .tabBar)
         .sheet(isPresented: $showCountryPicker) {
             CountryPickerSheet(selected: $selectedCountry)
@@ -57,21 +75,36 @@ struct ResidenceCitizenshipUSTaxView: View {
         .sheet(isPresented: $showCitizenshipPicker) {
             CountryPickerSheet(selected: $selectedCitizenship)
         }
-    }
-
-    private var topBar: some View {
-        HStack {
-            Button(action: { dismiss() }) {
-                Image("arrow-back")
-                    .resizable()
-                    .frame(width: 24, height: 24)
-                    .foregroundColor(Color("PrimaryNuriBlack"))
+        .fullScreenCover(isPresented: $showSDK) {
+            if let token = accessToken {
+                SumsubView(accessToken: token) { approved in
+                    // The SDK overlay will dismiss itself; we dismiss our cover afterwards
+                    showSDK = false
+                    if approved {
+                        SumsubService.shared.fetchApplicantName { name in
+                            self.successInfo = SuccessInfo(userName: name)
+                        }
+                    }
+                }
+                .ignoresSafeArea()
+            } else {
+                ProgressView()
+                    .onAppear {
+                        startVerification()
+                    }
+                    .ignoresSafeArea()
             }
-            Spacer()
-            Color.clear.frame(width: 24, height: 24)
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 44)
+        // Use .fullScreenCover(item:) for robust presentation
+        .fullScreenCover(item: $successInfo) { info in
+            let title = info.userName != nil ? "Welcome, \(info.userName!)" : "Verification successful!"
+            let subtitle = "Your identity has been verified."
+
+            SuccessView(illustration: "hand-plant", title: title, subtitle: subtitle) {
+                successInfo = nil
+                dismiss()
+            }
+        }
     }
 }
 
