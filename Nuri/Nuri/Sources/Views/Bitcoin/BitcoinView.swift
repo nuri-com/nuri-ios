@@ -138,7 +138,7 @@ private struct SecondaryCurrencyAndAmount: View {
             }
         }
         .font(.system(size: 16, weight: .medium))
-        .foregroundColor(Color(hex: "#6D6D86"))
+        .foregroundColor(Color("PrimaryNuriBlack"))
     }
 }
 
@@ -156,12 +156,12 @@ private struct SecondaryHalfButton: View {
                 Text(title)
                     .font(.system(size: 16, weight: .medium))
             }
-            .foregroundColor(Color(hex: "#2C232E"))
+            .foregroundColor(Color("PrimaryNuriBlack"))
             .frame(maxWidth: .infinity)
             .frame(height: 48)
             .overlay(
                 RoundedRectangle(cornerRadius: 32)
-                    .stroke(Color(hex: "#2C232E"), lineWidth: 1.4)
+                    .stroke(Color("PrimaryNuriBlack"), lineWidth: 1.4)
             )
         }
     }
@@ -181,7 +181,7 @@ private struct PrimaryHalfButton: View {
                 Text(title)
                     .font(.system(size: 16, weight: .medium))
             }
-            .foregroundColor(Color(hex: "#2C232E"))
+            .foregroundColor(Color("PrimaryNuriBlack"))
             .frame(maxWidth: .infinity)
             .frame(height: 48)
             .background(Color(hex: "#BEAAFF"))

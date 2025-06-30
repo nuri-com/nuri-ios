@@ -2,7 +2,7 @@ import SwiftUI
 
 struct CardView: View {
     var body: some View {
-        VStack(spacing: 0) {
+        Screen {
             // Unified header
             NuriHeader<AnyView, AnyView>(title: "") {
                 AnyView(
@@ -25,7 +25,7 @@ struct CardView: View {
                     }
                 )
             }
-
+        } content: {
             VStack(spacing: 0) {
                 NuriCardIllustration()
                     .padding(.bottom, 16)
@@ -40,9 +40,6 @@ struct CardView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 34)
         }
-        .background(NuriAsset.background.swiftUIColor.ignoresSafeArea())
-        .navigationBarBackButtonHidden(true)
-        .toolbar(.hidden, for: .navigationBar)
     }
 
     private func featureList() -> some View {
@@ -59,7 +56,6 @@ struct CardView: View {
                         title: "Add to Apple Wallet",
                         subtitle: "Use with Tap-To-Pay")
         }
-        .padding(.horizontal, 16)
     }
 }
 
@@ -70,5 +66,3 @@ struct CardView_Previews: PreviewProvider {
     }
 }
 #endif
-
-// This extension can be moved to a separate file

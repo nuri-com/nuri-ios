@@ -5,51 +5,45 @@ struct SecurityView: View {
     @State private var iCloudBackupEnabled: Bool = true
 
     var body: some View {
-        VStack(spacing: 0) {
+        Screen {
             // Header – displays screen title and CTA
             NuriHeader<AnyView, AnyView>.logoAndCTA(
                 title: "",
                 cta: "+ Add Key",
                 onCTA: {}
             )
-
+        } content: {
             // Body content fills the remaining space below the header
-            VStack(spacing: 0) {
-                VStack(spacing: 12) {
-                    NuriMenuRow(icon: "passkey-new",
-                                title: "Passkey",
-                                subtitle: "Account is secured with Apple iCloud Passkey.") {
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(Color("PrimaryNuriBlack"))
-                    }
-
-                    NuriMenuRow(icon: "icloud-download",
-                                title: "iCloud Backup",
-                                subtitle: "We automatically saved a recovery key to iCloud.") {
-                        Toggle("", isOn: $iCloudBackupEnabled)
-                            .labelsHidden()
-                            .tint(Color("PrimaryNuriLilac"))
-                    }
-
-                    NuriMenuRow(icon: "touch-id",
-                                title: "Add Hardware Key",
-                                subtitle: "Add a Nuri or Yubikey security key to your Account.") {
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(Color("PrimaryNuriBlack"))
-                    }
+            VStack(spacing: 12) {
+                NuriMenuRow(icon: "passkey-new",
+                            title: "Passkey",
+                            subtitle: "Account is secured with Apple iCloud Passkey.") {
+                    Image(systemName: "chevron.right")
+                        .foregroundColor(Color("PrimaryNuriBlack"))
                 }
-                .padding(.horizontal, 16)
 
-                Spacer(minLength: 0) // push action button toward bottom while still inside the body
+                NuriMenuRow(icon: "icloud-download",
+                            title: "iCloud Backup",
+                            subtitle: "We automatically saved a recovery key to iCloud.") {
+                    Toggle("", isOn: $iCloudBackupEnabled)
+                        .labelsHidden()
+                        .tint(Color("PrimaryNuriLilac"))
+                }
 
-                actionButton()
-                    .padding(.bottom, 34)
+                NuriMenuRow(icon: "touch-id",
+                            title: "Add Hardware Key",
+                            subtitle: "Add a Nuri or Yubikey security key to your Account.") {
+                    Image(systemName: "chevron.right")
+                        .foregroundColor(Color("PrimaryNuriBlack"))
+                }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .padding(.horizontal, 16)
+
+            Spacer(minLength: 0) // push action button toward bottom while still inside the body
+
+            actionButton()
+                .padding(.bottom, 34)
         }
-        .background(NuriAsset.background.swiftUIColor.ignoresSafeArea())
-        .navigationBarBackButtonHidden(true)
-        .toolbar(.hidden, for: .navigationBar)
     }
 
     // MARK: - Components

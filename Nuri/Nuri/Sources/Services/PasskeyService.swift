@@ -249,6 +249,11 @@ final class PasskeyService: NSObject {
                     for cookie in cookies {
                         PasskeyService.dbg("🍪 Set-Cookie:", cookie)
                         HTTPCookieStorage.shared.setCookie(cookie)
+                        // Debug: print all cookies after setting
+                        let allCookies = HTTPCookieStorage.shared.cookies ?? []
+                        for c in allCookies {
+                            PasskeyService.dbg("🍪 [All Cookies]", c)
+                        }
                     }
                 }
             }
@@ -331,6 +336,11 @@ final class PasskeyService: NSObject {
                     for cookie in cookies {
                         PasskeyService.dbg("🍪 Set-Cookie:", cookie)
                         HTTPCookieStorage.shared.setCookie(cookie)
+                        // Debug: print all cookies after setting
+                        let allCookies = HTTPCookieStorage.shared.cookies ?? []
+                        for c in allCookies {
+                            PasskeyService.dbg("🍪 [All Cookies]", c)
+                        }
                     }
                 }
             }

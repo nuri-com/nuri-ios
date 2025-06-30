@@ -28,6 +28,7 @@ struct MainTabBar: View {
                     }
                 }
             }
+            .accentColor(Color("PrimaryNuriBlack"))
         }
         .ignoresSafeArea(.keyboard)
     }

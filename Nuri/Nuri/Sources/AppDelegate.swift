@@ -7,7 +7,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         if let baseFont = UIFont(name: "Inter", size: 14) {
             let interFont = UIFontMetrics(forTextStyle: .caption1).scaledFont(for: baseFont)
             UILabel.appearance(whenContainedInInstancesOf: [UITabBar.self]).font = interFont
-            let primary = UIColor(NuriAsset.primaryNuriBlack.swiftUIColor)
+            let primary = UIColor(red: 0x2C/255.0, green: 0x23/255.0, blue: 0x2E/255.0, alpha: 1.0) // #2C232E
             let normalAttributes: [NSAttributedString.Key: Any] = [
                 .font: interFont,
                 .foregroundColor: primary.withAlphaComponent(0.5)
