@@ -24,47 +24,18 @@ struct WelcomeView: View {
                 }
                 VStack {
                     Spacer()
-                    AppleSignInButton {
-                        Task { @MainActor in
-                            do {
-                                try await PrivyManager.shared.oAuth.login(with: .apple)
-                                // Provision wallets if needed
-                                do { try await WalletProvisioner.ensureWallets() } catch { print("⚠️ Wallet provisioning error", error) }
-                                isUserLoggedIn = true
-                            } catch {
-                                print("❌ Apple sign-in failed:", error)
-                            }
-                        }
-                    }
-                    .frame(height: 45)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                    Button("Sign In with Passkey") {
-                        PasskeyAuthCoordinator.shared.start { result in
+                    
+                    Button("Sign-in or Create Passkey") {
+                        print("👆 [WelcomeView] User tapped 'Sign-in or Create Passkey'")
+                        PasskeyAuthCoordinator.shared.signInOrRegister { result in
                             switch result {
                             case .success:
+                                print("✅ [WelcomeView] Sign-in or register successful, setting isUserLoggedIn = true")
                                 DispatchQueue.main.async { isUserLoggedIn = true }
                             case .failure(let error):
-                                print("❌ Passkey sign-in failed:", error)
+                                print("❌ [WelcomeView] Sign-in or register failed:", error)
                             }
                         }
-                    }
-                    .buttonStyle(ProminentButtonStyle())
-
-                    Button("Create Passkey") {
-                        PasskeyAuthCoordinator.shared.register { result in
-                            switch result {
-                            case .success:
-                                DispatchQueue.main.async { isUserLoggedIn = true }
-                            case .failure(let error):
-                                print("❌ Passkey registration failed:", error)
-                            }
-                        }
-                    }
-                    .buttonStyle(ProminentButtonStyle())
-
-                    Button("Skip Login") {
-                        isUserLoggedIn = true
                     }
                     .buttonStyle(ProminentButtonStyle())
                 }

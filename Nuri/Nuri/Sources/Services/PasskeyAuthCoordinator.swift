@@ -12,25 +12,39 @@ final class PasskeyAuthCoordinator: NSObject {
     /// Launches the **native** passkey sheet powered by the Privy SDK (v2+).
     /// This replaces the deprecated WebAuth flow that hit https://auth.privy.io/passkey.
     func start(relyingParty: String = "https://nuri.com", completion: ((Result<Void, Error>) -> Void)? = nil) {
+        print("🔐 [PasskeyAuthCoordinator] Starting sign-in flow...")
+        print("   📍 Relying party: \(relyingParty)")
+        
         Task { @MainActor in
             guard let window = UIApplication.shared.connectedScenes
                     .compactMap({ ($0 as? UIWindowScene)?.windows.first })
                     .first else {
+                print("❌ [PasskeyAuthCoordinator] Failed to get window for presentation")
                 completion?(.failure(NSError(domain: "Passkey", code: -1, userInfo: [NSLocalizedDescriptionKey: "No window"])))
                 return
             }
 
+            print("✅ [PasskeyAuthCoordinator] Got presentation window, calling PasskeyService.login...")
+            
             PasskeyService.shared.login(relyingParty: relyingParty, presentationAnchor: window) { result in
                 switch result {
                 case .success:
-                    print("✅ [Passkey] native login successful")
+                    print("✅ [PasskeyAuthCoordinator] Native login successful!")
+                    print("   🔄 Now provisioning wallets...")
                     Task {
-                        do { try await WalletProvisioner.ensureWallets() }
-                        catch { print("⚠️ Wallet provisioning error", error) }
+                        do { 
+                            try await WalletProvisioner.ensureWallets()
+                            print("   ✅ Wallets provisioned successfully")
+                        } catch { 
+                            print("   ⚠️ Wallet provisioning error:", error)
+                        }
+                        print("✅ [PasskeyAuthCoordinator] Sign-in flow completed successfully")
                         completion?(.success(()))
                     }
                 case .failure(let error):
-                    print("❌ [Passkey] login error", error)
+                    print("❌ [PasskeyAuthCoordinator] Login failed with error:", error)
+                    print("   📊 Error domain: \((error as NSError).domain)")
+                    print("   📊 Error code: \((error as NSError).code)")
                     completion?(.failure(error))
                 }
             }
@@ -39,25 +53,40 @@ final class PasskeyAuthCoordinator: NSObject {
 
     /// Launches the **native** passkey registration sheet to create a new credential.
     func register(relyingParty: String = "https://nuri.com", completion: ((Result<Void, Error>) -> Void)? = nil) {
+        print("🔐 [PasskeyAuthCoordinator] Starting registration flow...")
+        print("   📍 Relying party: \(relyingParty)")
+        
         Task { @MainActor in
             guard let window = UIApplication.shared.connectedScenes
                     .compactMap({ ($0 as? UIWindowScene)?.windows.first })
                     .first else {
+                print("❌ [PasskeyAuthCoordinator] Failed to get window for presentation")
                 completion?(.failure(NSError(domain: "Passkey", code: -1, userInfo: [NSLocalizedDescriptionKey: "No window"])))
                 return
             }
 
+            print("✅ [PasskeyAuthCoordinator] Got presentation window, calling PasskeyService.signup...")
+            
             PasskeyService.shared.signup(relyingParty: relyingParty, presentationAnchor: window) { result in
                 switch result {
                 case .success:
-                    print("✅ [Passkey] native signup successful")
+                    print("✅ [PasskeyAuthCoordinator] Native signup successful!")
+                    print("   🔑 New passkey created and stored in iCloud Keychain")
+                    print("   🔄 Now provisioning wallets...")
                     Task {
-                        do { try await WalletProvisioner.ensureWallets() }
-                        catch { print("⚠️ Wallet provisioning error", error) }
+                        do { 
+                            try await WalletProvisioner.ensureWallets()
+                            print("   ✅ Wallets provisioned successfully")
+                        } catch { 
+                            print("   ⚠️ Wallet provisioning error:", error)
+                        }
+                        print("✅ [PasskeyAuthCoordinator] Registration flow completed successfully")
                         completion?(.success(()))
                     }
                 case .failure(let error):
-                    print("❌ [Passkey] signup error", error)
+                    print("❌ [PasskeyAuthCoordinator] Signup failed with error:", error)
+                    print("   📊 Error domain: \((error as NSError).domain)")
+                    print("   📊 Error code: \((error as NSError).code)")
                     completion?(.failure(error))
                 }
             }
@@ -66,20 +95,38 @@ final class PasskeyAuthCoordinator: NSObject {
 
     /// Attempts to sign-in; if the device holds no compatible passkey it automatically falls back to registration.
     func signInOrRegister(relyingParty: String = "https://nuri.com", completion: ((Result<Void, Error>) -> Void)? = nil) {
-        start(relyingParty: relyingParty) { [weak self] result in
-            switch result {
-            case .success:
-                Task {
-                    do { try await WalletProvisioner.ensureWallets() }
-                    catch { print("⚠️ Wallet provisioning error", error) }
-                    completion?(.success(()))
-                }
+        print("🔐 [PasskeyAuthCoordinator] Starting smart sign-in/register flow...")
+        print("   📍 Using loginOrRegister to check for existing passkeys first...")
+        
+        Task { @MainActor in
+            guard let window = UIApplication.shared.connectedScenes
+                    .compactMap({ ($0 as? UIWindowScene)?.windows.first })
+                    .first else {
+                print("❌ [PasskeyAuthCoordinator] Failed to get window for presentation")
+                completion?(.failure(NSError(domain: "Passkey", code: -1, userInfo: [NSLocalizedDescriptionKey: "No window"])))
+                return
+            }
 
-            case .failure(let error):
-                if let passErr = error as? PasskeyError, case .noCredentialFound = passErr {
-                    // No passkey – create one and finish.
-                    self?.register(relyingParty: relyingParty, completion: completion)
-                } else {
+            print("✅ [PasskeyAuthCoordinator] Got presentation window, calling PasskeyService.loginOrRegister...")
+            
+            PasskeyService.shared.loginOrRegister(relyingParty: relyingParty, presentationAnchor: window) { result in
+                switch result {
+                case .success:
+                    print("✅ [PasskeyAuthCoordinator] Smart flow: Login or register succeeded")
+                    Task {
+                        do { 
+                            try await WalletProvisioner.ensureWallets()
+                            print("   ✅ Wallets provisioned successfully")
+                        } catch { 
+                            print("   ⚠️ Wallet provisioning error:", error)
+                        }
+                        print("✅ [PasskeyAuthCoordinator] Smart flow completed successfully")
+                        completion?(.success(()))
+                    }
+                case .failure(let error):
+                    print("❌ [PasskeyAuthCoordinator] Smart flow failed with error:", error)
+                    print("   📊 Error domain: \((error as NSError).domain)")
+                    print("   📊 Error code: \((error as NSError).code)")
                     completion?(.failure(error))
                 }
             }
