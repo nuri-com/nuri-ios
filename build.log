@@ -1,3 +1,0 @@
-Command line invocation:
-    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -scheme Nuri -workspace Nuri.xcworkspace -destination "platform=iOS Simulator,name=iphone 15" clean build
-

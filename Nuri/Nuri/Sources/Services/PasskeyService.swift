@@ -59,23 +59,224 @@ final class PasskeyService: NSObject {
         PasskeyService.dbg("Starting loginOrRegister. appId:", appId, "clientId:", clientId)
 
         // 1) Fetch assertion options (authenticate/init)
-        Self.fetchAssertionOptions(relyingParty: relyingParty, appId: appId, clientId: clientId) { result in
+        Self.fetchAssertionOptions(relyingParty: relyingParty, appId: appId, clientId: clientId) { [weak self] result in
+            guard let self = self else { return }
             switch result {
+            case .success(let options):
+                // 2) Always try sign-in first, regardless of allowCredentials
+                // The system will check if any passkeys exist for this RP
+                PasskeyService.dbg("Attempting sign-in with passkey (allowCredentials: \(options.allowCredentials?.count ?? 0))")
+                
+                self.performAssertion(with: options, rpId: options.rpId, anchor: window) { assertionResult in
+                    switch assertionResult {
+                    case .success(let assertionJSON):
+                        // 3) Verify the assertion with Privy
+                        self.verifyCredential(assertionJSON: assertionJSON, 
+                                            challenge: options.challenge,
+                                            relyingParty: relyingParty,
+                                            appId: appId, 
+                                            clientId: clientId,
+                                            completion: completion)
+                    case .failure(let error):
+                        // Check if the error indicates no passkeys exist
+                        if let authError = error as? ASAuthorizationError,
+                           authError.code == .canceled {
+                            // User cancelled or no passkeys exist, try registration
+                            PasskeyService.dbg("No passkeys found or user cancelled, falling back to registration")
+                            self.signup(relyingParty: relyingParty,
+                                      presentationAnchor: window,
+                                      completion: completion)
+                        } else {
+                            completion(.failure(error))
+                        }
+                    }
+                }
             case .failure(let error):
                 completion(.failure(error))
-            case .success(let options):
-                // 2) Check if any passkeys exist for this user
-                if options.allowCredentials == nil || options.allowCredentials?.isEmpty == true {
-                    // No passkey: trigger registration
-                    PasskeyService.dbg("No passkey found (allowCredentials nil or empty), triggering registration")
-                    self.signup(relyingParty: relyingParty, presentationAnchor: window, completion: completion)
-                } else {
-                    // Passkey exists: trigger sign-in
-                    PasskeyService.dbg("Passkey found, triggering sign-in")
-                    self.login(relyingParty: relyingParty, presentationAnchor: window, completion: completion)
-                }
             }
         }
+    }
+
+    /// Links an additional passkey to an already authenticated user.
+    /// This allows users to add hardware security keys or platform passkeys as backup authentication methods.
+    func linkAdditionalPasskey(relyingParty: String,
+                              presentationAnchor window: ASPresentationAnchor,
+                              completion: @escaping (Result<Void, Error>) -> Void) {
+        // First check if we have a user in the Privy SDK
+        guard let user = PrivyManager.currentUser else {
+            completion(.failure(NSError(domain: "PasskeyService", code: -1, userInfo: [NSLocalizedDescriptionKey: "User must be authenticated to link additional passkeys"])))
+            return
+        }
+        
+        let appId = PrivyManager.appId
+        let clientId = PrivyManager.clientId
+        
+        PasskeyService.dbg("Starting linkAdditionalPasskey. appId:", appId, "clientId:", clientId)
+        PasskeyService.dbg("Current user ID:", user.id)
+        
+        // Get the access token from the authenticated user
+        Task {
+            do {
+                let accessToken = try await user.getAccessToken()
+                PasskeyService.dbg("Got access token: \(accessToken.prefix(20))...")
+                
+                // Continue with the linking process
+                self.performLinkingWithToken(accessToken: accessToken,
+                                            relyingParty: relyingParty,
+                                            presentationAnchor: window,
+                                            completion: completion)
+            } catch {
+                PasskeyService.dbg("❌ Failed to get access token: \(error)")
+                completion(.failure(error))
+            }
+        }
+    }
+    
+    private func performLinkingWithToken(accessToken: String,
+                                       relyingParty: String,
+                                       presentationAnchor window: ASPresentationAnchor,
+                                       completion: @escaping (Result<Void, Error>) -> Void) {
+        let appId = PrivyManager.appId
+        let clientId = PrivyManager.clientId
+        
+        // For linking, we need to call the register endpoint with the existing user's context
+        let challengeURL = URL(string: "https://auth.privy.io/api/v1/passkeys/register/init")!
+        
+        var req = URLRequest(url: challengeURL)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(appId, forHTTPHeaderField: "privy-app-id")
+        req.setValue(clientId, forHTTPHeaderField: "privy-client-id")
+        req.setValue("expo:0.53.9", forHTTPHeaderField: "privy-client")
+        req.setValue(Bundle.main.bundleIdentifier ?? "", forHTTPHeaderField: "x-native-app-identifier")
+        
+        // Include the access token as Bearer authorization
+        req.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        PasskeyService.dbg("Including Bearer token in Authorization header")
+        
+        let body: [String: Any] = [
+            "relying_party": relyingParty
+            // Note: Removed "link": true as it might not be needed with proper auth
+        ]
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        
+        URLSession.shared.dataTask(with: req) { [weak self] data, resp, err in
+            guard let self = self else { return }
+            if let http = resp as? HTTPURLResponse {
+                PasskeyService.dbg("⬅️ Link register-init response status:", http.statusCode)
+            }
+            if let err = err {
+                return completion(.failure(err))
+            }
+            guard let data = data else {
+                return completion(.failure(PasskeyError.invalidChallengeResponse))
+            }
+            
+            if let raw = String(data: data, encoding: .utf8) {
+                PasskeyService.dbg("⬅️ Link register-init response:", raw)
+            }
+            
+            do {
+                // Parse creation options
+                let creationOptions: PublicKeyCredentialCreationOptions
+                if let env = try? JSONDecoder().decode(CreationEnvelope.self, from: data) {
+                    creationOptions = env.options
+                } else {
+                    creationOptions = try JSONDecoder().decode(PublicKeyCredentialCreationOptions.self, from: data)
+                }
+                
+                // Perform the platform registration
+                self.performRegistration(with: creationOptions,
+                                       rpId: creationOptions.rp.id,
+                                       anchor: window) { result in
+                    switch result {
+                    case .success(let attestationJSON):
+                        self.verifyLinkAttestation(attestationJSON: attestationJSON,
+                                                  relyingParty: relyingParty,
+                                                  accessToken: accessToken,
+                                                  appId: appId,
+                                                  clientId: clientId,
+                                                  completion: completion)
+                    case .failure(let error):
+                        DispatchQueue.main.async { completion(.failure(error)) }
+                    }
+                }
+            } catch {
+                PasskeyService.dbg("❌ Link register-init decode failed")
+                completion(.failure(PasskeyError.invalidChallengeResponse))
+            }
+        }.resume()
+    }
+    
+    private func verifyLinkAttestation(attestationJSON: [String: Any],
+                                      relyingParty: String,
+                                      accessToken: String,
+                                      appId: String,
+                                      clientId: String,
+                                      completion: @escaping (Result<Void, Error>) -> Void) {
+        let verifyURL = URL(string: "https://auth.privy.io/api/v1/passkeys/register")!
+        
+        var verifyReq = URLRequest(url: verifyURL)
+        verifyReq.httpMethod = "POST"
+        verifyReq.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        verifyReq.setValue(appId, forHTTPHeaderField: "privy-app-id")
+        verifyReq.setValue(clientId, forHTTPHeaderField: "privy-client-id")
+        verifyReq.setValue("expo:0.53.9", forHTTPHeaderField: "privy-client")
+        verifyReq.setValue(Bundle.main.bundleIdentifier ?? "", forHTTPHeaderField: "x-native-app-identifier")
+        
+        // Include the access token as Bearer authorization
+        verifyReq.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        
+        let body: [String: Any] = [
+            "authenticator_response": attestationJSON,
+            "relying_party": relyingParty
+        ]
+        
+        verifyReq.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        
+        URLSession.shared.dataTask(with: verifyReq) { data, resp, err in
+            if let http = resp as? HTTPURLResponse {
+                PasskeyService.dbg("⬅️ Link verify response status:", http.statusCode)
+            }
+            if let err = err {
+                completion(.failure(err)); return
+            }
+            guard let data = data else {
+                completion(.failure(PasskeyError.verificationFailed("No data"))); return
+            }
+            
+            if let raw = String(data: data, encoding: .utf8), !raw.isEmpty {
+                PasskeyService.dbg("⬅️ Link verify raw response:", raw)
+            }
+            
+            if let http = resp as? HTTPURLResponse {
+                if (200...299).contains(http.statusCode) {
+                    DispatchQueue.main.async { 
+                        PasskeyService.dbg("✅ Additional passkey linked successfully")
+                        completion(.success(())) 
+                    }
+                    
+                    // Log the successful authentication and check Privy state
+                    Task { @MainActor in
+                        PasskeyService.dbg("✅ Authentication successful, checking Privy state...")
+                        await PrivyManager.awaitReady()
+                        
+                        if let user = PrivyManager.currentUser {
+                            PasskeyService.dbg("✅ User is now logged in: \(user.id)")
+                        } else {
+                            PasskeyService.dbg("❌ WARNING: User is still nil after successful auth!")
+                        }
+                    }
+                    
+                    return
+                }
+            }
+            
+            // Try to extract error message
+            let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let msg = errorData?["error"] as? String ?? errorData?["message"] as? String
+            completion(.failure(PasskeyError.verificationFailed(msg ?? "Failed to link passkey")))
+        }.resume()
     }
 
     /// Triggers a passkey **registration** with the given relying party.
@@ -195,26 +396,28 @@ final class PasskeyService: NSObject {
                                   rpId: String,
                                   anchor: ASPresentationAnchor,
                                   completion: @escaping (Result<[String: Any], Error>) -> Void) {
-        PasskeyService.dbg("[performAssertion] Presenting Apple passkey sheet – rpId:", rpId)
         let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: rpId)
         guard let challengeData = Data(base64EncodedURLSafe: options.challenge) else {
             return completion(.failure(PasskeyError.invalidChallengeResponse))
         }
+        
         let request = provider.createCredentialAssertionRequest(challenge: challengeData)
-        if let allowed = options.allowCredentials, !allowed.isEmpty {
-            request.allowedCredentials = allowed.compactMap { credential in
-                guard let idData = Data(base64EncodedURLSafe: credential.id) else { return nil }
-                return ASAuthorizationPlatformPublicKeyCredentialDescriptor(credentialID: idData)
+        request.userVerificationPreference = .preferred
+        
+        // If specific credentials are provided, use them
+        if let allowCredentials = options.allowCredentials, !allowCredentials.isEmpty {
+            request.allowedCredentials = allowCredentials.compactMap { desc in
+                guard let data = Data(base64EncodedURLSafe: desc.id) else { return nil }
+                return ASAuthorizationPlatformPublicKeyCredentialDescriptor(credentialID: data)
             }
         }
-        request.userVerificationPreference = .preferred
-
+        // If no specific credentials, the system will show all available passkeys for this RP
+        
         let authController = ASAuthorizationController(authorizationRequests: [request])
         let delegate = AuthorizationDelegate { [weak self] result in
             completion(result)
             self?.activeDelegate = nil
         }
-        delegate.verbose = true
         self.activeDelegate = delegate
         
         authController.delegate = delegate
@@ -278,9 +481,47 @@ final class PasskeyService: NSObject {
             if let raw = String(data: data, encoding: .utf8), !raw.isEmpty {
                 PasskeyService.dbg("⬅️ Verify raw response:", raw)
             }
+            
+            // Try to parse the response to get tokens
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                if let token = json["token"] as? String {
+                    PasskeyService.dbg("🎫 Got access token: \(token.prefix(20))...")
+                }
+                if let refreshToken = json["refresh_token"] as? String {
+                    PasskeyService.dbg("🔄 Got refresh token: \(refreshToken.prefix(20))...")
+                }
+                if let privyAccessToken = json["privy_access_token"] as? String {
+                    PasskeyService.dbg("🔑 Got privy access token: \(privyAccessToken.prefix(20))...")
+                }
+                
+                // Store tokens for later use
+                if let token = json["token"] as? String,
+                   let refreshToken = json["refresh_token"] as? String {
+                    // We'll create a method to handle these tokens
+                    self.handleAuthenticationTokens(
+                        accessToken: token,
+                        refreshToken: refreshToken,
+                        response: json
+                    )
+                }
+            }
+            
             if let http = resp as? HTTPURLResponse {
                 if (200...299).contains(http.statusCode) {
                     DispatchQueue.main.async { completion(.success(())) }
+                    
+                    // Log the successful authentication and check Privy state
+                    Task { @MainActor in
+                        PasskeyService.dbg("✅ Authentication successful, checking Privy state...")
+                        await PrivyManager.awaitReady()
+                        
+                        if let user = PrivyManager.currentUser {
+                            PasskeyService.dbg("✅ User is now logged in: \(user.id)")
+                        } else {
+                            PasskeyService.dbg("❌ WARNING: User is still nil after successful auth!")
+                        }
+                    }
+                    
                     return
                 }
             }
@@ -322,6 +563,69 @@ final class PasskeyService: NSObject {
         authController.presentationContextProvider = delegate
         delegate.anchor = anchor
         authController.performRequests()
+    }
+
+    // MARK: - Token Management
+    
+    /// Handles authentication tokens received from Privy after successful passkey authentication
+    private func handleAuthenticationTokens(accessToken: String, refreshToken: String, response: [String: Any]) {
+        PasskeyService.dbg("🔐 Handling authentication tokens...")
+        
+        // Store tokens securely using Keychain (through Privy SDK's storage)
+        // For now, we'll store them in UserDefaults as a temporary solution
+        // In production, use Keychain Services
+        
+        UserDefaults.standard.set(accessToken, forKey: "privy_access_token")
+        UserDefaults.standard.set(refreshToken, forKey: "privy_refresh_token")
+        
+        // Store user data if available
+        if let userData = response["user"] as? [String: Any],
+           let userId = userData["id"] as? String {
+            UserDefaults.standard.set(userId, forKey: "privy_user_id")
+            PasskeyService.dbg("👤 Stored user ID: \(userId)")
+        }
+        
+        // Post notification that authentication is complete
+        NotificationCenter.default.post(
+            name: Notification.Name("PrivyAuthenticationComplete"),
+            object: nil,
+            userInfo: ["response": response]
+        )
+        
+        PasskeyService.dbg("✅ Authentication tokens stored successfully")
+    }
+    
+    /// Retrieves stored authentication tokens
+    static func getStoredTokens() -> (String?, String?, String?) {
+        let accessToken = UserDefaults.standard.string(forKey: "privy_access_token")
+        let refreshToken = UserDefaults.standard.string(forKey: "privy_refresh_token")
+        let userId = UserDefaults.standard.string(forKey: "privy_user_id")
+        return (accessToken, refreshToken, userId)
+    }
+    
+    /// Stores authentication tokens
+    static func storeAuthTokens(accessToken: String?, refreshToken: String?, userId: String?) {
+        if let accessToken = accessToken {
+            UserDefaults.standard.set(accessToken, forKey: "privy_access_token")
+        }
+        if let refreshToken = refreshToken {
+            UserDefaults.standard.set(refreshToken, forKey: "privy_refresh_token")
+        }
+        if let userId = userId {
+            UserDefaults.standard.set(userId, forKey: "privy_user_id")
+        }
+        UserDefaults.standard.synchronize()
+        
+        PasskeyService.dbg("🗃️ Stored auth tokens - Access: \(accessToken?.prefix(20) ?? "nil")... Refresh: \(refreshToken?.prefix(20) ?? "nil")... User: \(userId ?? "nil")")
+    }
+    
+    /// Clears stored authentication tokens
+    static func clearStoredTokens() {
+        UserDefaults.standard.removeObject(forKey: "privy_access_token")
+        UserDefaults.standard.removeObject(forKey: "privy_refresh_token")
+        UserDefaults.standard.removeObject(forKey: "privy_user_id")
+        UserDefaults.standard.synchronize()
+        PasskeyService.dbg("🗑️ Cleared stored authentication tokens")
     }
 
     private func verifyAttestation(attestationJSON: [String: Any],
@@ -383,9 +687,46 @@ final class PasskeyService: NSObject {
                 PasskeyService.dbg("⬅️ Register verify raw response:", raw)
             }
             
+            // Try to parse the response to get tokens
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                if let token = json["token"] as? String {
+                    PasskeyService.dbg("🎫 Got access token: \(token.prefix(20))...")
+                }
+                if let refreshToken = json["refresh_token"] as? String {
+                    PasskeyService.dbg("🔄 Got refresh token: \(refreshToken.prefix(20))...")
+                }
+                if let privyAccessToken = json["privy_access_token"] as? String {
+                    PasskeyService.dbg("🔑 Got privy access token: \(privyAccessToken.prefix(20))...")
+                }
+                
+                // Store tokens for later use
+                if let token = json["token"] as? String,
+                   let refreshToken = json["refresh_token"] as? String {
+                    // We'll create a method to handle these tokens
+                    self.handleAuthenticationTokens(
+                        accessToken: token,
+                        refreshToken: refreshToken,
+                        response: json
+                    )
+                }
+            }
+            
             if let http = resp as? HTTPURLResponse {
                 if (200...299).contains(http.statusCode) {
                     DispatchQueue.main.async { completion(.success(())) }
+                    
+                    // Log the successful authentication and check Privy state
+                    Task { @MainActor in
+                        PasskeyService.dbg("✅ Authentication successful, checking Privy state...")
+                        await PrivyManager.awaitReady()
+                        
+                        if let user = PrivyManager.currentUser {
+                            PasskeyService.dbg("✅ User is now logged in: \(user.id)")
+                        } else {
+                            PasskeyService.dbg("❌ WARNING: User is still nil after successful auth!")
+                        }
+                    }
+                    
                     return
                 }
             }

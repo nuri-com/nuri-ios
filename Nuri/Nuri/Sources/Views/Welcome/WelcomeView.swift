@@ -6,6 +6,9 @@ import PrivySDK
 struct WelcomeView: View {
 
     @AppStorage("isUserLoggedIn") var isUserLoggedIn: Bool = false
+    @State private var showError = false
+    @State private var errorMessage = ""
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         GeometryReader { proxy in
@@ -26,16 +29,7 @@ struct WelcomeView: View {
                     Spacer()
                     
                     Button("Sign-in or Create Passkey") {
-                        print("👆 [WelcomeView] User tapped 'Sign-in or Create Passkey'")
-                        PasskeyAuthCoordinator.shared.signInOrRegister { result in
-                            switch result {
-                            case .success:
-                                print("✅ [WelcomeView] Sign-in or register successful, setting isUserLoggedIn = true")
-                                DispatchQueue.main.async { isUserLoggedIn = true }
-                            case .failure(let error):
-                                print("❌ [WelcomeView] Sign-in or register failed:", error)
-                            }
-                        }
+                        signInOrCreatePasskey()
                     }
                     .buttonStyle(ProminentButtonStyle())
                 }
@@ -43,7 +37,44 @@ struct WelcomeView: View {
             }
             .background(NuriAsset.brandOrange.swiftUIColor)
         }
+        .alert("Authentication Error", isPresented: $showError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(errorMessage)
+        }
     }
+
+    // MARK: - Actions
+    
+    private func signInOrCreatePasskey() {
+        print("👆 [WelcomeView] User tapped 'Sign-in or Create Passkey'")
+        PasskeyAuthCoordinator.shared.signInOrRegister { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success:
+                    print("✅ [WelcomeView] Passkey operation successful")
+                    
+                    // Add logging to check if tokens were stored
+                    let tokens = PasskeyService.getStoredTokens()
+                    print("📦 [WelcomeView] Stored tokens - Access: \(tokens.0?.prefix(20) ?? "nil")... User: \(tokens.2 ?? "nil")")
+                    
+                    self.isUserLoggedIn = true
+                    self.dismiss()
+                case .failure(let error):
+                    print("❌ [WelcomeView] Passkey operation failed: \(error)")
+                    self.errorMessage = error.localizedDescription
+                    self.showError = true
+                }
+            }
+        }
+    }
+    
+    private func skipForNow() {
+        print("⏩ [WelcomeView] User skipped passkey setup")
+        dismiss()
+    }
+    
+    // MARK: - View Helpers
 }
 
 #Preview {

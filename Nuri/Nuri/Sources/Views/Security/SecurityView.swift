@@ -28,14 +28,7 @@ struct SecurityView: View {
         } content: {
             // Body content fills the screen between header and footer
             VStack(spacing: 16) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Security")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                        .foregroundColor(.black)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                
+            
                 NuriMenuRow(
                     icon: "passkey-new",
                     title: "Passkey",
@@ -61,10 +54,10 @@ struct SecurityView: View {
                 // Wallet Management Section
                 if PrivyWorkaroundService.shared.isAuthenticated {
                     VStack(spacing: 16) {
-                        // Wallet Creation Section
+                        // Ethereum Wallet Section (Currently Supported)
                         NuriMenuRow(
                             icon: "wallet",
-                            title: "Wallet",
+                            title: "Ethereum Wallet",
                             subtitle: walletAddress != nil ? 
                                 String(walletAddress!.prefix(6) + "..." + walletAddress!.suffix(4)) : 
                                 "Not created"
@@ -72,16 +65,17 @@ struct SecurityView: View {
                             EmptyView()
                         }
                         
-                        // Create Wallet Button
+                        // Create Ethereum Wallet Button
                         if walletAddress == nil {
                             Button(action: createWallet) {
                                 HStack {
                                     if isCreatingWallet {
                                         ProgressView()
-                                            .progressViewStyle(CircularProgressViewStyle())
                                             .scaleEffect(0.8)
+                                    } else {
+                                        Image(systemName: "plus.circle.fill")
                                     }
-                                    Text(isCreatingWallet ? "Creating Wallet..." : "Create Wallet")
+                                    Text(isCreatingWallet ? "Creating Wallet..." : "Create Ethereum Wallet")
                                 }
                                 .frame(maxWidth: .infinity)
                                 .padding()
@@ -90,6 +84,22 @@ struct SecurityView: View {
                                 .cornerRadius(8)
                             }
                             .disabled(isCreatingWallet)
+                        }
+                        
+                        // Future Bitcoin Wallet Section (Placeholder)
+                        VStack(alignment: .leading, spacing: 8) {
+                            NuriMenuRow(
+                                icon: "bitcoin-circle",
+                                title: "Bitcoin Wallet (Future)",
+                                subtitle: "Available when Privy adds native iOS support"
+                            ) {
+                                EmptyView()
+                            }
+                            
+                            Text("🚀 Coming Soon: Native iOS Bitcoin wallet support")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(.leading, 44) // Align with subtitle
                         }
                         
                         // Export Private Key Button
@@ -108,18 +118,32 @@ struct SecurityView: View {
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text("Private Key:")
                                         .font(.caption)
-                                        .foregroundColor(.gray)
+                                        .foregroundColor(.secondary)
+                                    
                                     Text(privateKey)
                                         .font(.system(.caption, design: .monospaced))
                                         .padding()
-                                        .background(Color.gray.opacity(0.1))
-                                        .cornerRadius(8)
+                                        .background(Color(UIColor.systemGray6))
+                                        .cornerRadius(4)
                                         .textSelection(.enabled)
                                 }
                             }
                         }
+                        
+                        // Error Display
+                        if let error = walletError {
+                            Text(error)
+                                .foregroundColor(.red)
+                                .font(.caption)
+                                .padding()
+                                .background(Color.red.opacity(0.1))
+                                .cornerRadius(4)
+                        }
                     }
-                    .padding(.top, 20)
+                    .padding()
+                    .background(Color(UIColor.systemBackground))
+                    .cornerRadius(12)
+                    .shadow(color: .black.opacity(0.05), radius: 2)
                 }
                 
                 Spacer()
@@ -159,63 +183,82 @@ struct SecurityView: View {
     // MARK: - Wallet Functions
     
     private func createWallet() {
-        print("🔄 [SecurityView] Starting wallet creation...")
+        print("🔄 [SecurityView] Ensure wallet flow started …")
         isCreatingWallet = true
         walletError = nil
-        
-        // First, let's check our authentication status
-        print("📊 [SecurityView] Authentication check:")
-        print("   ✅ Is authenticated: \(PrivyWorkaroundService.shared.isAuthenticated)")
-        print("   👤 User ID: \(PrivyWorkaroundService.shared.currentUserId ?? "nil")")
-        
-        let tokens = PasskeyService.getStoredTokens()
-        print("   🎫 Access token: \(tokens.0?.prefix(20) ?? "nil")...")
-        print("   🔄 Refresh token: \(tokens.1?.prefix(20) ?? "nil")...")
-        
-        // Check if user already has wallets first
+
+        // 1. Fetch current wallets first to avoid duplicates
         PrivyWorkaroundService.shared.getWallets { result in
             switch result {
+            case .failure(let err):
+                DispatchQueue.main.async {
+                    self.walletError = "Fetch wallets failed: \(err.localizedDescription)"
+                    self.isCreatingWallet = false
+                }
             case .success(let wallets):
-                print("📊 [SecurityView] User has \(wallets.count) existing wallets")
-                
-                if let existingWallet = wallets.first {
-                    DispatchQueue.main.async {
-                        self.walletAddress = existingWallet.address
-                        self.isCreatingWallet = false
-                        print("✅ [SecurityView] Using existing wallet: \(existingWallet.address)")
-                    }
-                    return
+                // Separate ETH / BTC
+                let eth = wallets.first { $0.chainType.lowercased() == "ethereum" }
+                let btc = wallets.first { $0.chainType.lowercased().contains("bitcoin") }
+
+                if let ethWallet = eth {
+                    print("✅ Existing ETH wallet found: \(ethWallet.address)")
+                    DispatchQueue.main.async { self.walletAddress = ethWallet.address }
                 }
-                
-                // No wallets found, create a new one
-                print("🔨 [SecurityView] No existing wallets, creating new wallet...")
-                self.performWalletCreation()
-                
-            case .failure(let error):
-                print("⚠️ [SecurityView] Failed to check existing wallets: \(error)")
-                
-                // If checking existing wallets failed due to rate limiting, don't try to create
-                if let nsError = error as NSError?,
-                   nsError.domain == "PrivyAuth",
-                   nsError.code == -3,
-                   let errorString = nsError.userInfo[NSLocalizedDescriptionKey] as? String,
-                   errorString.contains("Too many requests") {
-                    DispatchQueue.main.async {
-                        self.isCreatingWallet = false
-                        self.walletError = "Rate limited. Please wait a moment and try again."
-                        self.showAlert = true
+
+                // Closure helper to proceed with BTC creation after ETH ready
+                func ensureBitcoin(using existingWallets: [PrivyWorkaroundService.WalletInfo]) {
+                    if let btcWallet = existingWallets.first(where: { $0.chainType.lowercased().contains("bitcoin") }) {
+                        print("✅ Bitcoin wallet already exists: \(btcWallet.address)")
+                        DispatchQueue.main.async { self.isCreatingWallet = false }
+                        return
                     }
-                    return
+                    print("🚀 No Bitcoin wallet – creating one …")
+                    PrivyWorkaroundService.shared.createBitcoinWallet { createRes in
+                        DispatchQueue.main.async {
+                            self.isCreatingWallet = false
+                            switch createRes {
+                            case .success(let w):
+                                print("✅ BTC wallet created: \(w.address)")
+                            case .failure(let e):
+                                print("❌ BTC wallet creation failed: \(e.localizedDescription)")
+                                // Don't show the technical error to the user for Bitcoin wallets
+                                // Since it's a known limitation, we'll handle it gracefully
+                                if e.localizedDescription.contains("not yet supported") {
+                                    print("ℹ️ Bitcoin wallet creation is pending native iOS support from Privy")
+                                    // You could show a user-friendly message or just skip it
+                                } else {
+                                    self.walletError = "BTC create failed: \(e.localizedDescription)"
+                                }
+                            }
+                        }
+                    }
                 }
-                
-                // For other errors, still try to create a wallet
-                print("🔨 [SecurityView] Check failed, attempting wallet creation anyway...")
-                self.performWalletCreation()
+
+                // If no ETH wallet yet, create it then call ensureBitcoin
+                if eth == nil {
+                    print("🚀 No Ethereum wallet – creating one …")
+                    PrivyWorkaroundService.shared.createEthereumWallet { ethRes in
+                        switch ethRes {
+                        case .success(let newEth):
+                            print("✅ ETH wallet created: \(newEth.address)")
+                            DispatchQueue.main.async { self.walletAddress = newEth.address }
+                            ensureBitcoin(using: wallets + [newEth])
+                        case .failure(let err):
+                            DispatchQueue.main.async {
+                                self.walletError = "ETH create failed: \(err.localizedDescription)"
+                                self.isCreatingWallet = false
+                            }
+                        }
+                    }
+                } else {
+                    // ETH exists; now ensure Bitcoin
+                    ensureBitcoin(using: wallets)
+                }
             }
         }
     }
     
-    private func performWalletCreation() {
+    private func performEthereumWalletCreation() {
         PrivyWorkaroundService.shared.createEmbeddedWallet { createResult in
             DispatchQueue.main.async {
                 self.isCreatingWallet = false
@@ -223,43 +266,69 @@ struct SecurityView: View {
                 switch createResult {
                 case .success(let wallet):
                     self.walletAddress = wallet.address
-                    print("✅ [SecurityView] Wallet created successfully!")
+                    print("✅ [SecurityView] Ethereum wallet created successfully!")
                     print("   💳 Address: \(wallet.address)")
                     print("   ⛓️ Chain: \(wallet.chainType)")
                     print("   ✅ Verified: \(wallet.verified)")
                     
                 case .failure(let error):
-                    print("❌ [SecurityView] Wallet creation failed: \(error)")
+                    print("❌ [SecurityView] Ethereum wallet creation failed: \(error)")
                     
                     // Check for specific error types
                     if let nsError = error as NSError? {
-                        if nsError.domain == "PrivyAuth" && nsError.code == -3 {
-                            if let errorMessage = nsError.userInfo[NSLocalizedDescriptionKey] as? String {
-                                if errorMessage.contains("Too many requests") {
-                                    self.walletError = "Rate limited. Please wait a moment and try again."
-                                } else if errorMessage.contains("already exists") || errorMessage.contains("duplicate") {
-                                    self.walletError = "Wallet already exists. Please refresh to see it."
-                                } else {
-                                    self.walletError = "API Error: \(errorMessage)"
-                                }
-                            } else {
-                                self.walletError = "API Error: Unknown error"
-                            }
+                        if nsError.domain == "PrivyAuth" && nsError.code == 401 {
+                            self.walletError = "Authentication expired. Please log in again."
+                        } else if nsError.localizedDescription.contains("already exists") {
+                            // Wallet already exists, try to fetch it
+                            self.checkExistingWallet()
+                            return
                         } else {
-                            self.walletError = error.localizedDescription
+                            self.walletError = "Creation failed: \(nsError.localizedDescription)"
                         }
                     } else {
-                        self.walletError = error.localizedDescription
+                        self.walletError = "Creation failed: \(error.localizedDescription)"
+                    }
+                }
+            }
+        }
+    }
+    
+    private func checkExistingWallet() {
+        print("🔍 [SecurityView] Checking for existing wallets...")
+        
+        // Check authentication first
+        guard PrivyWorkaroundService.shared.isAuthenticated else {
+            print("❌ [SecurityView] User not authenticated")
+            return
+        }
+        
+        // Get existing wallets
+        PrivyWorkaroundService.shared.getWallets { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let wallets):
+                    print("✅ [SecurityView] Got wallets: \(wallets.count)")
+                    
+                    // Look for Ethereum wallets specifically
+                    let ethereumWallets = wallets.filter { $0.chainType.lowercased() == "ethereum" }
+                    
+                    if let ethWallet = ethereumWallets.first {
+                        self.walletAddress = ethWallet.address
+                        print("✅ [SecurityView] Using existing Ethereum wallet: \(ethWallet.address)")
+                    } else {
+                        print("💡 [SecurityView] No Ethereum wallet found. User needs to create one.")
                     }
                     
-                    self.showAlert = true
+                case .failure(let error):
+                    print("❌ [SecurityView] Failed to get wallets: \(error)")
+                    self.walletError = "Failed to load wallets: \(error.localizedDescription)"
                 }
             }
         }
     }
     
     private func exportPrivateKey() {
-        print("🔑 [SecurityView] Export private key toggled")
+        print("🔑 [SecurityView] Private key export toggled")
         
         if showPrivateKey {
             // Hide the private key
@@ -268,15 +337,13 @@ struct SecurityView: View {
         } else {
             // Show the private key
             // Note: In a real implementation, you would need to:
-            // 1. Get the private key from Privy's API
+            // 1. Get the private key from Privy's wallet API
             // 2. Decrypt it using MPC
             // This is a placeholder implementation
             showPrivateKey = true
             walletPrivateKey = "Private key export requires MPC implementation"
             
             print("⚠️ [SecurityView] Private key export requires MPC implementation")
-            print("   ℹ️ Privy uses MPC (Multi-Party Computation) for security")
-            print("   ℹ️ The private key is split into shares and requires special handling")
         }
     }
     

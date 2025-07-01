@@ -132,6 +132,39 @@ final class PasskeyAuthCoordinator: NSObject {
             }
         }
     }
+    
+    /// Links an additional passkey to the already authenticated user's account.
+    /// This allows adding hardware security keys or additional platform passkeys as backup authentication methods.
+    func linkAdditionalPasskey(relyingParty: String = "https://nuri.com", completion: ((Result<Void, Error>) -> Void)? = nil) {
+        print("🔐 [PasskeyAuthCoordinator] Starting link additional passkey flow...")
+        print("   📍 Current user:", PrivyManager.currentUser?.id ?? "nil")
+        
+        Task { @MainActor in
+            guard let window = UIApplication.shared.connectedScenes
+                    .compactMap({ ($0 as? UIWindowScene)?.windows.first })
+                    .first else {
+                print("❌ [PasskeyAuthCoordinator] Failed to get window for presentation")
+                completion?(.failure(NSError(domain: "Passkey", code: -1, userInfo: [NSLocalizedDescriptionKey: "No window"])))
+                return
+            }
+            
+            print("✅ [PasskeyAuthCoordinator] Got presentation window, calling PasskeyService.linkAdditionalPasskey...")
+            
+            PasskeyService.shared.linkAdditionalPasskey(relyingParty: relyingParty, presentationAnchor: window) { result in
+                switch result {
+                case .success:
+                    print("✅ [PasskeyAuthCoordinator] Additional passkey linked successfully!")
+                    print("   🔑 User can now authenticate with the new passkey")
+                    completion?(.success(()))
+                case .failure(let error):
+                    print("❌ [PasskeyAuthCoordinator] Link passkey failed with error:", error)
+                    print("   📊 Error domain: \((error as NSError).domain)")
+                    print("   📊 Error code: \((error as NSError).code)")
+                    completion?(.failure(error))
+                }
+            }
+        }
+    }
 }
 
 // ASWebAuthenticationSession no longer needed – leaving the protocol conformance removed. 

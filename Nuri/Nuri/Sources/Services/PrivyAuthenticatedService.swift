@@ -40,6 +40,7 @@ enum PrivyAuthenticatedService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(PrivyManager.appId, forHTTPHeaderField: "privy-app-id")
         request.setValue(PrivyManager.clientId, forHTTPHeaderField: "privy-client-id")
+        request.setValue("expo:0.53.9", forHTTPHeaderField: "privy-client")
         
         // Add the native app identifier header (CRITICAL for native mobile apps)
         if let bundleId = Bundle.main.bundleIdentifier {
@@ -54,6 +55,7 @@ enum PrivyAuthenticatedService {
         print("      Authorization: Bearer \(accessToken.prefix(20))...")
         print("      privy-app-id: \(PrivyManager.appId)")
         print("      privy-client-id: \(PrivyManager.clientId)")
+        print("      privy-client: expo:0.53.9")
         
         if let body = body {
             request.httpBody = try? JSONSerialization.data(withJSONObject: body)
@@ -196,11 +198,17 @@ enum PrivyAuthenticatedService {
         }.resume()
     }
     
-    /// Creates an embedded wallet using stored access token
+    /// Creates an embedded Ethereum wallet using stored access token
+    /// 
+    /// IMPORTANT: Bitcoin wallets are only supported in React Native (@privy-io/expo)
+    /// Native iOS SDK currently only supports: ethereum, solana, cosmos, stellar, sui, tron
+    /// TODO: Migrate to Bitcoin when Privy adds native iOS Bitcoin support
     static func createEmbeddedWallet(completion: @escaping (Result<[String: Any], Error>) -> Void) {
-        print("🔨 [PrivyAuthenticatedService] Creating embedded wallet...")
+        print("🔨 [PrivyAuthenticatedService] Creating embedded Ethereum wallet...")
+        print("⚠️ [PrivyAuthenticatedService] Bitcoin wallets only supported in React Native, using Ethereum for now")
         
-        // Try the correct wallet creation endpoint without the 'type' parameter
+        // Create Ethereum wallet (supported in native iOS)
+        // Supported chain types: "ethereum", "solana", "cosmos", "stellar", "sui", "tron"
         makeRequest(
             endpoint: "wallets",
             method: .POST,
@@ -210,14 +218,10 @@ enum PrivyAuthenticatedService {
             completion: { result in
                 switch result {
                 case .success(let data):
-                    print("✅ [PrivyAuthenticatedService] Wallet created successfully")
+                    print("✅ [PrivyAuthenticatedService] Ethereum wallet created successfully")
                     completion(.success(data))
                 case .failure(let error):
-                    print("⚠️ [PrivyAuthenticatedService] Wallet creation failed, checking if user already has wallets...")
-                    
-                    // If wallet creation fails, it might be because user already has one
-                    // But to avoid rate limiting, we'll return the error instead of checking again
-                    print("❌ [PrivyAuthenticatedService] Wallet creation failed: \(error)")
+                    print("❌ [PrivyAuthenticatedService] Ethereum wallet creation failed: \(error)")
                     completion(.failure(error))
                 }
             }
@@ -233,13 +237,43 @@ enum PrivyAuthenticatedService {
 }
 
 extension PrivyAuthenticatedService {
+    /// Creates a Bitcoin Taproot embedded wallet (index 0) for the current user.
+    /// 
+    /// IMPORTANT: As of now, the Privy REST API does not support Bitcoin wallet creation.
+    /// The /wallets endpoint only accepts: ethereum, solana, cosmos, stellar, sui, tron
+    /// 
+    /// Bitcoin wallet creation is currently only available through:
+    /// 1. The React Native/Expo SDK using internal RPC calls
+    /// 2. Backend pregeneration using the Privy NodeJS SDK
+    /// 
+    /// For native iOS, you have these options:
+    /// - Wait for Privy to add Bitcoin support to their native iOS SDK
+    /// - Use a backend endpoint to create the wallet server-side
+    /// - Use a WebView-based approach to access the React Native SDK functionality
+    static func createBitcoinWallet(completion: @escaping (Result<[String: Any], Error>) -> Void) {
+        // This is a placeholder - Bitcoin wallet creation is not supported via REST API
+        let error = NSError(
+            domain: "PrivyAPI",
+            code: -1,
+            userInfo: [
+                NSLocalizedDescriptionKey: "Bitcoin wallet creation is not supported via REST API. Use backend pregeneration or wait for native SDK support."
+            ]
+        )
+        completion(.failure(error))
+    }
+    
     static func createUserWallets(completion: @escaping (Result<[String: Any], Error>) -> Void) {
+        // Deprecated - use createEthereumWallet or createBitcoinWallet instead
+        createEthereumWallet(completion: completion)
+    }
+    
+    /// Creates an Ethereum embedded wallet for the current user
+    static func createEthereumWallet(completion: @escaping (Result<[String: Any], Error>) -> Void) {
         makeRequest(
-            endpoint: "users/me/wallets",
+            endpoint: "wallets",
             method: .POST,
             body: [
-                "chain_type": "ethereum",
-                "wallet_index": 0
+                "chain_type": "ethereum"
             ],
             completion: completion
         )
