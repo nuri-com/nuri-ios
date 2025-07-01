@@ -35,6 +35,8 @@ public enum PasskeyError: LocalizedError {
 /// 4.   On success stores the resulting Privy session cookie so that the regular Privy SDK picks it up.
 final class PasskeyService: NSObject {
     static let shared = PasskeyService()
+    private var activeDelegate: NSObject?
+    
     private override init() {}
 
     // Simple debug logger usable from every method.
@@ -133,7 +135,6 @@ final class PasskeyService: NSObject {
                     switch result {
                     case .success(let attestationJSON):
                         self.verifyAttestation(attestationJSON: attestationJSON,
-                                               challenge: creationOptions.challenge,
                                                relyingParty: relyingParty,
                                                appId: appId,
                                                clientId: clientId) { verifyResult in
@@ -194,6 +195,7 @@ final class PasskeyService: NSObject {
                                   rpId: String,
                                   anchor: ASPresentationAnchor,
                                   completion: @escaping (Result<[String: Any], Error>) -> Void) {
+        PasskeyService.dbg("[performAssertion] Presenting Apple passkey sheet – rpId:", rpId)
         let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: rpId)
         guard let challengeData = Data(base64EncodedURLSafe: options.challenge) else {
             return completion(.failure(PasskeyError.invalidChallengeResponse))
@@ -208,7 +210,13 @@ final class PasskeyService: NSObject {
         request.userVerificationPreference = .preferred
 
         let authController = ASAuthorizationController(authorizationRequests: [request])
-        let delegate = AuthorizationDelegate(completion: completion)
+        let delegate = AuthorizationDelegate { [weak self] result in
+            completion(result)
+            self?.activeDelegate = nil
+        }
+        delegate.verbose = true
+        self.activeDelegate = delegate
+        
         authController.delegate = delegate
         authController.presentationContextProvider = delegate
         delegate.anchor = anchor
@@ -233,12 +241,16 @@ final class PasskeyService: NSObject {
         verifyReq.setValue("expo:0.53.9", forHTTPHeaderField: "privy-client")
         verifyReq.setValue(Bundle.main.bundleIdentifier ?? "", forHTTPHeaderField: "x-native-app-identifier")
 
-        var body: [String: Any] = [
+        let body: [String: Any] = [
+            "authenticator_response": assertionJSON,
             "relying_party": relyingParty,
-            "challenge": challenge,
-            "assertion": assertionJSON
+            "challenge": challenge
         ]
         verifyReq.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        
+        if let preview = String(data: verifyReq.httpBody ?? Data(), encoding: .utf8)?.prefix(400) {
+            PasskeyService.dbg("➡️ Verify request body (truncated):", preview)
+        }
 
         URLSession.shared.dataTask(with: verifyReq) { data, resp, err in
             if let http = resp as? HTTPURLResponse {
@@ -262,6 +274,9 @@ final class PasskeyService: NSObject {
             }
             guard let data = data else {
                 completion(.failure(PasskeyError.verificationFailed("No data"))); return
+            }
+            if let raw = String(data: data, encoding: .utf8), !raw.isEmpty {
+                PasskeyService.dbg("⬅️ Verify raw response:", raw)
             }
             if let http = resp as? HTTPURLResponse {
                 if (200...299).contains(http.statusCode) {
@@ -297,7 +312,12 @@ final class PasskeyService: NSObject {
         }
 
         let authController = ASAuthorizationController(authorizationRequests: [request])
-        let delegate = RegistrationDelegate(completion: completion)
+        let delegate = RegistrationDelegate { [weak self] result in
+            completion(result)
+            self?.activeDelegate = nil
+        }
+        self.activeDelegate = delegate
+        
         authController.delegate = delegate
         authController.presentationContextProvider = delegate
         delegate.anchor = anchor
@@ -305,7 +325,6 @@ final class PasskeyService: NSObject {
     }
 
     private func verifyAttestation(attestationJSON: [String: Any],
-                                   challenge: String,
                                    relyingParty: String,
                                    appId: String,
                                    clientId: String,
@@ -320,12 +339,20 @@ final class PasskeyService: NSObject {
         verifyReq.setValue("expo:0.53.9", forHTTPHeaderField: "privy-client")
         verifyReq.setValue(Bundle.main.bundleIdentifier ?? "", forHTTPHeaderField: "x-native-app-identifier")
 
-        var body: [String: Any] = [
+        // Check if we need to pass attestation data differently
+        // Some APIs expect the attestation response to be flattened
+        let body: [String: Any] = [
+            "authenticator_response": attestationJSON,
             "relying_party": relyingParty,
-            "challenge": challenge,
-            "attestation": attestationJSON
         ]
+        
+        PasskeyService.dbg("🔍 Attestation JSON structure:", attestationJSON)
         verifyReq.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        
+        if let requestData = verifyReq.httpBody,
+           let requestJSON = String(data: requestData, encoding: .utf8) {
+            PasskeyService.dbg("➡️ Register verify request body:", requestJSON)
+        }
 
         URLSession.shared.dataTask(with: verifyReq) { data, resp, err in
             if let http = resp as? HTTPURLResponse {
@@ -350,6 +377,12 @@ final class PasskeyService: NSObject {
             guard let data = data else {
                 completion(.failure(PasskeyError.verificationFailed("No data"))); return
             }
+            
+            // Always log the raw response for debugging
+            if let raw = String(data: data, encoding: .utf8), !raw.isEmpty {
+                PasskeyService.dbg("⬅️ Register verify raw response:", raw)
+            }
+            
             if let http = resp as? HTTPURLResponse {
                 if (200...299).contains(http.statusCode) {
                     DispatchQueue.main.async { completion(.success(())) }
@@ -357,7 +390,9 @@ final class PasskeyService: NSObject {
                 }
             }
             // Try to extract error message
-            let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
+            let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let msg = errorData?["error"] as? String ?? errorData?["message"] as? String
+            PasskeyService.dbg("❌ Register verify error data:", errorData ?? "no error data")
             completion(.failure(PasskeyError.verificationFailed(msg ?? "Unknown error")))
         }.resume()
     }
@@ -406,8 +441,9 @@ final class PasskeyService: NSObject {
 private final class AuthorizationDelegate: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
     var completion: (Result<[String: Any], Error>) -> Void
     weak var anchor: ASPresentationAnchor?
+    var verbose: Bool = false
 
-    init(completion: @escaping (Result<[String: Any], Error>) -> Void) {
+    init(_ completion: @escaping (Result<[String: Any], Error>) -> Void) {
         self.completion = completion
     }
 
@@ -417,23 +453,74 @@ private final class AuthorizationDelegate: NSObject, ASAuthorizationControllerDe
 
     func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
         guard let cred = authorization.credential as? ASAuthorizationPlatformPublicKeyCredentialAssertion else {
-            return completion(.failure(PasskeyError.appleAuthorizationFailed))
+            completion(.failure(PasskeyError.appleAuthorizationFailed))
+            return
         }
-        var json: [String: Any] = [
+        let json: [String: Any] = [
             "id": cred.credentialID.base64EncodedStringURLSafe(),
             "type": "public-key",
-            "rawId": cred.credentialID.base64EncodedStringURLSafe(),
+            "raw_id": cred.credentialID.base64EncodedStringURLSafe(),
             "response": [
-                "authenticatorData": cred.rawAuthenticatorData?.base64EncodedStringURLSafe() ?? "",
-                "clientDataJSON": String(data: cred.rawClientDataJSON, encoding: .utf8) ?? "",
+                "authenticator_data": cred.rawAuthenticatorData?.base64EncodedStringURLSafe() ?? "",
+                // client_data_json should be base64url encoded, not a string
+                "client_data_json": cred.rawClientDataJSON.base64EncodedStringURLSafe(),
                 "signature": cred.signature.base64EncodedStringURLSafe()
-            ]
+            ],
+            "client_extension_results": [String: Any]()
         ]
-        PasskeyService.dbg("Built assertion payload:", json)
+        if verbose {
+            PasskeyService.dbg("✅ [Apple] Built assertion payload. id:", json["id"] ?? "?", "sig bytes:", (cred.signature as NSData).length)
+        }
         completion(.success(json))
     }
 
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        PasskeyService.dbg("❌ [Apple] authorization error", error)
+        completion(.failure(error))
+    }
+}
+
+// MARK: - Registration Delegate
+private final class RegistrationDelegate: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
+    var completion: (Result<[String: Any], Error>) -> Void
+    weak var anchor: ASPresentationAnchor?
+
+    init(_ completion: @escaping (Result<[String: Any], Error>) -> Void) {
+        self.completion = completion
+    }
+
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        return anchor ?? ASPresentationAnchor()
+    }
+
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        guard let cred = authorization.credential as? ASAuthorizationPlatformPublicKeyCredentialRegistration else {
+            completion(.failure(PasskeyError.appleAuthorizationFailed))
+            return
+        }
+        let json: [String: Any] = [
+            "id": cred.credentialID.base64EncodedStringURLSafe(),
+            "type": "public-key",
+            "raw_id": cred.credentialID.base64EncodedStringURLSafe(),
+            "response": [
+                "attestation_object": cred.rawAttestationObject?.base64EncodedStringURLSafe() ?? "",
+                // client_data_json should be base64url encoded, not a string
+                "client_data_json": cred.rawClientDataJSON.base64EncodedStringURLSafe()
+            ],
+            "client_extension_results": [String: Any]()
+        ]
+        
+        // Debug: Log clientDataJSON content
+        if let clientDataJSON = String(data: cred.rawClientDataJSON, encoding: .utf8) {
+            PasskeyService.dbg("📋 clientDataJSON content:", clientDataJSON)
+        }
+        
+        PasskeyService.dbg("Built attestation payload:", json)
+        completion(.success(json))
+    }
+
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        PasskeyService.dbg("❌ [Apple] registration error", error)
         completion(.failure(error))
     }
 }
@@ -477,8 +564,11 @@ private struct ChallengeEnvelope: Decodable {
     let options: PublicKeyCredentialRequestOptions
 }
 
-// INSERTION POINT BELOW PRIVATE STRUCTS
-// ... existing code ...
+// Envelope for register-init
+private struct CreationEnvelope: Decodable {
+    let options: PublicKeyCredentialCreationOptions
+}
+
 private struct PublicKeyCredentialCreationOptions: Decodable {
     let challenge: String
     let rp: RPEntity
@@ -497,33 +587,3 @@ private struct PublicKeyCredentialCreationOptions: Decodable {
         enum CodingKeys: String, CodingKey { case id, name, displayName = "display_name" } }
     struct CredentialDescriptor: Decodable { let id: String }
 }
-
-// Envelope for register-init
-private struct CreationEnvelope: Decodable { let options: PublicKeyCredentialCreationOptions }
-
-// MARK: – Delegate for registration
-private final class RegistrationDelegate: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
-    var completion: (Result<[String: Any], Error>) -> Void
-    weak var anchor: ASPresentationAnchor?
-    init(completion: @escaping (Result<[String: Any], Error>) -> Void) { self.completion = completion }
-    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor { anchor ?? ASPresentationAnchor() }
-    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
-        guard let cred = authorization.credential as? ASAuthorizationPlatformPublicKeyCredentialRegistration else {
-            return completion(.failure(PasskeyError.appleAuthorizationFailed))
-        }
-        let json: [String: Any] = [
-            "id": cred.credentialID.base64EncodedStringURLSafe(),
-            "type": "public-key",
-            "rawId": cred.credentialID.base64EncodedStringURLSafe(),
-            "response": [
-                "attestationObject": cred.rawAttestationObject?.base64EncodedStringURLSafe() ?? "",
-                "clientDataJSON": String(data: cred.rawClientDataJSON, encoding: .utf8) ?? ""
-            ]
-        ]
-        PasskeyService.dbg("Built attestation payload:", json)
-        completion(.success(json))
-    }
-    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) { completion(.failure(error)) }
-}
-// ... existing code ... 
-// ... existing code ... 

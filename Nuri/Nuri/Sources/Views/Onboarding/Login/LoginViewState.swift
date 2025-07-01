@@ -5,6 +5,7 @@ struct LoginViewState: ViewModelViewState {
     var emailTextField: TextFieldViewState
     let orLabel: String
     let passkeyButton: TextButtonViewState
+    let appleLoginAction: UserAction
 
 
     static var empty: LoginViewState {
@@ -15,6 +16,7 @@ struct LoginViewState: ViewModelViewState {
             emailTextField: .empty,
             orLabel: "",
             passkeyButton: .empty,
+            appleLoginAction: .empty
         )
     }
 }

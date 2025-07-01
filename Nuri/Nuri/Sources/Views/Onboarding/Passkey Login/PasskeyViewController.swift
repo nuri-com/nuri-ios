@@ -3,6 +3,7 @@
 
 import UIKit
 import AuthenticationServices
+import PrivySDK
 
 class PasskeyViewController: UIViewController, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
 
@@ -12,6 +13,12 @@ class PasskeyViewController: UIViewController, ASAuthorizationControllerDelegate
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .white
+
+        // Sign in with Apple (Privy OAuth)
+        let appleButton = ASAuthorizationAppleIDButton(type: .signIn, style: .black)
+        appleButton.addTarget(self, action: #selector(loginWithApple), for: .touchUpInside)
+        appleButton.frame = CGRect(x: 40, y: 100, width: 300, height: 50)
+        view.addSubview(appleButton)
 
         let registerButton = UIButton(type: .system)
         registerButton.setTitle("Register with Passkey", for: .normal)
@@ -101,6 +108,25 @@ class PasskeyViewController: UIViewController, ASAuthorizationControllerDelegate
 
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
         print("❌ Authorization failed: \(error.localizedDescription)")
+    }
+
+    // MARK: - Apple Login
+    /// Triggers the native "Sign in with Apple" sheet and completes authentication via the Privy SDK.
+    @objc private func loginWithApple() {
+        Task { @MainActor in
+            do {
+                // The Privy SDK automatically launches the appropriate ASAuthorizationController under the hood.
+                // On success `PrivyManager.currentUser` will be populated.
+                try await PrivyManager.shared.oAuth.login(with: OAuthProvider.apple)
+                print("✅ Logged in with Apple (Privy)")
+
+                // Optional: Ensure the user owns the required wallets.
+                do { try await WalletProvisioner.ensureWallets() }
+                catch { print("⚠️ Wallet provisioning error", error) }
+            } catch {
+                print("❌ Apple login failed", error)
+            }
+        }
     }
 }
 

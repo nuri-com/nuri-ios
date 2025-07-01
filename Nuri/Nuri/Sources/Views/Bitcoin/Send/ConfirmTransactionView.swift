@@ -5,9 +5,11 @@ struct ConfirmTransactionView: View {
     @EnvironmentObject var navigation: BitcoinViewNavigation
     @Environment(\.dismiss) private var dismiss
 
-    // Dummy values – these will later be provided via constructor
-    private let btcAmount: Double = 0.00001337
-    private let eurAmount: Double = 11.23
+    // Values provided by previous screen
+    let btcAmount: Double
+    let eurAmount: Double
+
+    // TODO: These could be provided/calculated later.
     private let networkFeeEur: Double = 0.32
     private let networkFeeBtc: Double = 0.0000012
     private let recipient: String = "bc1q87rj40hdu23kzwyz5aq89fj84wrrf6h757r0y5kpxhnez2q8uvnq0gjqfl"
@@ -29,39 +31,50 @@ struct ConfirmTransactionView: View {
                         .font(.system(size: 40, weight: .semibold))
                 }
                 Text(String(format: "~ %.2f EUR", eurAmount))
-                    .font(.footnote)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Color.secondary)
 
                 // Details card
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Recipient")
-                        .font(.brandBody)
-                    Text(recipient)
-                        .font(.system(size: 14, weight: .medium))
-                        .textSelection(.enabled)
+                        .font(.custom("Inter", size: 16).weight(.medium))
+                        .foregroundColor(Color("PrimaryNuriBlack"))
+                    recipientView()
                     Divider()
                     HStack {
                         Text("Send")
+                            .font(.custom("Inter", size: 16))
+                            .foregroundColor(Color("PrimaryNuriBlack"))
                         Spacer()
                         Text(String(format: "%0.8f BTC", btcAmount))
+                            .font(.custom("Inter", size: 16).weight(.medium))
+                            .foregroundColor(Color("PrimaryNuriBlack"))
                     }
                     HStack {
                         Text("From Bitcoin Wallet")
+                            .font(.custom("Inter", size: 16))
+                            .foregroundColor(Color("TextSecondary"))
                         Spacer()
                         Text(String(format: "%.2f EUR", eurAmount))
+                            .font(.custom("Inter", size: 16))
+                            .foregroundColor(Color("TextSecondary"))
                     }
-                    .foregroundStyle(.secondary)
                     Divider()
                     HStack {
                         Text("Network Fee")
+                            .font(.custom("Inter", size: 16))
+                            .foregroundColor(Color("PrimaryNuriBlack"))
                         Spacer()
                         Text(String(format: "%.2f EUR", networkFeeEur))
+                            .font(.custom("Inter", size: 16).weight(.medium))
+                            .foregroundColor(Color("PrimaryNuriBlack"))
                     }
                     HStack {
                         Spacer()
                         Text(String(format: "%0.8f BTC", networkFeeBtc))
+                            .font(.custom("Inter", size: 16))
+                            .foregroundColor(Color("TextSecondary"))
                     }
-                    .foregroundStyle(.secondary)
                 }
                 .padding()
                 .background(Color.white)
@@ -70,14 +83,42 @@ struct ConfirmTransactionView: View {
 
                 Spacer()
 
-                NavigationLink(destination: SuccessView(illustration: "bitcoin-sent", title: "Bitcoin sent!", subtitle: "You've sent 0.9123 BTC!") {
+                NavigationLink(destination: SuccessView(illustration: "bitcoin-sent", title: "Bitcoin sent!", subtitle: "You've sent \(formattedBtc) BTC!", onDone: {
                     navigation.isSendViewPresented = false
-                }) {
+                })) {
                     NuriButton(icon: "bitcoin-circle", title: "Send", style: .primary)
                 }
             }
             .padding(32)
         }
+    }
+
+    // MARK: - Subviews
+    @ViewBuilder
+    private func recipientView() -> some View {
+        let segments = segmentedRecipient()
+        HStack(spacing: 0) {
+            ForEach(segments.indices, id: \.self) { idx in
+                let seg = segments[idx]
+                Text(seg)
+                    .font(.custom("Inter", size: 16).weight(idx % 2 == 0 ? .semibold : .regular))
+                    .foregroundColor(idx % 2 == 0 ? Color("PrimaryNuriBlack") : Color("TextSecondary"))
+            }
+        }
+        .textSelection(.enabled)
+    }
+
+    private func segmentedRecipient() -> [String] {
+        stride(from: 0, to: recipient.count, by: 5).map { start in
+            let end = min(start + 5, recipient.count)
+            let startIdx = recipient.index(recipient.startIndex, offsetBy: start)
+            let endIdx = recipient.index(recipient.startIndex, offsetBy: end)
+            return String(recipient[startIdx..<endIdx])
+        }
+    }
+
+    private var formattedBtc: String {
+        String(format: "%0.8f", btcAmount).trimTrailingZeros()
     }
 }
 
