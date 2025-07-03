@@ -429,7 +429,7 @@ final class BitcoinWalletService {
     }
 
     // MARK: - Mnemonic Verification Helper
-    private func verifyMnemonicStored() {
+private func verifyMnemonicStored() {
         guard let keychain = keychain else {
             print("❌ [BitcoinWalletService] Cannot verify mnemonic - keychain not initialized")
             return
@@ -450,6 +450,22 @@ final class BitcoinWalletService {
             if let statusMessage = SecCopyErrorMessageString(OSStatus(error.code), nil) {
                 print("   📋 OSStatus description: \(statusMessage as String)")
             }
+        }
+    }
+
+    // MARK: - Balance
+    /// Syncs the wallet with the blockchain and returns the total balance in satoshis.
+    func syncAndGetBalance() async -> UInt64? {
+        guard let wallet else { return nil }
+        do {
+            let esploraConfig = EsploraConfig(baseURL: "https://blockstream.info/api")
+            let blockchain = try Blockchain(config: .esplora(esploraConfig))
+            try wallet.sync(blockchain: blockchain, progress: nil)
+            let bal = try wallet.getBalance()
+            return bal.total
+        } catch {
+            print("❌ [BitcoinWalletService] Failed to sync and get balance: \(error)")
+            return nil
         }
     }
 }
