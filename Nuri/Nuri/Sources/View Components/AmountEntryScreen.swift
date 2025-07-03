@@ -141,10 +141,14 @@ public struct AmountEntryScreen: View {
         f.maximumFractionDigits = limit
         f.numberStyle = .decimal
 
-        if isPrimaryCrypto {
+    if isPrimaryCrypto { // Switching from Crypto to Fiat (e.g., BTC to EUR)
             let fiat = current * exchangeRate
-            amountText = String(format: "%0.2f", fiat)
-        } else {
+            if fiat == 0 {
+                amountText = "0"
+            } else {
+                amountText = String(format: "%0.2f", fiat)
+            }
+        } else { // Switching from Fiat to Crypto (e.g., EUR to BTC)
             let btc = current / exchangeRate
             amountText = f.string(from: NSNumber(value: btc)) ?? ""
         }
