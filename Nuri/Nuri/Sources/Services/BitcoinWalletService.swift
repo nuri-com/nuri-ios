@@ -122,14 +122,19 @@ final class BitcoinWalletService {
             }
         }
         
-        // Create user-specific keychain with iCloud sync and biometric authentication
+        // Create user-specific keychain with biometric authentication
+        // NOTE: `synchronizable` cannot be combined with `authenticationPolicy`
+        // so iCloud sync is disabled when biometrics are required.
         keychain = Keychain(service: keychainService)
-            .accessibility(.whenUnlocked, authenticationPolicy: .biometryAny)
-            .synchronizable(true)
+            .accessibility(
+                .whenUnlocked,
+                authenticationPolicy: .biometryAny
+            )
+            .synchronizable(false)
             .authenticationPrompt("Access your Bitcoin wallet")
-        
+
         print("🔑 [BitcoinWalletService] Keychain configured:")
-        print("   🌩️ iCloud sync: ENABLED")
+        print("   🌩️ iCloud sync: DISABLED")
         print("   🔐 Biometric auth: REQUIRED (.biometryAny)")
         print("   🔓 Accessibility: .whenUnlocked")
         print("   💬 Prompt: 'Access your Bitcoin wallet'")
@@ -299,8 +304,8 @@ final class BitcoinWalletService {
             try keychain.set(internalDesc.toStringWithSecret(), key: Keys.changeDescriptor)
             print("   ✅ Internal descriptor stored successfully")
             
-            // Check iCloud sync status
-            print("   🌍 Keychain configured with iCloud sync enabled")
+            // Keychain configuration summary
+            print("   🌍 Keychain configured with iCloud sync disabled")
             print("   🔐 Biometric authentication required for access")
 
             // Create wallet DB & instance
