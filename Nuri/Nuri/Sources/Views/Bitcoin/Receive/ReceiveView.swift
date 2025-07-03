@@ -4,7 +4,8 @@ struct ReceiveView: View {
 
     @EnvironmentObject var navigation: BitcoinViewNavigation
     @State private var address: String = ""
-    @State private var isLoading = true
+    @State private var isLoading = false
+    @State private var seedPhrase: String = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -19,8 +20,7 @@ struct ReceiveView: View {
                     if Self.isBitcoinAddress(address) {
                         HStack {
                             Spacer()
-                            Image("qr-code")
-                                .resizable()
+                            QRCodeImage(text: address)
                                 .frame(width: 200, height: 200)
                                 .padding(16)
                             Spacer()
@@ -61,6 +61,23 @@ struct ReceiveView: View {
                 .background(Color.white)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .padding(.vertical, 16)
+
+                // Temporary seed display for debugging
+                if !seedPhrase.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Seed phrase (debug):")
+                            .font(.caption)
+                            .foregroundStyle(Color.secondary)
+                        Text(seedPhrase)
+                            .font(.footnote)
+                            .lineLimit(nil)
+                            .textSelection(.enabled)
+                    }
+                    .padding(12)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+
                 Button("Share") {
                     
                 }
@@ -76,7 +93,45 @@ struct ReceiveView: View {
         }
         .background(NuriAsset.background.swiftUIColor)
         .task {
-            // TODO: Integrate BTC address retrieval via Privy once wallet support is in place
+            await loadWalletData()
+        }
+    }
+    
+    private func loadWalletData() async {
+        await MainActor.run {
+            isLoading = true
+        }
+        
+        // Ensure wallet is properly initialized
+        let walletService = BitcoinWalletService.shared
+        
+        // If no wallet, try to initialize
+        if !walletService.hasWallet() {
+            print("⚠️ [ReceiveView] No wallet found, attempting to load...")
+            walletService.retryWalletLoad()
+            
+            // Wait a moment for wallet to load
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+        }
+        
+        await MainActor.run {
+            // Get current address
+            if let addr = walletService.currentAddress() {
+                print("✅ [ReceiveView] Got address: \(addr)")
+                address = addr
+            } else {
+                print("❌ [ReceiveView] Failed to get address")
+                address = ""
+            }
+            
+            // Get seed phrase for debugging
+            seedPhrase = walletService.seedPhrase() ?? ""
+            if !seedPhrase.isEmpty {
+                print("✅ [ReceiveView] Got seed phrase: \(seedPhrase.prefix(20))...")
+            } else {
+                print("❌ [ReceiveView] No seed phrase available")
+            }
+            
             isLoading = false
         }
     }

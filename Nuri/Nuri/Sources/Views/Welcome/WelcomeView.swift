@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 import AuthenticationServices
 import PrivySDK
+import BitcoinDevKit
 
 struct WelcomeView: View {
 
@@ -15,7 +16,7 @@ struct WelcomeView: View {
             ZStack {
                 VStack {
                     Spacer()
-                    Text("The gateway to bitcoin and new financial opportunities.")
+                    Text("Your Biometrics. Your Bitcoin. Your Money.")
                         .font(.largeTitle)
                         .fontWeight(.bold)
                         .padding(40)
@@ -28,7 +29,7 @@ struct WelcomeView: View {
                 VStack {
                     Spacer()
                     
-                    Button("Sign-in or Create Passkey") {
+                    Button("Login with Biometrics") {
                         signInOrCreatePasskey()
                     }
                     .buttonStyle(ProminentButtonStyle())
@@ -54,9 +55,17 @@ struct WelcomeView: View {
                 case .success:
                     print("✅ [WelcomeView] Passkey operation successful")
                     
-                    // Add logging to check if tokens were stored
+                    // Get stored tokens and initialize wallet for user
                     let tokens = PasskeyService.getStoredTokens()
                     print("📦 [WelcomeView] Stored tokens - Access: \(tokens.0?.prefix(20) ?? "nil")... User: \(tokens.2 ?? "nil")")
+                    
+                    // Initialize Bitcoin wallet for this specific user
+                    if let userID = tokens.2 {
+                        print("🔑 [WelcomeView] Initializing wallet for user: \(userID)")
+                        BitcoinWalletService.shared.initializeForUser(userID)
+                    } else {
+                        print("⚠️ [WelcomeView] No user ID found in tokens")
+                    }
                     
                     self.isUserLoggedIn = true
                     self.dismiss()

@@ -26,6 +26,7 @@ enum PrivyManager {
     static var currentUser: PrivyUser? {
         let user = shared.user
         print("📦 [PrivyManager] Getting currentUser: \(user?.id ?? "nil")")
+        print("📦 [PrivyManager] Auth state: \(shared.authState)")
         return user
     }
     
@@ -38,6 +39,8 @@ enum PrivyManager {
                 print("🔴 [PrivyManager] Auth state: NOT READY")
             case .unauthenticated:
                 print("🟡 [PrivyManager] Auth state: UNAUTHENTICATED")
+            case .authenticatedUnverified(let context):
+                print("🟠 [PrivyManager] Auth state: AUTHENTICATED UNVERIFIED - \(context)")
             case .authenticated(let user):
                 print("🟢 [PrivyManager] Auth state: AUTHENTICATED - User ID: \(user.id)")
                 print("   📧 Linked accounts: \(user.linkedAccounts.count)")
@@ -55,9 +58,16 @@ enum PrivyManager {
                         print("   💳 Ethereum Wallet: \(wallet)")
                     case .embeddedSolanaWallet(let wallet):
                         print("   💳 Solana Wallet: \(wallet)")
-                    // Note: Add more cases as they become available in the SDK
-                    // OAuth providers like .google, .apple, .discord, etc. might be added later
-                    // Passkey support is currently handled through web authentication
+                    case .externalWallet(let wallet):
+                        print("   🔗 External Wallet: \(wallet)")
+                    case .google(let googleAccount):
+                        print("   🔍 Google: \(googleAccount)")
+                    case .twitter(let twitterAccount):
+                        print("   🐦 Twitter: \(twitterAccount)")
+                    case .apple(let appleAccount):
+                        print("   🍎 Apple: \(appleAccount)")
+                    case .discord(let discordAccount):
+                        print("   🎮 Discord: \(discordAccount)")
                     @unknown default:
                         print("   ❓ Unknown account type: \(account)")
                     }
@@ -96,6 +106,33 @@ enum PrivyManager {
             print("   👤 User found: \(user.id)")
         } else {
             print("   ❌ No user found after ready")
+        }
+    }
+    
+    /// Force refresh the Privy session with stored tokens
+    static func restoreSession() async -> Bool {
+        print("🔄 [PrivyManager] Attempting to restore session...")
+        
+        // Get stored tokens from PasskeyService
+        let tokens = PasskeyService.getStoredTokens()
+        guard tokens.0 != nil else {
+            print("❌ [PrivyManager] No access token found")
+            return false
+        }
+        
+        // Wait for Privy to be ready first
+        await awaitReady()
+        
+        // Force a refresh to validate the token
+        await refreshUser()
+        
+        // Check if user is now available
+        if let user = currentUser {
+            print("✅ [PrivyManager] Session restored successfully for user: \(user.id)")
+            return true
+        } else {
+            print("❌ [PrivyManager] User still nil after restore attempt")
+            return false
         }
     }
 } 

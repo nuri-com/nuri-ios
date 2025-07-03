@@ -38,7 +38,7 @@ struct SecurityView: View {
                 }) {
                     NuriMenuRow(
                         icon: "wallet",
-                        title: "Wallet Info",
+                        title: "Wallet Keys",
                         subtitle: "2-of-2 multi-signature"
                     ) {
                         Image(systemName: "chevron.right")

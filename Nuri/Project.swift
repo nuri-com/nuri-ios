@@ -55,6 +55,8 @@ let project = Project(
                 .project(target: "Authentication", path: "../Authentication"),
                 .external(name: "IdensicMobileSDK"),
                 .external(name: "Privy"),
+                .external(name: "BitcoinDevKit"),
+                .external(name: "KeychainAccess"),
             ],
             settings: .settings(
                 base: [

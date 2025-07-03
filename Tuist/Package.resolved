@@ -1,6 +1,15 @@
 {
-  "originHash" : "cc7ac7bf490743a9004ad2b48b044a32ae6540b305c363da97be8fa2e22033d6",
+  "originHash" : "7dbbe89d641fe5b2855a8e53381b6757a5b342af9714cf8e9640ec9c41d19d7a",
   "pins" : [
+    {
+      "identity" : "bdk-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/bitcoindevkit/bdk-swift",
+      "state" : {
+        "revision" : "92ecb88e7568ef77aadefb062382988d12be57dd",
+        "version" : "1.2.0"
+      }
+    },
     {
       "identity" : "idensicmobilesdk-ios",
       "kind" : "remoteSourceControl",
@@ -8,6 +17,15 @@
       "state" : {
         "revision" : "de2d8f77baaa5b1bb2ca475d4b6fffa21529be67",
         "version" : "1.36.0"
+      }
+    },
+    {
+      "identity" : "keychainaccess",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/kishikawakatsumi/KeychainAccess",
+      "state" : {
+        "revision" : "84e546727d66f1adc5439debad16270d0fdd04e7",
+        "version" : "4.2.2"
       }
     },
     {
