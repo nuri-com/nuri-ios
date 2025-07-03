@@ -4,27 +4,16 @@ import SwiftUI
 struct NuriApp: App {
 
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-
     @AppStorage("isUserLoggedIn") var isUserLoggedIn: Bool = false
 
     init() {
         // Initialize Privy SDK
         _ = PrivyManager.shared
         
-        // Check if we have stored tokens to determine login state
-        let tokens = PasskeyService.getStoredTokens()
-        if tokens.0 != nil && tokens.2 != nil {
-            print("🔑 [NuriApp] Found stored tokens, user should be logged in")
-            // Initialize wallet service for this user
-            if let userID = tokens.2 {
-                print("🔑 [NuriApp] Pre-initializing wallet for user: \(userID)")
-                BitcoinWalletService.shared.initializeForUser(userID)
-            }
-            isUserLoggedIn = true
-        } else {
-            print("❌ [NuriApp] No stored tokens found, user logged out")
-            isUserLoggedIn = false
-        }
+        // Simple check - don't trust stored tokens, always start with welcome screen
+        // Let Privy and the welcome screen handle authentication state properly
+        print("🔑 [NuriApp] App started - user will authenticate via welcome screen")
+        isUserLoggedIn = false
     }
 
     var body: some Scene {

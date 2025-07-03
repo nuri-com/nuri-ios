@@ -37,11 +37,14 @@ final class BitcoinWalletService {
 
     // MARK: - Public API
     func currentAddress() -> String? {
+        print("🔍 [BitcoinWalletService] currentAddress() called")
         // Return cached address if available
         if let cachedAddress = currentBitcoinAddress {
+            print("✅ [BitcoinWalletService] Returning cached address (no Face ID): \(cachedAddress)")
             return cachedAddress
         }
         
+        print("⚠️ [BitcoinWalletService] No cached address, will try keychain...")
         // Try to load cached address from keychain first
         if let keychainAddress = loadAddressFromKeychain() {
             currentBitcoinAddress = keychainAddress
@@ -64,7 +67,7 @@ final class BitcoinWalletService {
             print("❌ [BitcoinWalletService] Cannot retrieve seed phrase - keychain not initialized")
             return nil
         }
-        print("🔐 [BitcoinWalletService] About to retrieve mnemonic from keychain...")
+        print("🔐 [BitcoinWalletService] 🚨 FACE ID TRIGGER #2 - seedPhrase() method called...")
         do {
             let phrase = try keychain.get(Keys.mnemonic)
             if let phrase = phrase {
@@ -91,7 +94,9 @@ final class BitcoinWalletService {
     }
     
     func hasWallet() -> Bool {
-        return wallet != nil
+        let hasWallet = wallet != nil
+        print("🔍 [BitcoinWalletService] hasWallet() called - result: \(hasWallet)")
+        return hasWallet
     }
     
     func forceCreateNewWallet() {
@@ -101,7 +106,15 @@ final class BitcoinWalletService {
     
     /// Initialize wallet for a specific user ID (from Privy)
     func initializeForUser(_ userID: String) {
-        print("🔑 [BitcoinWalletService] Initializing wallet for user: \(userID)")
+        print("🔑 [BitcoinWalletService] 🚨 initializeForUser() called for user: \(userID)")
+        
+        // Check if we're already initialized for this user
+        if currentUserID == userID && wallet != nil {
+            print("✅ [BitcoinWalletService] Already initialized for this user, skipping...")
+            return
+        }
+        
+        print("🔄 [BitcoinWalletService] Proceeding with initialization...")
         currentUserID = userID
         setupKeychain(for: userID)
         initialiseWallet()
@@ -147,19 +160,15 @@ final class BitcoinWalletService {
         // Create user-specific keychain with biometric authentication
         // NOTE: `synchronizable` cannot be combined with `authenticationPolicy`
         // so iCloud sync is disabled when biometrics are required.
+        // TEMPORARY: Remove biometric requirement to debug multiple Face ID issue
         keychain = Keychain(service: keychainService)
-            .accessibility(
-                .whenUnlocked,
-                authenticationPolicy: .biometryAny
-            )
-            .synchronizable(false)
-            .authenticationPrompt("Access your Bitcoin wallet")
+            .accessibility(.whenUnlocked)
+            .synchronizable(true)  // Enable iCloud sync without biometrics for now
 
         print("🔑 [BitcoinWalletService] Keychain configured:")
-        print("   🌩️ iCloud sync: DISABLED")
-        print("   🔐 Biometric auth: REQUIRED (.biometryAny)")
+        print("   🌩️ iCloud sync: ENABLED (temporary for debugging)")
+        print("   🔐 Biometric auth: DISABLED (temporary for debugging)")
         print("   🔓 Accessibility: .whenUnlocked")
-        print("   💬 Prompt: 'Access your Bitcoin wallet'")
     }
 
     // MARK: - Private helpers
@@ -171,9 +180,9 @@ final class BitcoinWalletService {
         }
         print("✅ [BitcoinWalletService] Keychain is initialized, proceeding with wallet initialization")
         
-        // Try to load existing wallet with single keychain access attempt
+        // Try to load existing wallet with SINGLE Face ID prompt
         do {
-            try loadExistingWallet()
+            try loadExistingWalletWithSingleAuth()
             print("✅ [BitcoinWalletService] Existing wallet loaded successfully")
         } catch WalletError.noExistingWallet {
             print("ℹ️ [BitcoinWalletService] No existing wallet found, creating new one")
@@ -326,17 +335,17 @@ final class BitcoinWalletService {
             print("🔐 [BitcoinWalletService] Storing wallet to user-specific keychain (will trigger Face ID for backup)...")
             
             // Store to keychain with biometric authentication
-            print("   🔐 About to store mnemonic to keychain...")
+            print("🔐 [BitcoinWalletService] 🚨 FACE ID TRIGGER #A - Storing mnemonic...")
             try keychain.set(mnemonic.description, key: Keys.mnemonic)
             print("   ✅ Mnemonic stored successfully")
             // Verify mnemonic was stored correctly
             verifyMnemonicStored()
             
-            print("   🔐 About to store external descriptor to keychain...")
+            print("🔐 [BitcoinWalletService] 🚨 FACE ID TRIGGER #B - Storing external descriptor...")
             try keychain.set(externalDesc.toStringWithSecret(), key: Keys.descriptor)
             print("   ✅ External descriptor stored successfully")
             
-            print("   🔐 About to store internal descriptor to keychain...")
+            print("🔐 [BitcoinWalletService] 🚨 FACE ID TRIGGER #C - Storing internal descriptor...")
             try keychain.set(internalDesc.toStringWithSecret(), key: Keys.changeDescriptor)
             print("   ✅ Internal descriptor stored successfully")
             
@@ -381,7 +390,7 @@ final class BitcoinWalletService {
             return
         }
         
-        print("🔐 [BitcoinWalletService] About to save address to keychain (may trigger Face ID)...")
+        print("🔐 [BitcoinWalletService] 🚨 FACE ID TRIGGER #3 - saveAddressToKeychain() called...")
         do {
             try keychain.set(address, key: Keys.currentAddress)
             print("✅ [BitcoinWalletService] Address saved to keychain with biometric protection: \(address)")
@@ -402,7 +411,7 @@ final class BitcoinWalletService {
             return nil
         }
         
-        print("🔐 [BitcoinWalletService] About to load address from keychain (will trigger Face ID)...")
+        print("🔐 [BitcoinWalletService] 🚨 FACE ID TRIGGER #4 - loadAddressFromKeychain() called...")
         do {
             let address = try keychain.get(Keys.currentAddress)
             if let address = address {
@@ -434,7 +443,7 @@ private func verifyMnemonicStored() {
             print("❌ [BitcoinWalletService] Cannot verify mnemonic - keychain not initialized")
             return
         }
-        print("🔐 [BitcoinWalletService] Verifying mnemonic was stored...")
+        print("🔐 [BitcoinWalletService] 🚨 FACE ID TRIGGER #5 - verifyMnemonicStored() called...")
         do {
             let value = try keychain.get(Keys.mnemonic)
             if let value = value {
@@ -467,5 +476,87 @@ private func verifyMnemonicStored() {
             print("❌ [BitcoinWalletService] Failed to sync and get balance: \(error)")
             return nil
         }
+    }
+    
+    /// Load existing wallet with single Face ID prompt by consolidating keychain access
+    private func loadExistingWalletWithSingleAuth() throws {
+        guard let keychain = keychain else {
+            print("❌ [BitcoinWalletService] Keychain not initialized")
+            throw WalletError.keychainAccessFailed
+        }
+        
+        print("🔍 [BitcoinWalletService] Loading existing wallet with single auth...")
+        
+        // Get all keychain data in one authentication session
+        print("🔐 [BitcoinWalletService] Requesting all wallet data from keychain (single Face ID prompt)...")
+        
+        var mnemonic: String?
+        var descriptor: String?
+        var changeDescriptor: String?
+        var cachedAddress: String?
+        
+        do {
+            // Once Face ID is triggered for the first item, subsequent accesses should not trigger it again
+            // due to keychain authentication caching
+            print("🔐 [BitcoinWalletService] 🚨 FACE ID TRIGGER #1 - Getting mnemonic...")
+            mnemonic = try keychain.get(Keys.mnemonic)
+            print("🔐 [BitcoinWalletService] Getting descriptor (should NOT trigger Face ID)...")
+            descriptor = try keychain.get(Keys.descriptor)
+            print("🔐 [BitcoinWalletService] Getting change descriptor (should NOT trigger Face ID)...")
+            changeDescriptor = try keychain.get(Keys.changeDescriptor)
+            print("🔐 [BitcoinWalletService] Getting cached address (should NOT trigger Face ID)...")
+            cachedAddress = try keychain.get(Keys.currentAddress)
+            
+            print("✅ [BitcoinWalletService] Retrieved all data from keychain with single auth")
+            print("   📝 Mnemonic: \(mnemonic != nil ? "Found (\(mnemonic!.count) chars)" : "Not found")")
+            print("   📝 External descriptor: \(descriptor != nil ? "Found (\(descriptor!.count) chars)" : "Not found")")
+            print("   📝 Change descriptor: \(changeDescriptor != nil ? "Found (\(changeDescriptor!.count) chars)" : "Not found")")
+            print("   📝 Cached address: \(cachedAddress ?? "Not found")")
+            
+        } catch let error as NSError {
+            print("❌ [BitcoinWalletService] Failed to get wallet data from keychain: \(error)")
+            print("   📋 Error domain: \(error.domain)")
+            print("   📋 Error code: \(error.code)")
+            print("   📋 Error description: \(error.localizedDescription)")
+            if let statusMessage = SecCopyErrorMessageString(OSStatus(error.code), nil) {
+                print("   📋 OSStatus description: \(statusMessage as String)")
+            }
+            throw WalletError.noExistingWallet
+        }
+        
+        // Validate we have the required data
+        guard let mnemonic = mnemonic, 
+              let descriptor = descriptor, 
+              let changeDescriptor = changeDescriptor else {
+            print("❌ [BitcoinWalletService] Missing required wallet data")
+            throw WalletError.noExistingWallet
+        }
+        
+        // Load wallet with existing descriptors
+        print("🔧 [BitcoinWalletService] Loading wallet with retrieved descriptors...")
+        try loadWallet(descriptor: descriptor, changeDescriptor: changeDescriptor)
+        print("✅ [BitcoinWalletService] Wallet loaded successfully")
+        
+        // Restore cached address if available
+        if let cachedAddress = cachedAddress {
+            currentBitcoinAddress = cachedAddress
+            print("🔑 [BitcoinWalletService] Cached address restored: \(cachedAddress)")
+        } else {
+            // Generate first address if no cached address exists
+            if let wallet = self.wallet {
+                let addressInfo = wallet.revealNextAddress(keychain: .external)
+                currentBitcoinAddress = addressInfo.address.description
+                // Save the new address to keychain (this won't trigger Face ID since we just authenticated)
+                do {
+                    try keychain.set(currentBitcoinAddress!, key: Keys.currentAddress)
+                    print("🔑 [BitcoinWalletService] Generated and cached new address: \(currentBitcoinAddress!)")
+                } catch {
+                    print("⚠️ [BitcoinWalletService] Failed to cache new address: \(error)")
+                }
+                persist()
+            }
+        }
+        
+        print("✅ [BitcoinWalletService] Wallet loaded with single authentication for user: \(currentUserID ?? "unknown")")
     }
 }

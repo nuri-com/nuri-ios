@@ -51,10 +51,14 @@ struct BitcoinView: View {
                         }
                         HStack(spacing: 16) {
                             PrimaryHalfButton(title: "Receive", icon: "bitcoin_hand") {
-                                navigation.isReceiveViewPresented = true
+                                ensureWalletInitialized {
+                                    navigation.isReceiveViewPresented = true
+                                }
                             }
                             SecondaryHalfButton(title: "Send", icon: "qr_scan") {
-                                navigation.isSendViewPresented = true
+                                ensureWalletInitialized {
+                                    navigation.isSendViewPresented = true
+                                }
                             }
                         }
                         .padding(.top, 16)
@@ -75,7 +79,7 @@ struct BitcoinView: View {
         }
         .background(NuriAsset.background.swiftUIColor)
         .onAppear {
-            checkWalletStatus()
+            // Don't automatically check wallet status
         }
         .task {
             await refreshBalance()
@@ -113,34 +117,46 @@ struct BitcoinView: View {
     }
     
     // MARK: - Wallet Management
-    private func checkWalletStatus() {
+    private func ensureWalletInitialized(completion: @escaping () -> Void) {
         let walletService = BitcoinWalletService.shared
+        
+        print("🔍 [BitcoinView] ensureWalletInitialized() called")
         
         // Check if wallet is already initialized
         if walletService.hasWallet() {
+            print("✅ [BitcoinView] Wallet already initialized, no Face ID needed")
             walletStatus = .loaded
+            completion()
             return
         }
         
         // Try to initialize wallet with stored user ID
         let tokens = PasskeyService.getStoredTokens()
         if let userID = tokens.2 {
+            print("🔑 [BitcoinView] 🚨 WALLET RE-INITIALIZATION - This should NOT happen if wallet was already loaded!")
             print("🔑 [BitcoinView] Initializing wallet for user: \(userID)")
+            walletStatus = .checking
+            
             walletService.initializeForUser(userID)
             
             // Check if initialization was successful
             if walletService.hasWallet() {
                 walletStatus = .loaded
+                completion()
             } else {
                 walletStatus = .needsRecovery
-                // Give user a moment to see the view before showing alert
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    showWalletRecoveryAlert = true
-                }
+                showWalletRecoveryAlert = true
             }
         } else {
             print("⚠️ [BitcoinView] No user ID found - wallet cannot be initialized")
             walletStatus = .failed
+        }
+    }
+    
+    private func checkWalletStatus() {
+        // Keep this method for manual retry scenarios
+        ensureWalletInitialized {
+            // Wallet is ready
         }
     }
     
