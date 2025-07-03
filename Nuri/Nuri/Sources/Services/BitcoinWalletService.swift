@@ -2,6 +2,7 @@ import Foundation
 import BitcoinDevKit
 import KeychainAccess
 import LocalAuthentication
+import Security
 
 final class BitcoinWalletService {
     static let shared = BitcoinWalletService()
@@ -59,8 +60,29 @@ final class BitcoinWalletService {
     }
 
     func seedPhrase() -> String? {
-        guard let keychain = keychain else { return nil }
-        return try? keychain.get(Keys.mnemonic)
+        guard let keychain = keychain else {
+            print("❌ [BitcoinWalletService] Cannot retrieve seed phrase - keychain not initialized")
+            return nil
+        }
+        print("🔐 [BitcoinWalletService] About to retrieve mnemonic from keychain...")
+        do {
+            let phrase = try keychain.get(Keys.mnemonic)
+            if let phrase = phrase {
+                print("✅ [BitcoinWalletService] Retrieved mnemonic from keychain (length: \(phrase.count))")
+            } else {
+                print("ℹ️ [BitcoinWalletService] Mnemonic not found in keychain")
+            }
+            return phrase
+        } catch let error as NSError {
+            print("❌ [BitcoinWalletService] Failed to retrieve mnemonic: \(error)")
+            print("   📋 Error domain: \(error.domain)")
+            print("   📋 Error code: \(error.code)")
+            print("   📋 Error description: \(error.localizedDescription)")
+            if let statusMessage = SecCopyErrorMessageString(OSStatus(error.code), nil) {
+                print("   📋 OSStatus description: \(statusMessage as String)")
+            }
+            return nil
+        }
     }
     
     func retryWalletLoad() {
@@ -189,6 +211,9 @@ final class BitcoinWalletService {
             print("   📋 Error domain: \(error.domain)")
             print("   📋 Error code: \(error.code)")
             print("   📋 Error description: \(error.localizedDescription)")
+            if let statusMessage = SecCopyErrorMessageString(OSStatus(error.code), nil) {
+                print("   📋 OSStatus description: \(statusMessage as String)")
+            }
             if error.domain == "com.kishikawakatsumi.KeychainAccess.error" {
                 print("   📋 KeychainAccess specific error - possibly biometric auth failed")
             }
@@ -233,8 +258,14 @@ final class BitcoinWalletService {
             }
             
             print("✅ [BitcoinWalletService] Wallet successfully loaded from keychain for user: \(currentUserID ?? "unknown")")
-        } catch {
+        } catch let error as NSError {
             print("❌ [BitcoinWalletService] Failed to load descriptors or wallet: \(error)")
+            print("   📋 Error domain: \(error.domain)")
+            print("   📋 Error code: \(error.code)")
+            print("   📋 Error description: \(error.localizedDescription)")
+            if let statusMessage = SecCopyErrorMessageString(OSStatus(error.code), nil) {
+                print("   📋 OSStatus description: \(statusMessage as String)")
+            }
             throw error
         }
     }
@@ -272,6 +303,9 @@ final class BitcoinWalletService {
             print("   📋 Error domain: \(error.domain)")
             print("   📋 Error code: \(error.code)")
             print("   📋 Error description: \(error.localizedDescription)")
+            if let statusMessage = SecCopyErrorMessageString(OSStatus(error.code), nil) {
+                print("   📋 OSStatus description: \(statusMessage as String)")
+            }
             throw error
         }
     }
@@ -295,6 +329,8 @@ final class BitcoinWalletService {
             print("   🔐 About to store mnemonic to keychain...")
             try keychain.set(mnemonic.description, key: Keys.mnemonic)
             print("   ✅ Mnemonic stored successfully")
+            // Verify mnemonic was stored correctly
+            verifyMnemonicStored()
             
             print("   🔐 About to store external descriptor to keychain...")
             try keychain.set(externalDesc.toStringWithSecret(), key: Keys.descriptor)
@@ -354,6 +390,9 @@ final class BitcoinWalletService {
             print("   📋 Error domain: \(error.domain)")
             print("   📋 Error code: \(error.code)")
             print("   📋 Error description: \(error.localizedDescription)")
+            if let statusMessage = SecCopyErrorMessageString(OSStatus(error.code), nil) {
+                print("   📋 OSStatus description: \(statusMessage as String)")
+            }
         }
     }
     
@@ -377,6 +416,9 @@ final class BitcoinWalletService {
             print("   📋 Error domain: \(error.domain)")
             print("   📋 Error code: \(error.code)")
             print("   📋 Error description: \(error.localizedDescription)")
+            if let statusMessage = SecCopyErrorMessageString(OSStatus(error.code), nil) {
+                print("   📋 OSStatus description: \(statusMessage as String)")
+            }
             if error.code == -128 {
                 print("   🙅 User cancelled biometric authentication")
             } else if error.code == -25300 {
@@ -385,4 +427,29 @@ final class BitcoinWalletService {
             return nil
         }
     }
-} 
+
+    // MARK: - Mnemonic Verification Helper
+    private func verifyMnemonicStored() {
+        guard let keychain = keychain else {
+            print("❌ [BitcoinWalletService] Cannot verify mnemonic - keychain not initialized")
+            return
+        }
+        print("🔐 [BitcoinWalletService] Verifying mnemonic was stored...")
+        do {
+            let value = try keychain.get(Keys.mnemonic)
+            if let value = value {
+                print("✅ [BitcoinWalletService] Mnemonic verified in keychain (length: \(value.count))")
+            } else {
+                print("❌ [BitcoinWalletService] Mnemonic missing after attempted store")
+            }
+        } catch let error as NSError {
+            print("❌ [BitcoinWalletService] Failed to verify mnemonic in keychain: \(error)")
+            print("   📋 Error domain: \(error.domain)")
+            print("   📋 Error code: \(error.code)")
+            print("   📋 Error description: \(error.localizedDescription)")
+            if let statusMessage = SecCopyErrorMessageString(OSStatus(error.code), nil) {
+                print("   📋 OSStatus description: \(statusMessage as String)")
+            }
+        }
+    }
+}
