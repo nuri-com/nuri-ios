@@ -14,6 +14,8 @@ struct BitcoinView: View {
     @State private var isBalanceHidden = false
     @State private var walletStatus: WalletStatus = .checking
     @State private var showWalletRecoveryAlert = false
+    @State private var balanceSats: UInt64 = 0
+    @State private var exchangeRate: Double = 0.0
     
     enum WalletStatus {
         case checking
@@ -35,8 +37,14 @@ struct BitcoinView: View {
                     Spacer()
                     VStack(spacing: 8) {
                         VStack(spacing: 4) {
-                            AmountAndCurrency(isPrimaryBTC: $isPrimaryBTC, isBalanceHidden: $isBalanceHidden)
-                            SecondaryCurrencyAndAmount(isPrimaryBTC: $isPrimaryBTC, isBalanceHidden: $isBalanceHidden)
+                            AmountAndCurrency(isPrimaryBTC: $isPrimaryBTC,
+                                             isBalanceHidden: $isBalanceHidden,
+                                             sats: balanceSats,
+                                             rate: exchangeRate)
+                            SecondaryCurrencyAndAmount(isPrimaryBTC: $isPrimaryBTC,
+                                                       isBalanceHidden: $isBalanceHidden,
+                                                       sats: balanceSats,
+                                                       rate: exchangeRate)
                         }
                         .onTapGesture {
                             isBalanceHidden.toggle()
@@ -68,6 +76,9 @@ struct BitcoinView: View {
         .background(NuriAsset.background.swiftUIColor)
         .onAppear {
             checkWalletStatus()
+        }
+        .task {
+            await refreshBalance()
         }
         .alert("Wallet Recovery", isPresented: $showWalletRecoveryAlert) {
             Button("Retry") {
@@ -177,13 +188,50 @@ struct BitcoinView: View {
             walletStatus = .failed
         }
     }
+
+    // MARK: - Balance
+    private func refreshBalance() async {
+        let walletService = BitcoinWalletService.shared
+        if let sats = await walletService.syncAndGetBalance() {
+            await MainActor.run { balanceSats = sats }
+        } else {
+            await MainActor.run { balanceSats = 0 }
+        }
+
+        if let price = await fetchPrice() {
+            await MainActor.run { exchangeRate = price }
+        }
+    }
+
+    private func fetchPrice() async -> Double? {
+        guard let url = URL(string: "https://mempool.space/api/v1/prices") else { return nil }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            if let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let eur = dict["EUR"] as? Double {
+                return eur
+            }
+        } catch {
+            print("Price fetch failed", error)
+        }
+        return nil
+    }
 }
 
 private struct AmountAndCurrency: View {
     @Binding var isPrimaryBTC: Bool
     @Binding var isBalanceHidden: Bool
+    var sats: UInt64
+    var rate: Double
 
     var body: some View {
+        let btc = Double(sats) / 100_000_000
+        let btcString = String(format: "%.8f", btc)
+        let eurString = String(format: "%.2f", btc * rate)
+        let parts = btcString.split(separator: ".")
+        let intPart = String(parts.first ?? "0")
+        let fracPart = parts.count > 1 ? String(parts[1]) : "0"
+
         HStack(spacing: 8) {
             if isBalanceHidden {
                 Text("********")
@@ -193,14 +241,14 @@ private struct AmountAndCurrency: View {
                     if isPrimaryBTC {
                         Text("₿")
                         HStack(spacing: 0) {
-                            Text("0.0000")
+                            Text("\(intPart).")
                                 .foregroundColor(Color.gray.opacity(0.55))
-                            Text("1337")
+                            Text(fracPart)
                         }
                     } else {
                         HStack(spacing: 0) {
                             Text("€ ")
-                            Text("11.23")
+                            Text(eurString)
                         }
                     }
                 }
@@ -221,18 +269,23 @@ private struct AmountAndCurrency: View {
 private struct SecondaryCurrencyAndAmount: View {
     @Binding var isPrimaryBTC: Bool
     @Binding var isBalanceHidden: Bool
+    var sats: UInt64
+    var rate: Double
 
     var body: some View {
         Group {
             if isBalanceHidden {
                 Text("********")
             } else {
+                let btc = Double(sats) / 100_000_000
+                let btcString = String(format: "%.8f", btc)
+                let eurString = String(format: "%.2f", btc * rate)
                 HStack(spacing: 0) {
                     if isPrimaryBTC {
                         Text("€ ")
-                        Text("11.23")
+                        Text(eurString)
                     } else {
-                        Text("₿ 0.00001337")
+                        Text("₿ \(btcString)")
                     }
                 }
             }
