@@ -438,7 +438,7 @@ final class BitcoinWalletService {
     }
 
     // MARK: - Mnemonic Verification Helper
-private func verifyMnemonicStored() {
+    private func verifyMnemonicStored() {
         guard let keychain = keychain else {
             print("❌ [BitcoinWalletService] Cannot verify mnemonic - keychain not initialized")
             return
@@ -467,13 +467,12 @@ private func verifyMnemonicStored() {
     func syncAndGetBalance() async -> UInt64? {
         guard let wallet else { return nil }
         do {
-            let esploraConfig = EsploraConfig(baseURL: "https://blockstream.info/api")
-            let blockchain = try Blockchain(config: .esplora(esploraConfig))
-            try wallet.sync(blockchain: blockchain, progress: nil)
-            let bal = try wallet.getBalance()
-            return bal.total
+            // Note: This is a placeholder implementation
+            // The actual sync/balance API has changed in the newer BitcoinDevKit version
+            let bal = wallet.balance()
+            return bal.total.toSat()
         } catch {
-            print("❌ [BitcoinWalletService] Failed to sync and get balance: \(error)")
+            print("❌ [BitcoinWalletService] Failed to get balance: \(error)")
             return nil
         }
     }
@@ -525,7 +524,7 @@ private func verifyMnemonicStored() {
         }
         
         // Validate we have the required data
-        guard let mnemonic = mnemonic, 
+        guard let _ = mnemonic, 
               let descriptor = descriptor, 
               let changeDescriptor = changeDescriptor else {
             print("❌ [BitcoinWalletService] Missing required wallet data")
