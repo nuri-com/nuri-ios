@@ -1,93 +1,118 @@
 import SwiftUI
+import UIKit
 
 struct CardViewActive: View {
     @State private var isTransactionsPresented = false
     @State private var showCardDetails = false
+    @State private var isLargeQRPresented = false
+    @State private var isCardFrozen = false
+    @State private var isTopUpPresented = false
+    @State private var isShareSheetPresented = false
+    @State private var qrImage: UIImage? = nil
+
+    private let btcAddress = "bc1qsmd4xz68a7fhwvhjkd0cawx4uvs9a43746xld4yh0spfmwefpr5qc9wvv6"
 
     var body: some View {
         VStack(spacing: 0) {
-            Spacer()
-            VStack(spacing: 12) {
-                HStack(spacing: 0) {
-                    Text("€")
-                        .font(.system(size: 40, weight: .semibold))
-                    Text("1,337.00")
-                        .font(.system(size: 40, weight: .semibold))
+            // Unified header
+            NuriHeader<AnyView, AnyView>(title: "") {
+                AnyView(
+                    Image("HeaderLogo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 24, height: 24)
+                        .frame(width: 32, height: 32)
+                )
+            } trailing: {
+                AnyView(
+                    Button(action: {
+                        isTopUpPresented = true
+                    }) {
+                        Text("+ Add Money")
+                            .font(.custom("Inter", size: 14).weight(.medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color("PrimaryNuriBlack"))
+                            .cornerRadius(64)
+                    }
+                )
+            }
+
+            VStack {
+                Spacer()
+                NuriTitleWithSubtitle(title: "€1,337.00", subtitle: "Available Balance")
+                .padding(.bottom, 30)
+
+                let cardOpacity = isCardFrozen ? 0.4 : 1.0
+
+                if showCardDetails {
+                    CardMini(card: CardModel(holder: "Cim Topal", number: "5354 5655 2079 6981", expiry: "03/30", cvv: "041"), qrAddress: btcAddress, onQRTap: { isLargeQRPresented = true })
+                        .transition(.opacity)
+                        .opacity(cardOpacity)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 30)
+                } else {
+                    NuriCardIllustration()
+                        .opacity(cardOpacity)
+                        .padding(.bottom, 30)
                 }
-                .foregroundColor(Color("PrimaryNuriBlack"))
 
-                Text("Available Balance")
-                    .font(.custom("Inter", size: 16).weight(.medium))
-                    .foregroundColor(Color(hex: "#6D6D86"))
-            }
-            .padding(.bottom, 30)
-
-            if showCardDetails {
-                CardMini(card: CardModel(holder: "Cim Topal", number: "5354 5655 2079 6981", expiry: "03/30", cvv: "041"))
-                    .transition(.opacity)
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 30)
-            } else {
-                Image("card-flattend")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 256)
-                    .padding(.bottom, 30)
-            }
-
-            HStack(spacing: 32) {
-                SmallIconButton(icon: showCardDetails ? "eye_hidden" : "eye_hidden", title: "Details") {
-                    withAnimation(.easeInOut) {
-                        showCardDetails.toggle()
+                HStack(spacing: 32) {
+                    NuriSmallIconToggle(isActive: $showCardDetails,
+                                        label: showCardDetails ? "Hide" : "Show",
+                                        iconActive: "eye",  // open eye
+                                        iconInactive: "eye_hidden")
+                    SmallIconButton(icon: isCardFrozen ? "lock" : "lock_open", title: isCardFrozen ? "Unfreeze" : "Freeze") {
+                        isCardFrozen.toggle()
+                    }
+                    SmallIconButton(icon: "money_topup", title: "Top-Up") {
+                        isTopUpPresented = true
                     }
                 }
-                SmallIconButton(icon: "lock_open", title: "Freeze") {
-                }
-                SmallIconButton(icon: "money_topup", title: "Top-Up") {
-                }
-            }
-            .padding(.bottom, 30)
+                .padding(.bottom, 30)
 
-            Button(action: {
+                Button(action: {
 
-            }) {
-                HStack(spacing: 8) {
-                    Image("apple-wallet")
-                        .resizable()
-                        .frame(width: 32, height: 32)
-                    Text("Add to Apple Wallet")
-                        .font(.brandBody)
-                        .foregroundColor(.white)
+                }) {
+                    HStack(spacing: 8) {
+                        Image("apple-wallet")
+                            .resizable()
+                            .frame(width: 32, height: 32)
+                        Text("Add to Apple Wallet")
+                            .font(.brandBody)
+                            .foregroundColor(.white)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 54)
+                    .background(Color("PrimaryNuriBlack"))
+                    .cornerRadius(100)
                 }
-                .frame(maxWidth: .infinity)
-                .frame(height: 54)
-                .background(Color("PrimaryNuriBlack"))
-                .cornerRadius(100)
-            }
-            .padding(.horizontal, 24)
 
-            // Activate Card button
-            NavigationLink(destination: ResidenceCitizenshipUSTaxView()) {
-                HStack(spacing: 8) {
-                    Image("head")
-                        .resizable()
-                        .renderingMode(.template)
-                        .foregroundColor(Color("PrimaryNuriBlack"))
-                        .frame(width: 24, height: 24)
-                    Text("Activate Card")
-                        .font(.brandBody)
-                        .foregroundColor(Color("PrimaryNuriBlack"))
+                // Activate Card button
+                NavigationLink(destination: ResidenceCitizenshipUSTaxView()) {
+                    HStack(spacing: 8) {
+                        Image("head")
+                            .resizable()
+                            .renderingMode(.template)
+                            .foregroundColor(Color("PrimaryNuriBlack"))
+                            .frame(width: 24, height: 24)
+                        Text("Activate Card")
+                            .font(.brandBody)
+                            .foregroundColor(Color("PrimaryNuriBlack"))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 54)
+                    .background(Color("PrimaryNuriLilac"))
+                    .cornerRadius(100)
                 }
-                .frame(maxWidth: .infinity)
-                .frame(height: 54)
-                .background(Color("PrimaryNuriLilac"))
-                .cornerRadius(100)
+                .padding(.top, 16)
+
+                Spacer(minLength: 0)
             }
             .padding(.horizontal, 24)
-            .padding(.top, 16)
 
-            Spacer()
-
+            // Place the transactions button at the bottom, outside the main content stack
             Button(action: {
                 isTransactionsPresented = true
             }) {
@@ -95,50 +120,61 @@ struct CardViewActive: View {
                     .resizable()
                     .frame(width: 24, height: 13)
             }
+            .padding(.horizontal, 24)
             .padding(.bottom, 34)
-            Spacer()
         }
         .background(NuriAsset.background.swiftUIColor)
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Image("nuri-logo-svg")
-                    .resizable()
-                    .frame(width: 24, height: 24)
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink(destination: EmptyView()) {
-                    Text("+ Add Money")
-                        .font(.custom("Inter", size: 14).weight(.medium))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color("PrimaryNuriBlack"))
-                        .cornerRadius(64)
-                }
-            }
-        }
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .fullScreenCover(isPresented: $isTransactionsPresented) {
             TransactionsView()
         }
-    }
-}
-
-private struct SmallIconButton: View {
-    let icon: String
-    let title: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 4) {
-                Image(icon)
-                    .resizable()
-                    .renderingMode(.template)
-                    .foregroundColor(Color("PrimaryNuriBlack"))
-                    .frame(width: 32, height: 32)
-                Text(title)
-                    .font(.custom("Inter", size: 14).weight(.medium))
-                    .foregroundColor(Color("PrimaryNuriBlack"))
+        .sheet(isPresented: $isTopUpPresented) {
+            NavigationStack {
+                TopUpCardView(isPresented: $isTopUpPresented)
+            }
+        }
+        .fullScreenCover(isPresented: $isLargeQRPresented) {
+            GeometryReader { geo in
+                VStack(spacing: 24) {
+                    Spacer()
+                    ZStack {
+                        QRCodeImage(text: btcAddress)
+                            .frame(width: min(geo.size.width, geo.size.height) * 0.8,
+                                   height: min(geo.size.width, geo.size.height) * 0.8)
+                            .onAppear {
+                                UIPasteboard.general.string = btcAddress
+                                let renderer = ImageRenderer(content:
+                                    QRCodeImage(text: btcAddress)
+                                        .frame(width: 300, height: 300)
+                                )
+                                if let uiImage = renderer.uiImage {
+                                    qrImage = uiImage
+                                }
+                            }
+                            .onTapGesture { isLargeQRPresented = false }
+                    }
+                    Text("Bitcoin address copied to clipboard")
+                        .font(.headline)
+                        .padding()
+                    Button(action: {
+                        isShareSheetPresented = true
+                    }) {
+                        NuriButton(icon: "share", title: "Share Address", style: .primary)
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 8)
+                    Spacer()
+                }
+                .frame(width: geo.size.width, height: geo.size.height)
+                .background(Color.white.opacity(0.95).ignoresSafeArea())
+                .sheet(isPresented: $isShareSheetPresented) {
+                    if let qrImage = qrImage {
+                        ShareSheet(activityItems: [qrImage, btcAddress])
+                    } else {
+                        ShareSheet(activityItems: [btcAddress])
+                    }
+                }
             }
         }
     }
@@ -191,6 +227,8 @@ private struct CardModel {
 
 private struct CardMini: View {
     let card: CardModel
+    let qrAddress: String
+    let onQRTap: () -> Void
     var body: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 12) {
@@ -211,18 +249,37 @@ private struct CardMini: View {
                 }
             }
             Spacer(minLength: 12)
-            Image(systemName: "qrcode")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 32, height: 32)
-                .foregroundColor(.white)
+            QRCodeImage(text: qrAddress)
+                .frame(width: 48, height: 48)
+                .onTapGesture { onQRTap() }
         }
         .padding(20)
         .frame(maxWidth: .infinity)
-        .background(Color(hex: "#2C232E"))
+        .background(Color("PrimaryNuriBlack"))
         .clipShape(RoundedRectangle(cornerRadius: 12))
-        .aspectRatio(1.6, contentMode: .fit)
+        .aspectRatio(257/163, contentMode: .fit)
         .frame(minHeight: 196)
+    }
+}
+
+private struct SmallIconButton: View {
+    let icon: String
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(icon)
+                    .resizable()
+                    .renderingMode(.template)
+                    .foregroundColor(Color("PrimaryNuriBlack"))
+                    .frame(width: 32, height: 32)
+                Text(title)
+                    .font(.custom("Inter", size: 14).weight(.medium))
+                    .foregroundColor(Color("PrimaryNuriBlack"))
+            }
+        }
     }
 }
 
@@ -231,3 +288,16 @@ private struct CardMini: View {
     CardViewActive()
 }
 #endif
+
+// ShareSheet helper for SwiftUI
+struct ShareSheet: UIViewControllerRepresentable {
+    var activityItems: [Any]
+    var applicationActivities: [UIActivity]? = nil
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let controller = UIActivityViewController(activityItems: activityItems, applicationActivities: applicationActivities)
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}

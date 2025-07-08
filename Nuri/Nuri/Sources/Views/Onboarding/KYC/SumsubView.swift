@@ -49,6 +49,12 @@ private final class SumsubHostController: UIViewController {
     private func configureSDK() {
         guard sdk.isReady else {
             print("[Sumsub] SDK not ready: \(sdk.verboseStatus)")
+            // In DEBUG stub mode, simulate an approved verification after short delay so the flow continues.
+            #if DEBUG
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                self?.onResult?(true)
+            }
+            #endif
             return
         }
 

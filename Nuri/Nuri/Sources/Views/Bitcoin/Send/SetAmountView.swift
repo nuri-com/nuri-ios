@@ -1,46 +1,71 @@
 import SwiftUI
 
 struct SetAmountView: View {
+    @EnvironmentObject var navigation: BitcoinViewNavigation
+    @Environment(\.dismiss) private var dismiss
 
-    @State var amount: String = "0.00001337"
+    @State private var navigateToConfirm = false
 
-    @FocusState private var focusedField: Int?
+    // Amounts to forward to confirmation screen
+    @State private var btcAmount: Double = 0
+    @State private var eurAmount: Double = 0
 
     var body: some View {
-        VStack {
-            HStack {
-                Text("Confirm Amount")
-                    .font(.brandTitle1)
-                    .foregroundColor(Color("PrimaryNuriBlack"))
-                Spacer()
-                Text("↑↓ EUR")
-                    .font(.caption)
-                    .padding(2)
-                    .background(Color.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 3))
+        ZStack {
+            AmountEntryScreen(
+                title: "Confirm Amount",
+                primarySymbol: "₿",
+                secondarySymbol: "€",
+                initialPrimaryIsCrypto: true,
+                exchangeRate: 0, // will be fetched inside the component; we'll refetch before navigating
+                actionIcon: "bitcoin-circle",
+                actionTitle: "Confirm Amount",
+                onSubmit: { amount, isCrypto in
+                    Task {
+                        // Fetch latest BTC price to ensure consistency with entry screen
+                        let rate = await fetchPrice()
+                        let safeRate = rate > 0 ? rate : 1
+                        let btc: Double
+                        let eur: Double
+                        if isCrypto {
+                            btc = amount
+                            eur = amount * safeRate
+                        } else {
+                            eur = amount
+                            btc = amount / safeRate
+                        }
+                        await MainActor.run {
+                            btcAmount = btc
+                            eurAmount = eur
+                            navigateToConfirm = true
+                        }
+                    }
+                },
+                onClose: {
+                    navigation.isSendViewPresented = false
+                }
+            )
+
+            NavigationLink(destination: ConfirmTransactionView(btcAmount: btcAmount, eurAmount: eurAmount), isActive: $navigateToConfirm) {
+                EmptyView()
             }
-            Spacer()
-            HStack(spacing: 8) {
-                Text("₿")
-                    .font(.system(size: 40, weight: .semibold))
-                TextField("", text: $amount)
-                    .focused($focusedField, equals: 1)
-                    .font(.system(size: 40, weight: .semibold))
-            }
-            Text("~ 11.23 EUR")
-                .font(.footnote)
-                .foregroundStyle(Color.secondary)
-            Spacer()
-            NavigationLink("Confirm Amount") {
-                ConfirmTransactionView()
-            }
-            .buttonStyle(ProminentButtonStyle())
+            .hidden()
         }
-        .padding(32)
-        .background(NuriAsset.background.swiftUIColor)
-        .navigationTitle("Send Bitcoin")
-        .onAppear {
-            focusedField = 1
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
+    }
+
+    // MARK: - Helpers
+    private func fetchPrice() async -> Double {
+        guard let url = URL(string: "https://mempool.space/api/v1/prices") else { return 0 }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            if let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any], let eur = dict["EUR"] as? Double {
+                return eur
+            }
+        } catch {
+            print("Price fetch failed", error)
         }
+        return 0
     }
 }

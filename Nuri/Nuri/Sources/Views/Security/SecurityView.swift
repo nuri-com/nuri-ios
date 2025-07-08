@@ -1,129 +1,164 @@
 import SwiftUI
+import AuthenticationServices
 
 struct SecurityView: View {
     @State private var passkeyEnabled: Bool = true
     @State private var iCloudBackupEnabled: Bool = true
+    @State private var showPasskeyOptions: Bool = false
+    @State private var isLinkingPasskey: Bool = false
+    @State private var linkingError: String?
+    @State private var showAlert: Bool = false
+    @State private var showSuccess: Bool = false
+    @State private var showWalletInfo: Bool = false
+    
+
 
     var body: some View {
-        VStack(spacing: 21) {
-            Spacer()
-            Text("Security")
-                .font(.brandTitle1)
-                .foregroundColor(Color("PrimaryNuriBlack"))
-                .multilineTextAlignment(.center)
-            VStack(spacing: 12) {
-                SecurityRow(
+        Screen {
+            // Header – displays screen title and CTA
+            NuriHeader<AnyView, AnyView>.logoAndCTA(
+                title: "",
+                cta: "+ Add Key",
+                onCTA: {}
+            )
+        } content: {
+            // Body content fills the screen between header and footer
+            VStack(spacing: 16) {
+            
+                NuriMenuRow(
                     icon: "passkey-new",
-                    title: "Passkey",
-                    subtitle: "Account is secured with Apple iCloud Passkey.",
-                    subtitleColor: Color(hex: "#02542d"),
-                    trailing: AnyView(
-                        Toggle("", isOn: $passkeyEnabled)
-                            .labelsHidden()
-                            .tint(Color("PrimaryNuriLilac"))
-                    )
-                )
-                SecurityRow(
-                    icon: "icloud-download",
-                    title: "iCloud Backup",
-                    subtitle: "A Passkey encrypted backup of your Key is in your iCloud.",
-                    subtitleColor: Color(hex: "#02542d"),
-                    trailing: AnyView(
-                        Toggle("", isOn: $iCloudBackupEnabled)
-                            .labelsHidden()
-                            .tint(Color("PrimaryNuriLilac"))
-                    )
-                )
-                SecurityRow(
-                    icon: "touch-id",
-                    title: "Add Hardware Key",
-                    subtitle: "Secure your account with a Nuri key, Yubikey, Hardware Wallet, and more.",
-                    subtitleColor: Color(hex: "#6D6D86"),
-                    trailing: AnyView(
+                    title: "Passkeys",
+                    subtitle: passkeyEnabled ? "Enabled" : "Disabled"
+                ) {
+                    Image(systemName: "chevron.right")
+                }
+
+                Button(action: {
+                    showWalletInfo = true
+                }) {
+                    NuriMenuRow(
+                        icon: "wallet",
+                        title: "Wallet Keys",
+                        subtitle: "2-of-2 multi-signature"
+                    ) {
                         Image(systemName: "chevron.right")
-                            .foregroundColor(Color("PrimaryNuriBlack"))
-                    )
-                )
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                NuriMenuRow(
+                    icon: "icloud-download",
+                    title: "iCloud backup",
+                    subtitle: iCloudBackupEnabled ? "Enabled" : "Disabled"
+                ) {
+                    Toggle("", isOn: $iCloudBackupEnabled)
+                        .labelsHidden()
+                        .tint(Color("PrimaryNuriLilac"))
+                }
+                
+                // Add a Passkey button
+                actionButton()
+                    .padding(.top, 10)
+                
+
+                
+                Spacer()
             }
-            .padding(.horizontal, 16)
-            actionButton()
-                .padding(.top, 24)
-            Spacer()
+            .padding(.horizontal)
         }
-        .background(NuriAsset.background.swiftUIColor)
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Image("nuri-logo-svg")
-                    .resizable()
-                    .frame(width: 24, height: 24)
+        .alert("Error", isPresented: $showAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(linkingError ?? "An error occurred")
+        }
+        .confirmationDialog("Choose Passkey Type", isPresented: $showPasskeyOptions, titleVisibility: .visible) {
+            Button("Platform Passkey (Face ID/Touch ID)") {
+                linkPlatformPasskey()
             }
-            ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink(destination: EmptyView()) {
-                    Text("+ Add Key")
-                        .font(.custom("Inter", size: 14).weight(.medium))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color("PrimaryNuriBlack"))
-                        .cornerRadius(64)
+            
+            Button("Hardware Security Key (YubiKey/FIDO2)") {
+                linkHardwarePasskey()
+            }
+            
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Select the type of passkey you want to add to your account.")
+        }
+        .sheet(isPresented: $showSuccess) {
+            SuccessView(
+                illustration: "passkey-new",
+                title: "Success!",
+                subtitle: "Your new passkey has been added",
+                onDone: {
+                    showSuccess = false
+                }
+            )
+        }
+        .sheet(isPresented: $showWalletInfo) {
+            PrivyWallet(onClose: {
+                showWalletInfo = false
+            })
+        }
+    }
+    
+    // MARK: - Passkey Functions
+    
+    private func actionButton() -> some View {
+        Button(action: {
+            print("🔘 [SecurityView] Add a Passkey button tapped")
+            
+            // Check if user is authenticated via stored tokens
+            if PrivyWorkaroundService.shared.isAuthenticated {
+                print("✅ [SecurityView] User is authenticated via tokens")
+                print("   👤 User ID: \(PrivyWorkaroundService.shared.currentUserId ?? "nil")")
+                showPasskeyOptions = true
+            } else {
+                print("❌ [SecurityView] User is not authenticated")
+                showAlert = true
+                linkingError = "Please sign in first before adding additional passkeys"
+            }
+        }) {
+            NuriButton(
+                icon: "touch-id",
+                title: "Add a Passkey",
+                style: .primary
+            )
+        }
+        .padding(.horizontal, 24)
+    }
+    
+    private func linkPlatformPasskey() {
+        print("🔐 [SecurityView] Linking platform passkey...")
+        isLinkingPasskey = true
+        linkingError = nil
+        
+        PasskeyAuthCoordinator.shared.linkAdditionalPasskey { result in
+            DispatchQueue.main.async {
+                self.isLinkingPasskey = false
+                
+                switch result {
+                case .success:
+                    print("✅ [SecurityView] Platform passkey linked successfully")
+                    self.showSuccess = true
+                case .failure(let error):
+                    print("❌ [SecurityView] Failed to link platform passkey: \(error)")
+                    self.linkingError = error.localizedDescription
+                    self.showAlert = true
                 }
             }
         }
     }
-
-    // MARK: - Components
-
-    private func actionButton() -> some View {
-        Button(action: {
-            // Add Passkey action
-        }) {
-            HStack(spacing: 8) {
-                Image("passkey")
-                    .resizable()
-                    .renderingMode(.template)
-                    .foregroundColor(Color("PrimaryNuriBlack"))
-                    .frame(width: 32, height: 32)
-                Text("Add a Passkey")
-                    .font(.brandBody)
-                    .foregroundColor(Color("PrimaryNuriBlack"))
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 54)
-            .background(Color("PrimaryNuriLilac"))
-            .cornerRadius(32)
-        }
-        .padding(.horizontal, 24)
-    }
-}
-
-private struct SecurityRow: View {
-    let icon: String
-    let title: String
-    let subtitle: String
-    var subtitleColor: Color = Color(hex: "#02542d")
-    let trailing: AnyView
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 8) {
-            Image(icon)
-                .resizable()
-                .frame(width: 32, height: 32)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.custom("Inter", size: 16).weight(.medium))
-                    .foregroundColor(Color("PrimaryNuriBlack"))
-                Text(subtitle)
-                    .font(.custom("Inter", size: 16).weight(.medium))
-                    .foregroundColor(subtitleColor)
-            }
-
-            Spacer()
-
-            trailing
-        }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 24)
+    
+    private func linkHardwarePasskey() {
+        print("🔐 [SecurityView] Linking hardware passkey...")
+        isLinkingPasskey = true
+        linkingError = nil
+        
+        // Hardware keys would need special handling or web-based flow
+        // For now, show that it's not supported
+        self.linkingError = "Hardware security keys require special handling not yet implemented"
+        self.showAlert = true
+        self.isLinkingPasskey = false
     }
 }
 

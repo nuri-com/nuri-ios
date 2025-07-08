@@ -20,7 +20,7 @@ struct CardConfirmAddressView: View {
                         } icon: {
                             Image(systemName: "square.and.pencil")
                         }
-                        .tint(Color.black)
+                        .tint(Color("PrimaryNuriBlack"))
                     }
                 }
                 Text("Cim Topal\nObentrautstrasse 63\n10963 Berlin\nDeutschland")

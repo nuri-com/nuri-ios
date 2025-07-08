@@ -1,4 +1,5 @@
 import UIKit
+import PrivySDK
 
 final class AppDelegate: NSObject, UIApplicationDelegate {
 
@@ -6,7 +7,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         if let baseFont = UIFont(name: "Inter", size: 14) {
             let interFont = UIFontMetrics(forTextStyle: .caption1).scaledFont(for: baseFont)
             UILabel.appearance(whenContainedInInstancesOf: [UITabBar.self]).font = interFont
-            let primary = UIColor(NuriAsset.primaryNuriBlack.swiftUIColor)
+            let primary = UIColor(red: 0x2C/255.0, green: 0x23/255.0, blue: 0x2E/255.0, alpha: 1.0) // #2C232E
             let normalAttributes: [NSAttributedString.Key: Any] = [
                 .font: interFont,
                 .foregroundColor: primary.withAlphaComponent(0.5)
@@ -18,7 +19,28 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             UITabBarItem.appearance().setTitleTextAttributes(normalAttributes, for: .normal)
             UITabBarItem.appearance().setTitleTextAttributes(selectedAttributes, for: .selected)
             UITabBarItem.appearance().titlePositionAdjustment = UIOffset(horizontal: 0, vertical: 5)
+
+            // Customise TabBar background to match app background and remove top divider
+            let tabBarAppearance = UITabBarAppearance()
+            tabBarAppearance.configureWithOpaqueBackground()
+            tabBarAppearance.backgroundColor = UIColor(NuriAsset.background.swiftUIColor)
+            tabBarAppearance.shadowColor = .clear // remove divider
+
+            // Apply the same text attributes to the stacked layout appearance so they are
+            // respected when the system renders items.
+            tabBarAppearance.stackedLayoutAppearance.normal.titleTextAttributes = normalAttributes
+            tabBarAppearance.stackedLayoutAppearance.selected.titleTextAttributes = selectedAttributes
+
+            UITabBar.appearance().standardAppearance = tabBarAppearance
+            // Since iOS 15 `scrollEdgeAppearance` controls the translucent state when scrolled to edge
+            UITabBar.appearance().scrollEdgeAppearance = tabBarAppearance
         }
+        _ = PrivyManager.shared // initializes Privy SDK
         return true
+    }
+
+    func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
+        // Currently no special URL handling needed
+        return false
     }
 }

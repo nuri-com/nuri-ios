@@ -3,61 +3,143 @@ import SwiftUI
 struct ReceiveView: View {
 
     @EnvironmentObject var navigation: BitcoinViewNavigation
-
-    private let address = "bc1q87rj40hdu23kzwyz5aq89fj84wrrf6h757r0y5kpxhnez2q8uvnq0gjqfl"
+    @State private var address: String = ""
+    @State private var isLoading = false
+    @State private var seedPhrase: String = ""
 
     var body: some View {
-        VStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Spacer()
-                    Image("qr-code")
-                        .resizable()
-                        .frame(width: 200, height: 200)
-                        .padding(16)
-                    Spacer()
-                }
-                Divider()
-                Text("Bitcoin Address")
-                    .foregroundStyle(Color.secondary)
-                HStack {
-                    Text(address.withZeroWidthSpaces)
-                    Spacer()
-                    Button {
-                        UIPasteboard.general.string = address
-                    } label: {
-                        Image("copy-icon-black")
+        VStack(spacing: 0) {
+            NuriHeader<AnyView, AnyView>.logo(
+                title: "Receive Bitcoin",
+                onClose: { navigation.isReceiveViewPresented = false }
+            )
+
+            VStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 8) {
+                    // Show QR only if we have a plausible BTC address
+                    if Self.isBitcoinAddress(address) {
+                        HStack {
+                            Spacer()
+                            QRCodeImage(text: address)
+                                .frame(width: 200, height: 200)
+                                .padding(16)
+                            Spacer()
+                        }
+                    } else {
+                        HStack {
+                            Spacer()
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle())
+                                .frame(width: 50, height: 50)
+                                .padding(16)
+                            Spacer()
+                        }
+                    }
+                    Divider()
+                    Text("Bitcoin Address")
+                        .foregroundStyle(Color.secondary)
+                    HStack {
+                        if isLoading {
+                            ProgressView()
+                        } else if Self.isBitcoinAddress(address) {
+                            Text(address.withZeroWidthSpaces)
+                        } else {
+                            Text("Address not available yet")
+                                .foregroundStyle(Color.secondary)
+                        }
+                        Spacer()
+                        if Self.isBitcoinAddress(address) {
+                            Button {
+                                UIPasteboard.general.string = address
+                            } label: {
+                                Image("copy-icon-black")
+                            }
+                        }
                     }
                 }
-            }
-            .padding()
-            .background(Color.white)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .padding(.vertical, 16)
-            Button("Share") {
-                
-            }
-            .buttonStyle(ProminentBlackButtonStyle())
+                .padding()
+                .background(Color.white)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .padding(.vertical, 16)
 
-            NavigationLink("Buy Bitcoin") {
-                BuyBitcoinView(isPresented: $navigation.isReceiveViewPresented)
-            }
-            .buttonStyle(ProminentButtonStyle())
-            Spacer()
-        }
-        .padding(32)
-        .background(NuriAsset.background.swiftUIColor)
-        .navigationTitle("Receive Bitcoin")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem {
-                Button {
-                    navigation.isReceiveViewPresented = false
-                } label: {
-                    Image("delete-close")
+                // Temporary seed display for debugging
+                if !seedPhrase.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Seed phrase (debug):")
+                            .font(.caption)
+                            .foregroundStyle(Color.secondary)
+                        Text(seedPhrase)
+                            .font(.footnote)
+                            .lineLimit(nil)
+                            .textSelection(.enabled)
+                    }
+                    .padding(12)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
                 }
+
+                Button("Share") {
+                    
+                }
+                .buttonStyle(ProminentBlackButtonStyle())
+
+                NavigationLink("Buy Bitcoin") {
+                    BuyBitcoinView(isPresented: $navigation.isReceiveViewPresented)
+                }
+                .buttonStyle(ProminentButtonStyle())
+                Spacer()
             }
+            .padding(32)
         }
+        .background(NuriAsset.background.swiftUIColor)
+        .task {
+            await loadWalletData()
+        }
+    }
+    
+    private func loadWalletData() async {
+        await MainActor.run {
+            isLoading = true
+        }
+        
+        // Ensure wallet is properly initialized
+        let walletService = BitcoinWalletService.shared
+        
+        // If no wallet, try to initialize
+        if !walletService.hasWallet() {
+            print("⚠️ [ReceiveView] No wallet found, attempting to load...")
+            walletService.retryWalletLoad()
+            
+            // Wait a moment for wallet to load
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+        }
+        
+        await MainActor.run {
+            // Get current address
+            if let addr = walletService.currentAddress() {
+                print("✅ [ReceiveView] Got address: \(addr)")
+                address = addr
+            } else {
+                print("❌ [ReceiveView] Failed to get address")
+                address = ""
+            }
+            
+            // Get seed phrase for debugging
+            seedPhrase = walletService.seedPhrase() ?? ""
+            if !seedPhrase.isEmpty {
+                print("✅ [ReceiveView] Got seed phrase: \(seedPhrase.prefix(20))...")
+            } else {
+                print("❌ [ReceiveView] No seed phrase available")
+            }
+            
+            isLoading = false
+        }
+    }
+
+    // MARK: - Helpers
+    private static func isBitcoinAddress(_ address: String) -> Bool {
+        let lower = address.lowercased()
+        return lower.hasPrefix("bc1") || lower.hasPrefix("tb1") || lower.hasPrefix("1") || lower.hasPrefix("3")
     }
 }
 

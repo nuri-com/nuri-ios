@@ -7,7 +7,7 @@ struct SetWidthAccordingToText: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .frame(width: textWidth)
+            .frame(width: max(textWidth, 24))
             .background {
                 Text(text)
                     .fixedSize()

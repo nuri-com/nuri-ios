@@ -1,5 +1,6 @@
 import Combine
 import AuthenticationServices
+import PrivySDK
 
 protocol LoginViewModelDelegate: OnboardingScreenDelegate {
     func presentationAnchor() -> UIWindow
@@ -33,7 +34,10 @@ final class LoginViewModel: NSObject, ObservableObject, LoginViewModelType, Logi
             orLabel: "- or -",
             passkeyButton: .init(text: "Sign In using Passkey", action: .init { [weak self] in
                 self?.startPasskeyLogin()
-            })
+            }),
+            appleLoginAction: .init { [weak self] in
+                self?.startAppleLogin()
+            }
         )
     }
 
@@ -62,13 +66,33 @@ final class LoginViewModel: NSObject, ObservableObject, LoginViewModelType, Logi
     }
 
     private func startPasskeyLogin() {
-        guard let challenge else { return }
-        let securityKeyProvider = ASAuthorizationSecurityKeyPublicKeyCredentialProvider(relyingPartyIdentifier: "nuri.com")
-        let securityKeyRequest = securityKeyProvider.createCredentialAssertionRequest(challenge: challenge)
-        let authController = ASAuthorizationController(authorizationRequests: [securityKeyRequest])
-        authController.delegate = self
-        authController.presentationContextProvider = self
-        authController.performRequests()
+        PasskeyAuthCoordinator.shared.start { [weak self] result in
+            switch result {
+            case .success:
+                DispatchQueue.main.async {
+                    self?.delegate?.didFinish(screen: .login)
+                }
+            case .failure(let error):
+                print("Passkey auth failed: \(error)")
+            }
+        }
+    }
+
+    private func startAppleLogin() {
+        Task { @MainActor in
+            do {
+                try await PrivyManager.shared.oAuth.login(with: .apple)
+                // Ensure wallets
+                do { try await WalletProvisioner.ensureWallets() }
+                catch { print("⚠️ Wallet provisioning error", error) }
+
+                DispatchQueue.main.async {
+                    self.delegate?.didFinish(screen: .login)
+                }
+            } catch {
+                print("❌ Apple login failed", error)
+            }
+        }
     }
 
     func toViewModel() -> LoginViewModel {

@@ -1,13 +1,13 @@
 {
-  "originHash" : "534e9aebddd9b9d5703dd0cc54ce374ded204c13eec2b052834a4919892464f5",
+  "originHash" : "7dbbe89d641fe5b2855a8e53381b6757a5b342af9714cf8e9640ec9c41d19d7a",
   "pins" : [
     {
-      "identity" : "codescanner",
+      "identity" : "bdk-swift",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/twostraws/CodeScanner",
+      "location" : "https://github.com/bitcoindevkit/bdk-swift",
       "state" : {
-        "revision" : "5e886430238944c7200fc9e10dbf2d9550dba865",
-        "version" : "2.5.2"
+        "revision" : "92ecb88e7568ef77aadefb062382988d12be57dd",
+        "version" : "1.2.0"
       }
     },
     {
@@ -20,12 +20,30 @@
       }
     },
     {
+      "identity" : "keychainaccess",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/kishikawakatsumi/KeychainAccess",
+      "state" : {
+        "revision" : "84e546727d66f1adc5439debad16270d0fdd04e7",
+        "version" : "4.2.2"
+      }
+    },
+    {
       "identity" : "openssl",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/krzyzanowskim/OpenSSL",
       "state" : {
         "revision" : "623c84da314e85363236507ca38a4bde65df21c3",
         "version" : "3.3.3001"
+      }
+    },
+    {
+      "identity" : "privy-ios",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/privy-io/privy-ios",
+      "state" : {
+        "branch" : "main",
+        "revision" : "066b2cda4de65d6f253eb7c44c0ad06a27f17e4d"
       }
     },
     {
