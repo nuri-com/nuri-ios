@@ -13,7 +13,7 @@ struct NuriApp: App {
         // Simple check - don't trust stored tokens, always start with welcome screen
         // Let Privy and the welcome screen handle authentication state properly
         print("🔑 [NuriApp] App started - user will authenticate via welcome screen")
-        isUserLoggedIn = false
+        isUserLoggedIn = true
     }
 
     var body: some Scene {
