@@ -7,7 +7,7 @@ let project = Project(
             name: "Nuri",
             destinations: .iOS,
             product: .app,
-            bundleId: "com.nuri.passkeytest",
+            bundleId: "com.nuri.nuri-ios",
             deploymentTargets: .iOS("18.0"),
             infoPlist: .extendingDefault(with: [
                 "UIUserInterfaceStyle": "Light",
@@ -49,7 +49,7 @@ let project = Project(
                 "com.apple.developer.associated-domains": .array([
                     "webcredentials:nuri.com"
                 ]),
-                "application-identifier": "MH2SRQ3N27.com.nuri.passkeytest"
+                "application-identifier": "7NF2K7X2U6.com.nuri.nuri-ios"
             ]),
             dependencies: [
                 .project(target: "Authentication", path: "../Authentication"),
@@ -61,7 +61,7 @@ let project = Project(
             settings: .settings(
                 base: [
                     "CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION": "YES",
-                    "DEVELOPMENT_TEAM": "MH2SRQ3N27"
+                    "DEVELOPMENT_TEAM": "7NF2K7X2U6"
                 ],
                 defaultSettings: .recommended
             )
