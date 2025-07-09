@@ -9,7 +9,11 @@ public final class StrigaService {
 
     // MARK: - Variables
 
-    public var configuration: StrigaConfiguration?
+    public var configuration: StrigaConfiguration? {
+        didSet {
+            httpClient.additionalHeaders = [:] // Headers are now generated per request
+        }
+    }
 
     // MARK: - Endpoints
 
@@ -64,5 +68,37 @@ public final class StrigaService {
             throw NSError(domain: "Striga", code: 1001, userInfo: [NSLocalizedDescriptionKey: "Could not construct URL."])
         }
         return url
+    }
+
+    private func generateHeaders(for path: String, method: String, query: String = "", body: String? = nil) throws -> [String: String] {
+        guard let configuration = configuration else {
+            throw NSError(domain: "Striga", code: 1002, userInfo: [NSLocalizedDescriptionKey: "Configuration not set for authentication."])
+        }
+
+        let timestamp = String(Int(Date().timeIntervalSince1970))
+        var preSign = "\(timestamp)\(method.uppercased())\(path)"
+        if !query.isEmpty {
+            preSign += "?\(query)"
+        }
+        if let body = body {
+            preSign += body
+        }
+
+        let signature = hmacSHA256(data: preSign, key: configuration.secret)
+
+        return [
+            "X-API-Key": configuration.key,
+            "X-API-Timestamp": timestamp,
+            "X-API-Signature": signature,
+            "Content-Type": "application/json"
+        ]
+    }
+
+    private func hmacSHA256(data: String, key: String) -> String {
+        let keyData = Data(key.utf8)
+        let data = Data(data.utf8)
+        let key = SymmetricKey(data: keyData)
+        let signature = HMAC<SHA256>.authenticationCode(for: data, using: key)
+        return Data(signature).map { String(format: "%02hhx", $0) }.joined()
     }
 }
