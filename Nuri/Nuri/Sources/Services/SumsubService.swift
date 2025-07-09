@@ -161,6 +161,10 @@ final class SumsubService {
         }.resume()
     }
 #else
+    func fetchApplicantName(completion: @escaping (String?) -> Void) {
+        completion(nil)
+    }
+
     /// In production you must fetch the token from your backend.
     func fetchAccessToken(completion: @escaping (String?) -> Void) {
         assertionFailure("Implement backend token fetch for RELEASE builds")
