@@ -1,6 +1,6 @@
 import Foundation
 
-public struct User: Decodable {
+public struct CreateUserResponse: Decodable {
     public let firstName: String
     public let lastName: String
     public let email: String

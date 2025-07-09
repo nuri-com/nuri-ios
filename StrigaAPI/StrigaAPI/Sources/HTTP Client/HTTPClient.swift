@@ -15,12 +15,12 @@ final class HTTPClient {
 
     // MARK: - Public
 
-    func get<O: Decodable>(url: String) async throws -> O {
+    func get<O: Decodable>(url: URL) async throws -> O {
         var request = try urlRequest(for: url, method: "GET")
         return try await data(for: request)
     }
 
-    func post<I: Encodable, O: Decodable>(url: String, input: I) async throws -> O {
+    func post<I: Encodable, O: Decodable>(url: URL, input: I) async throws -> O {
         var request = try urlRequest(for: url, method: "POST")
         request.httpBody = try encoder.encode(input)
         return try await data(for: request)
@@ -47,10 +47,7 @@ final class HTTPClient {
         }
     }
 
-    private func urlRequest(for url: String, method: String) throws -> URLRequest {
-        guard let url = URL(string: url) else {
-            throw URLError(.badURL)
-        }
+    private func urlRequest(for url: URL, method: String) throws -> URLRequest {
         var request = URLRequest(url: url)
         request.httpMethod = method
         var headers = additionalHeaders

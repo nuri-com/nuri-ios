@@ -1,4 +1,4 @@
-public struct CreateUserInput: Encodable {
+public struct CreateUser: Encodable {
     public let firstName: String
     public let lastName: String
     public let email: String
