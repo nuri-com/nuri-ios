@@ -70,7 +70,7 @@ final class LoginViewModel: NSObject, ObservableObject, LoginViewModelType, Logi
     }
 
     private func startAppleLogin() {
-        // Apple login via Privy removed - will be replaced with new integration
+        // Apple login will be replaced with new integration
         print("Apple login disabled - awaiting new integration")
     }
 

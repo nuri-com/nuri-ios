@@ -38,15 +38,6 @@
       }
     },
     {
-      "identity" : "privy-ios",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/privy-io/privy-ios",
-      "state" : {
-        "branch" : "main",
-        "revision" : "066b2cda4de65d6f253eb7c44c0ad06a27f17e4d"
-      }
-    },
-    {
       "identity" : "twilio-video-ios",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/twilio/twilio-video-ios",
