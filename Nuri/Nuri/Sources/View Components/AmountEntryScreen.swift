@@ -27,6 +27,7 @@ public struct AmountEntryScreen: View {
     public let secondarySymbol: String
     public let initialPrimaryIsCrypto: Bool
     @Binding public var exchangeRate: Double // reactive to parent changes
+    public let availableBalance: UInt64? // Optional balance display
 
     public let actionIcon: String
     public let actionTitle: String
@@ -53,6 +54,7 @@ public struct AmountEntryScreen: View {
                 secondarySymbol: String,
                 initialPrimaryIsCrypto: Bool,
                 exchangeRate: Binding<Double>,
+                availableBalance: UInt64? = nil,
                 actionIcon: String,
                 actionTitle: String,
                 onSubmit: @escaping (_ amount: Double, _ isCrypto: Bool) -> Void,
@@ -62,6 +64,7 @@ public struct AmountEntryScreen: View {
         self.secondarySymbol = secondarySymbol
         self.initialPrimaryIsCrypto = initialPrimaryIsCrypto
         self._exchangeRate = exchangeRate
+        self.availableBalance = availableBalance
         self.actionIcon = actionIcon
         self.actionTitle = actionTitle
         self.onSubmit = onSubmit
@@ -103,6 +106,19 @@ public struct AmountEntryScreen: View {
                      "1 BTC ≈ € " + String(format: "%0.2f", exchangeRate))
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(Color(hex: "#6D6D86"))
+                
+                // Balance display
+                if let balance = availableBalance {
+                    HStack(spacing: 4) {
+                        Text("Balance:")
+                        Text("₿")
+                        Text("\(balance)")
+                    }
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(Color(hex: "#6D6D86"))
+                    .padding(.top, 8)
+                }
+                
                 Button(action: {
                     onSubmit(amountValue, isPrimaryCrypto)
                 }) {

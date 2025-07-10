@@ -13,6 +13,7 @@ struct SetAmountView: View {
     // Amounts to forward to confirmation screen  
     @State private var btcAmount: Double = 0 // Still in BTC for compatibility with ConfirmTransactionView
     @State private var eurAmount: Double = 0
+    @State private var availableBalance: UInt64 = 0
 
     var body: some View {
         ZStack {
@@ -22,10 +23,16 @@ struct SetAmountView: View {
                 secondarySymbol: "€",
                 initialPrimaryIsCrypto: true,
                 exchangeRate: $satsToEurRate,
+                availableBalance: availableBalance > 0 ? availableBalance : nil,
                 actionIcon: "bitcoin-circle",
                 actionTitle: "Confirm Amount",
                 onSubmit: { amount, isCrypto in
-                    print("💰 [SetAmountView] onSubmit called with amount: \(amount), isCrypto: \(isCrypto)")
+                    print("🚀 [SetAmountView] ========== AMOUNT SUBMISSION START ==========")
+                    print("💰 [SetAmountView] onSubmit called with:")
+                    print("   💰 Raw amount: \(amount)")
+                    print("   🪙 isCrypto: \(isCrypto)")
+                    print("   📊 satsToEurRate: \(satsToEurRate)")
+                    print("   📊 btcToEurRate: \(btcToEurRate)")
                     
                     let btc: Double
                     let eur: Double
@@ -34,18 +41,34 @@ struct SetAmountView: View {
                         let satsAmount = amount
                         btc = satsAmount / 100_000_000
                         eur = satsAmount * satsToEurRate
-                        print("💰 [SetAmountView] Sats: \(satsAmount), BTC: \(btc), EUR: \(eur)")
+                        print("🪙 [SetAmountView] CRYPTO PATH:")
+                        print("   💰 Sats: \(satsAmount)")
+                        print("   ₿ BTC: \(btc)")
+                        print("   💶 EUR: \(eur)")
+                        print("   🧮 Calculation: \(satsAmount) sats / 100M = \(btc) BTC")
+                        print("   🧮 Calculation: \(satsAmount) sats * \(satsToEurRate) rate = \(eur) EUR")
                     } else {
                         // amount is in EUR
                         eur = amount
                         let satsAmount = amount / satsToEurRate
                         btc = satsAmount / 100_000_000
-                        print("💰 [SetAmountView] EUR: \(eur), Sats: \(satsAmount), BTC: \(btc)")
+                        print("💶 [SetAmountView] EUR PATH:")
+                        print("   💶 EUR: \(eur)")
+                        print("   💰 Sats: \(satsAmount)")
+                        print("   ₿ BTC: \(btc)")
+                        print("   🧮 Calculation: \(eur) EUR / \(satsToEurRate) rate = \(satsAmount) sats")
+                        print("   🧮 Calculation: \(satsAmount) sats / 100M = \(btc) BTC")
                     }
+                    
+                    print("📦 [SetAmountView] Setting final values:")
+                    print("   ₿ btcAmount will be: \(btc)")
+                    print("   💶 eurAmount will be: \(eur)")
                     
                     btcAmount = btc
                     eurAmount = eur
                     navigateToConfirm = true
+                    
+                    print("✅ [SetAmountView] ========== AMOUNT SUBMISSION END ==========")
                 },
                 onClose: {
                     navigation.isSendViewPresented = false
@@ -60,9 +83,15 @@ struct SetAmountView: View {
                 print("📊 [SetAmountView] BTC to EUR rate: \(fetchedBtcToEurRate)")
                 print("📊 [SetAmountView] Sats to EUR rate: \(calculatedSatsToEurRate)")
                 
+                // Fetch wallet balance
+                print("💰 [SetAmountView] Fetching wallet balance...")
+                let balance = await BitcoinWalletService.shared.getDetailedBalance()
+                
                 await MainActor.run {
                     btcToEurRate = fetchedBtcToEurRate
                     satsToEurRate = calculatedSatsToEurRate
+                    availableBalance = balance?.confirmed ?? 0
+                    print("💰 [SetAmountView] Available balance: \(availableBalance) sats")
                 }
             }
 
@@ -70,6 +99,14 @@ struct SetAmountView: View {
                 EmptyView()
             }
             .hidden()
+            .onChange(of: navigateToConfirm) { newValue in
+                if newValue {
+                    print("🚀 [SetAmountView] Navigation triggered to ConfirmTransactionView")
+                    print("   ₿ btcAmount being passed: \(btcAmount)")
+                    print("   💶 eurAmount being passed: \(eurAmount)")
+                    print("   📍 recipientAddress: \(recipientAddress)")
+                }
+            }
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)

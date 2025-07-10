@@ -533,26 +533,55 @@ final class BitcoinWalletService {
     
     /// Get detailed balance breakdown (confirmed, pending, total)
     func getDetailedBalance() async -> (confirmed: UInt64, pending: UInt64, total: UInt64)? {
-        guard let wallet else { return nil }
-        guard let esploraClient else { return nil }
+        print("💰 [BitcoinWalletService] ========== GET DETAILED BALANCE START ==========")
+        
+        guard let wallet else { 
+            print("❌ [BitcoinWalletService] No wallet available for balance check!")
+            print("   🔍 Wallet instance: nil")
+            return nil 
+        }
+        print("✅ [BitcoinWalletService] Wallet is available")
+        
+        guard let esploraClient else { 
+            print("❌ [BitcoinWalletService] No Esplora client available for balance check!")
+            print("   🔍 EsploraClient instance: nil")
+            return nil 
+        }
+        print("✅ [BitcoinWalletService] Esplora client is available")
         
         do {
             // Sync first to get latest state
+            print("🔄 [BitcoinWalletService] Syncing wallet before balance check...")
             try await syncWallet()
+            print("✅ [BitcoinWalletService] Wallet sync completed")
             
             let balance = wallet.balance()
+            print("🔍 [BitcoinWalletService] Raw balance from wallet:")
+            print("   ✅ Confirmed: \(balance.confirmed.toSat()) sats")
+            print("   ⏳ Trusted pending: \(balance.trustedPending.toSat()) sats")
+            print("   ❓ Untrusted pending: \(balance.untrustedPending.toSat()) sats")
+            print("   📊 Total from wallet: \(balance.total.toSat()) sats")
+            
             let confirmed = balance.confirmed.toSat()
             let pending = balance.trustedPending.toSat() + balance.untrustedPending.toSat()
             let total = balance.total.toSat()
             
-            print("💰 [BitcoinWalletService] Detailed balance:")
+            print("💰 [BitcoinWalletService] Processed balance details:")
             print("   ✅ Confirmed: \(confirmed) sats")
-            print("   ⏳ Pending: \(pending) sats")  
+            print("   ⏳ Pending (total): \(pending) sats")  
             print("   📊 Total: \(total) sats")
             
-            return (confirmed: confirmed, pending: pending, total: total)
+            let result = (confirmed: confirmed, pending: pending, total: total)
+            print("💰 [BitcoinWalletService] ========== GET DETAILED BALANCE END (SUCCESS) ==========")
+            return result
         } catch {
             print("❌ [BitcoinWalletService] Failed to get detailed balance: \(error)")
+            print("   🔍 Error type: \(type(of: error))")
+            print("   🔍 Error description: \(error.localizedDescription)")
+            if let bdkError = error as? EsploraError {
+                print("   🔍 BDK Error: \(bdkError)")
+            }
+            print("💰 [BitcoinWalletService] ========== GET DETAILED BALANCE END (FAILED) ==========")
             return nil
         }
     }

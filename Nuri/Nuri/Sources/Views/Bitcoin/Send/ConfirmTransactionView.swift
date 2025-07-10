@@ -11,6 +11,20 @@ struct ConfirmTransactionView: View {
     let eurAmount: Double
     let recipientAddress: String
     
+    init(btcAmount: Double, eurAmount: Double, recipientAddress: String) {
+        print("🏗️ [ConfirmTransactionView] ========== INIT START ==========")
+        print("🏗️ [ConfirmTransactionView] Initializing with:")
+        print("   ₿ btcAmount: \(btcAmount)")
+        print("   💶 eurAmount: \(eurAmount)")
+        print("   📍 recipientAddress: \(recipientAddress)")
+        print("   💰 Calculated sats: \(UInt64(btcAmount * 100_000_000))")
+        print("🏗️ [ConfirmTransactionView] ========== INIT END ==========")
+        
+        self.btcAmount = btcAmount
+        self.eurAmount = eurAmount
+        self.recipientAddress = recipientAddress
+    }
+    
     // Transaction state
     @State private var transactionInfo: TransactionManager.TransactionInfo?
     @State private var isLoadingFee = true
@@ -19,6 +33,7 @@ struct ConfirmTransactionView: View {
     @State private var errorMessage = ""
     @State private var showSuccess = false
     @State private var transactionId = ""
+    @State private var availableBalance: UInt64 = 0
     
     // Services
     private let transactionManager = TransactionManager.shared
@@ -51,6 +66,18 @@ struct ConfirmTransactionView: View {
                     Text(String(format: "~ %.2f EUR", eurAmount))
                         .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(Color.secondary)
+
+                    // Balance display
+                    if availableBalance > 0 {
+                        HStack(spacing: 4) {
+                            Text("Balance:")
+                            Text("₿")
+                            Text("\(availableBalance)")
+                        }
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(Color(hex: "#6D6D86"))
+                        .padding(.top, 8)
+                    }
 
                     // Details card
                     VStack(alignment: .leading, spacing: 8) {
@@ -131,7 +158,8 @@ struct ConfirmTransactionView: View {
             }
         }
         .task {
-            await loadTransactionInfo()
+            print("🔄 [ConfirmTransactionView] Task started - about to load transaction info")
+            await loadBalanceAndTransactionInfo()
         }
         .alert("Transaction Error", isPresented: $showError) {
             Button("OK", role: .cancel) { }
@@ -180,20 +208,41 @@ struct ConfirmTransactionView: View {
     
     // MARK: - Transaction Methods
     
+    private func loadBalanceAndTransactionInfo() async {
+        // Load balance first
+        let balance = await BitcoinWalletService.shared.getDetailedBalance()
+        await MainActor.run {
+            availableBalance = balance?.confirmed ?? 0
+        }
+        
+        // Then load transaction info
+        await loadTransactionInfo()
+    }
+    
     private func loadTransactionInfo() async {
         do {
-            let amountSats = UInt64(btcAmount * 100_000_000) // Convert BTC to satoshis
+            let amountSats = UInt64(btcAmount * 100_000_000)
             
             let txInfo = try await transactionManager.buildTransactionInfo(
                 recipientAddress: recipientAddress,
                 amountSats: amountSats
             )
             
+            print("✅ [ConfirmTransactionView] Transaction info loaded successfully:")
+            print("   💰 Amount: \(txInfo.amountSats) sats")
+            print("   💸 Fee: \(txInfo.feeSats) sats")
+            print("   📊 Total: \(txInfo.totalSats) sats")
+            
             await MainActor.run {
                 self.transactionInfo = txInfo
                 self.isLoadingFee = false
             }
         } catch {
+            print("❌ [ConfirmTransactionView] Transaction info loading failed: \(error.localizedDescription)")
+            if let txError = error as? TransactionManager.TransactionError {
+                print("   🔍 Error type: \(txError)")
+            }
+            
             await MainActor.run {
                 self.errorMessage = error.localizedDescription
                 self.showError = true
@@ -215,10 +264,20 @@ struct ConfirmTransactionView: View {
                     feeRate: txInfo.feeRate
                 )
                 
+                // Immediately refresh balance after successful transaction
+                print("✅ [ConfirmTransactionView] Transaction sent successfully, refreshing balance...")
+                let updatedBalance = await BitcoinWalletService.shared.getDetailedBalance()
+                
                 await MainActor.run {
                     self.transactionId = txId
                     self.isSending = false
                     self.showSuccess = true
+                    
+                    // Update balance display immediately
+                    if let balance = updatedBalance {
+                        self.availableBalance = balance.confirmed
+                        print("💰 [ConfirmTransactionView] Balance updated to: \(balance.confirmed) sats")
+                    }
                 }
             } catch {
                 await MainActor.run {

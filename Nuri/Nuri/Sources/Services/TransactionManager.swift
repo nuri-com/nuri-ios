@@ -93,25 +93,47 @@ final class TransactionManager {
     func validateAmount(_ amountSats: UInt64) -> Bool {
         // Minimum amount is 546 satoshis (dust limit)
         let dustLimit: UInt64 = 546
-        return amountSats >= dustLimit
+        let isValid = amountSats >= dustLimit
+        print("✅ [TransactionManager] Amount validation:")
+        print("   💰 Amount: \(amountSats) sats")
+        print("   🚫 Dust limit: \(dustLimit) sats")
+        print("   ✅ Is valid: \(isValid)")
+        return isValid
     }
     
     /// Calculates transaction fee for given amount and fee rate
-    func calculateFee(amountSats: UInt64, feeRate: UInt64 = 0) async throws -> UInt64 {
-        print("🧮 [TransactionManager] Calculating fee for amount: \(amountSats) sats")
+    func calculateFee(amountSats: UInt64, feeRate: UInt64 = 0, recipientAddress: String) async throws -> UInt64 {
+        print("🧮 [TransactionManager] ========== FEE CALCULATION START ==========")
+        print("🧮 [TransactionManager] Calculating fee for:")
+        print("   💰 amountSats: \(amountSats)")
+        print("   ⚡ feeRate: \(feeRate)")
+        print("   📍 recipientAddress: \(recipientAddress)")
         
         let actualFeeRate = feeRate > 0 ? feeRate : DEFAULT_FEE_RATE
+        print("   ⚡ actualFeeRate: \(actualFeeRate) sat/vB (using default: \(feeRate == 0))")
         
+        print("🔍 [TransactionManager] Getting wallet...")
         guard let wallet = await getWallet() else {
+            print("❌ [TransactionManager] Wallet not available!")
             throw TransactionError.walletNotAvailable
         }
+        print("✅ [TransactionManager] Wallet obtained successfully")
         
-        // Get current balance to check if we have funds
+        // Get current balance
+        print("🔍 [TransactionManager] Getting balance...")
         guard let balance = await walletService.getDetailedBalance() else {
+            print("❌ [TransactionManager] Balance not available!")
             throw TransactionError.walletNotAvailable
         }
         
+        print("💰 [TransactionManager] Balance details:")
+        print("   ✅ Confirmed: \(balance.confirmed) sats")
+        print("   ⏳ Pending: \(balance.pending) sats")
+        print("   📊 Total: \(balance.confirmed + balance.pending) sats")
+        
+        // Check if we have at least the base amount (we'll check amount + fee later)
         if balance.confirmed < amountSats {
+            print("❌ [TransactionManager] Insufficient balance for amount alone: need \(amountSats) sats, have \(balance.confirmed) sats")
             throw TransactionError.insufficientFunds(
                 available: balance.confirmed,
                 required: amountSats
@@ -119,9 +141,8 @@ final class TransactionManager {
         }
         
         do {
-            // Create a dummy transaction to estimate size and fee
-            let tempAddress = try await getCurrentAddress()
-            let script = try Address(address: tempAddress, network: .bitcoin).scriptPubkey()
+            // Create actual transaction to estimate fee (using real recipient address)
+            let script = try Address(address: recipientAddress, network: .bitcoin).scriptPubkey()
             
             let txBuilder = try TxBuilder()
                 .addRecipient(
@@ -134,11 +155,16 @@ final class TransactionManager {
             // Extract transaction to calculate actual fee
             let transaction = try txBuilder.extractTx()
             
-            // Calculate fee by getting transaction details
+            // Get the actual fee from the transaction
             let sentReceived = wallet.sentAndReceived(tx: transaction)
-            let fee = sentReceived.sent.toSat() - amountSats
+            let totalSent = sentReceived.sent.toSat()
+            let fee = totalSent - amountSats
             
-            print("✅ [TransactionManager] Calculated fee: \(fee) sats at \(actualFeeRate) sat/vB")
+            print("✅ [TransactionManager] Fee calculation successful:")
+            print("   📤 Total sent: \(totalSent) sats")
+            print("   💰 Amount: \(amountSats) sats")
+            print("   💸 Fee: \(fee) sats at \(actualFeeRate) sat/vB")
+            
             return fee
             
         } catch {
@@ -154,36 +180,66 @@ final class TransactionManager {
         feeRate: UInt64 = 0
     ) async throws -> TransactionInfo {
         
-        print("🔧 [TransactionManager] Building transaction info")
+        print("🔧 [TransactionManager] ========== BUILD TRANSACTION INFO START ==========")
+        print("🔧 [TransactionManager] Building transaction info with:")
         print("   📍 Recipient: \(recipientAddress)")
         print("   💰 Amount: \(amountSats) sats")
+        print("   ⚡ Fee rate: \(feeRate) sat/vB")
         
         // Validate inputs
+        print("🔍 [TransactionManager] Validating address...")
         guard validateAddress(recipientAddress) else {
+            print("❌ [TransactionManager] Address validation failed: \(recipientAddress)")
             throw TransactionError.invalidAddress(recipientAddress)
         }
+        print("✅ [TransactionManager] Address validation passed")
         
+        print("🔍 [TransactionManager] Validating amount...")
         guard validateAmount(amountSats) else {
+            print("❌ [TransactionManager] Amount validation failed: \(amountSats) sats")
             throw TransactionError.invalidAmount("\(amountSats) sats")
         }
+        print("✅ [TransactionManager] Amount validation passed")
         
         let actualFeeRate = feeRate > 0 ? feeRate : DEFAULT_FEE_RATE
+        print("   ⚡ Using fee rate: \(actualFeeRate) sat/vB")
         
         // Calculate fee
-        let feeSats = try await calculateFee(amountSats: amountSats, feeRate: actualFeeRate)
+        print("🔍 [TransactionManager] Calculating transaction fee...")
+        let feeSats = try await calculateFee(amountSats: amountSats, feeRate: actualFeeRate, recipientAddress: recipientAddress)
         let totalSats = amountSats + feeSats
+        print("✅ [TransactionManager] Fee calculation completed:")
+        print("   💰 Amount: \(amountSats) sats")
+        print("   💸 Fee: \(feeSats) sats")
+        print("   📊 Total needed: \(totalSats) sats")
         
         // Verify we have enough funds including fee
+        print("🔍 [TransactionManager] Final balance check...")
         guard let balance = await walletService.getDetailedBalance() else {
+            print("❌ [TransactionManager] Cannot get balance for final check!")
             throw TransactionError.walletNotAvailable
         }
         
+        print("💰 [TransactionManager] Final balance comparison:")
+        print("   ✅ Confirmed: \(balance.confirmed) sats")
+        print("   ⏳ Pending: \(balance.pending) sats")  
+        print("   📊 Total: \(balance.total) sats")
+        print("   💸 Required: \(totalSats) sats")
+        print("   💡 Using confirmed balance for safety")
+        print("   💡 Sufficient funds: \(balance.confirmed >= totalSats)")
+        
         if balance.confirmed < totalSats {
+            print("❌ [TransactionManager] INSUFFICIENT FUNDS!")
+            print("   💰 Need: \(totalSats) sats")
+            print("   💰 Have (confirmed): \(balance.confirmed) sats")
+            print("   💰 Have (total): \(balance.total) sats")
+            print("   💰 Short by: \(totalSats - balance.confirmed) sats")
             throw TransactionError.insufficientFunds(
                 available: balance.confirmed,
                 required: totalSats
             )
         }
+        print("✅ [TransactionManager] Sufficient funds confirmed")
         
         let transactionInfo = TransactionInfo(
             recipientAddress: recipientAddress,
@@ -193,11 +249,12 @@ final class TransactionManager {
             feeRate: actualFeeRate
         )
         
-        print("✅ [TransactionManager] Transaction info built:")
+        print("✅ [TransactionManager] Transaction info built successfully:")
         print("   💰 Amount: \(amountSats) sats (\(transactionInfo.amountBTC) BTC)")
         print("   💸 Fee: \(feeSats) sats (\(transactionInfo.feeBTC) BTC)")
         print("   📊 Total: \(totalSats) sats (\(transactionInfo.totalBTC) BTC)")
         print("   ⚡ Fee rate: \(actualFeeRate) sat/vB")
+        print("🔧 [TransactionManager] ========== BUILD TRANSACTION INFO END ==========")
         
         return transactionInfo
     }
