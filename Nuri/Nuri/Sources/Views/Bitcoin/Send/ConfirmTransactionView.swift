@@ -39,6 +39,24 @@ struct ConfirmTransactionView: View {
     private var shouldDisableButton: Bool {
         return isSending || transactionInfo == nil || transactionData == nil || isInsufficientFunds
     }
+    
+    private var buttonTitle: String {
+        if transactionData == nil {
+            return "Loading..."
+        } else if isInsufficientFunds {
+            return "Insufficient Funds"
+        } else {
+            return "Send Bitcoin"
+        }
+    }
+    
+    private var buttonStyle: NuriButton.Style {
+        if transactionData == nil || isInsufficientFunds {
+            return .secondary
+        } else {
+            return .primary
+        }
+    }
 
     var body: some View {
         Screen {
@@ -199,20 +217,6 @@ struct ConfirmTransactionView: View {
                             .foregroundColor(.white)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                         } else {
-                            let buttonTitle: String
-                            let buttonStyle: NuriButton.Style
-                            
-                            if transactionData == nil {
-                                buttonTitle = "Loading..."
-                                buttonStyle = .secondary
-                            } else if isInsufficientFunds {
-                                buttonTitle = "Insufficient Funds"
-                                buttonStyle = .secondary
-                            } else {
-                                buttonTitle = "Send Bitcoin"
-                                buttonStyle = .primary
-                            }
-                            
                             NuriButton(
                                 icon: "bitcoin-circle", 
                                 title: buttonTitle, 
