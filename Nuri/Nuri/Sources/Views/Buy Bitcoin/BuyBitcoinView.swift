@@ -15,7 +15,7 @@ struct BuyBitcoinView: View {
     }
 
     @State private var amountText: String = ""
-    @State private var isPrimaryBTC = true // start with BTC primary
+    @State private var isPrimaryBTC = true // start with ₿ (sats) primary
 
     @FocusState private var isFieldFocused: Bool
 
@@ -74,10 +74,10 @@ struct BuyBitcoinView: View {
                     .foregroundStyle(Color.secondary)
                 Spacer()
                 // Current BTC price label
-                Text("1 BTC ≈ € " + String(format: "%0.2f", exchangeRate))
+                Text("1 ₿ = 1 sat ≈ € " + String(format: "%0.8f", exchangeRate / 100_000_000))
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(Color(hex: "#6D6D86"))
-                NavigationLink(destination: SuccessView(illustration: "hand-plant", title: "Bitcoin purchased!", subtitle: "You've purchased 0.9123 BTC!") {
+                NavigationLink(destination: SuccessView(illustration: "hand-plant", title: "Bitcoin purchased!", subtitle: "You've purchased ₿91,230,000!") {
                     isPresented = false
                 }) {
                     NuriButton(icon: "bitcoin-circle", title: "Buy with Apple Pay", style: .primary)

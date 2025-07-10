@@ -7,9 +7,10 @@ struct SetAmountView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var navigateToConfirm = false
+    @State private var satsToEurRate: Double = 0
 
-    // Amounts to forward to confirmation screen
-    @State private var btcAmount: Double = 0
+    // Amounts to forward to confirmation screen  
+    @State private var btcAmount: Double = 0 // Still in BTC for compatibility with ConfirmTransactionView
     @State private var eurAmount: Double = 0
 
     var body: some View {
@@ -19,22 +20,24 @@ struct SetAmountView: View {
                 primarySymbol: "₿",
                 secondarySymbol: "€",
                 initialPrimaryIsCrypto: true,
-                exchangeRate: 0, // will be fetched inside the component; we'll refetch before navigating
+                exchangeRate: satsToEurRate,
                 actionIcon: "bitcoin-circle",
                 actionTitle: "Confirm Amount",
                 onSubmit: { amount, isCrypto in
                     Task {
                         // Fetch latest BTC price to ensure consistency with entry screen
-                        let rate = await fetchPrice()
-                        let safeRate = rate > 0 ? rate : 1
+                        let btcToEurRate = await fetchPrice()
+                        let safeBtcToEurRate = btcToEurRate > 0 ? btcToEurRate : 1
+                        
                         let btc: Double
                         let eur: Double
                         if isCrypto {
-                            btc = amount
-                            eur = amount * safeRate
+                            // amount is in satoshis, convert to BTC for backend compatibility
+                            btc = amount / 100_000_000
+                            eur = btc * safeBtcToEurRate
                         } else {
                             eur = amount
-                            btc = amount / safeRate
+                            btc = amount / safeBtcToEurRate
                         }
                         await MainActor.run {
                             btcAmount = btc
@@ -47,6 +50,14 @@ struct SetAmountView: View {
                     navigation.isSendViewPresented = false
                 }
             )
+            .task {
+                // Calculate sats to EUR rate
+                let btcToEurRate = await fetchPrice()
+                let satsToEur = btcToEurRate / 100_000_000
+                await MainActor.run {
+                    satsToEurRate = satsToEur
+                }
+            }
 
             NavigationLink(destination: ConfirmTransactionView(btcAmount: btcAmount, eurAmount: eurAmount, recipientAddress: recipientAddress), isActive: $navigateToConfirm) {
                 EmptyView()

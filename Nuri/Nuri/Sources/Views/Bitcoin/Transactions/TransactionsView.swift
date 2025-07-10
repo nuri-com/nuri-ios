@@ -3,13 +3,13 @@ import SwiftUI
 struct TransactionsView: View {
     @Environment(\.dismiss) private var dismiss
 
-    // MARK: - Sample Data (Matches Figma "transactions-v3" frame)
+    // MARK: - Sample Data (Matches Figma "transactions-v3" frame) - Updated to use satoshis
     private let transactions: [Transaction] = [
-        .init(iconName: "list-item-icon-paperplane_send", title: "Send Bitcoin",    btc: -0.053,    fiat: -1_000, date: "Nov 27"),
-        .init(iconName: "vector-icon-card",             title: "Card Spend",      btc: nil,       fiat:  -10.53, date: "Nov 27"),
-        .init(iconName: "money_topup",                   title: "Card Top-Up",     btc: nil,       fiat:   100,   date: "Nov 27"),
-        .init(iconName: "list-item-icon-paperplane_send", title: "Send Bitcoin",    btc: -0.001,   fiat:  -100,   date: "Nov 27"),
-        .init(iconName: "bitcoin_hand",                  title: "Bought Bitcoin",  btc: 0.001337,  fiat:   133,   date: "Nov 27")
+        .init(iconName: "list-item-icon-paperplane_send", title: "Send Bitcoin",    sats: -5_300_000,    fiat: -1_000, date: "Nov 27"),
+        .init(iconName: "vector-icon-card",             title: "Card Spend",      sats: nil,          fiat:  -10.53, date: "Nov 27"),
+        .init(iconName: "money_topup",                   title: "Card Top-Up",     sats: nil,          fiat:   100,   date: "Nov 27"),
+        .init(iconName: "list-item-icon-paperplane_send", title: "Send Bitcoin",    sats: -100_000,     fiat:  -100,   date: "Nov 27"),
+        .init(iconName: "bitcoin_hand",                  title: "Bought Bitcoin",  sats: 133_700,      fiat:   133,   date: "Nov 27")
     ]
 
     var body: some View {
@@ -62,12 +62,12 @@ private struct TransactionRow: View {
             Spacer()
 
             VStack(alignment: .trailing, spacing: 0) {
-                if let btc = tx.btc {
-                    btcText(btc: btc)
+                if let sats = tx.sats {
+                    satsText(sats: sats)
                 }
 
                 if let fiat = tx.fiat {
-                    fiatText(fiat: fiat, hasBTC: tx.btc != nil)
+                    fiatText(fiat: fiat, hasSats: tx.sats != nil)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
@@ -77,38 +77,20 @@ private struct TransactionRow: View {
     }
 
     // MARK: - Helpers
-    private func btcText(btc: Double) -> Text {
-        let isPositive = btc > 0
+    private func satsText(sats: Int64) -> Text {
+        let isPositive = sats > 0
         let color: Color = isPositive ? Color(hex: "#02542d") : Color("PrimaryNuriBlack")
 
-        let absValue = abs(btc)
-        // If the amount is less than 0.01 BTC, split the string per Figma spec
-        if absValue < 0.01 {
-            let greyPart = Text(isPositive ? "0.00" : "-0.00")
-                .foregroundColor(Color("PrimaryNuriBlack").opacity(0.3))
-                .font(.custom("Inter", size: 16).weight(.medium))
-
-            // Convert to satoshis (8-decimals) and zero-pad to 6 digits so that
-            // the combined string always shows the full 8-decimal BTC value.
-            let suffixValue = Int(absValue * 100_000_000)
-            let suffixString = String(format: "%06d", suffixValue) // e.g. 42 -> "000042"
-            let suffix = Text("\(suffixString) BTC")
-                .foregroundColor(color)
-                .font(.custom("Inter", size: 16).weight(.medium))
-
-            return greyPart + suffix
-        } else {
-            return Text(String(format: "%@%.3f BTC", isPositive ? "" : "-", absValue))
-                .foregroundColor(color)
-                .font(.custom("Inter", size: 16).weight(.medium))
-        }
+        return Text("\(isPositive ? "" : "-")₿\(abs(sats))")
+            .foregroundColor(color)
+            .font(.custom("Inter", size: 16).weight(.medium))
     }
 
-    private func fiatText(fiat: Double, hasBTC: Bool) -> Text {
+    private func fiatText(fiat: Double, hasSats: Bool) -> Text {
         let isPositive = fiat > 0
 
-        if hasBTC {
-            // Secondary fiat line under BTC amount
+        if hasSats {
+            // Secondary fiat line under sats amount
             return Text(String(format: "%@%.0f €", isPositive ? "" : "-", abs(fiat)))
                 .foregroundColor(Color(hex: "#6D6D86"))
                 .font(.custom("Inter", size: 14).weight(.medium))
@@ -128,7 +110,7 @@ private struct Transaction: Identifiable {
     let id = UUID()
     let iconName: String
     let title: String
-    let btc: Double?
+    let sats: Int64?
     let fiat: Double?
     let date: String
 }

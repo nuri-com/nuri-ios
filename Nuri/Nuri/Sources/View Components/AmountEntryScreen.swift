@@ -43,7 +43,8 @@ public struct AmountEntryScreen: View {
         f.locale = Locale(identifier: "en_US_POSIX")
         f.numberStyle = .decimal
         f.minimumFractionDigits = 0
-        f.maximumFractionDigits = isPrimaryCrypto ? 8 : 2
+        // For ₿ (satoshis), no decimal places allowed. For other currencies, use appropriate decimals
+        f.maximumFractionDigits = (isPrimaryCrypto && primarySymbol == "₿") ? 0 : (isPrimaryCrypto ? 8 : 2)
         return f
     }
 
@@ -82,7 +83,7 @@ public struct AmountEntryScreen: View {
                         .setWidthAccordingTo(text: amountText)
                         .focused($isFieldFocused)
                         .font(.system(size: 40, weight: .semibold))
-                        .keyboardType(.decimalPad)
+                        .keyboardType((isPrimaryCrypto && primarySymbol == "₿") ? .numberPad : .decimalPad)
                         .tint(Color("PrimaryNuriLilac"))
                         .onChange(of: amountText, perform: sanitizeInput)
                     Button(action: toggleCurrency) {
@@ -97,7 +98,9 @@ public struct AmountEntryScreen: View {
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Color.secondary)
                 Spacer()
-                Text("1 BTC ≈ € " + String(format: "%0.2f", exchangeRate))
+                Text(primarySymbol == "₿" ? 
+                     "1 ₿ = 1 sat ≈ € " + String(format: "%0.8f", exchangeRate) :
+                     "1 BTC ≈ € " + String(format: "%0.2f", exchangeRate))
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(Color(hex: "#6D6D86"))
                 Button(action: {
@@ -134,23 +137,29 @@ public struct AmountEntryScreen: View {
 
     private func toggleCurrency() {
         let current = amountValue
-        let limit = isPrimaryCrypto ? 2 : 8
-        let f = NumberFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.minimumFractionDigits = 0
-        f.maximumFractionDigits = limit
-        f.numberStyle = .decimal
-
-    if isPrimaryCrypto { // Switching from Crypto to Fiat (e.g., BTC to EUR)
+        
+        if isPrimaryCrypto { // Switching from Crypto to Fiat (e.g., sats to EUR)
             let fiat = current * exchangeRate
             if fiat == 0 {
                 amountText = "0"
             } else {
                 amountText = String(format: "%0.2f", fiat)
             }
-        } else { // Switching from Fiat to Crypto (e.g., EUR to BTC)
-            let btc = current / exchangeRate
-            amountText = f.string(from: NSNumber(value: btc)) ?? ""
+        } else { // Switching from Fiat to Crypto (e.g., EUR to sats)
+            let crypto = current / exchangeRate
+            if primarySymbol == "₿" {
+                // For satoshis, show as integer
+                amountText = String(Int(crypto))
+            } else {
+                // For other crypto, use decimal format
+                let limit = 8
+                let f = NumberFormatter()
+                f.locale = Locale(identifier: "en_US_POSIX")
+                f.minimumFractionDigits = 0
+                f.maximumFractionDigits = limit
+                f.numberStyle = .decimal
+                amountText = f.string(from: NSNumber(value: crypto)) ?? ""
+            }
         }
         isPrimaryCrypto.toggle()
     }
@@ -160,20 +169,29 @@ public struct AmountEntryScreen: View {
     }
 
     private func sanitizeInput(_ newValue: String) {
-        var sanitized = newValue.replacingOccurrences(of: ",", with: ".")
-        sanitized = sanitized.filter { "0123456789.".contains($0) }
-        if let firstDot = sanitized.firstIndex(of: ".") {
-            let after = sanitized.index(after: firstDot)
-            sanitized = sanitized.prefix(upTo: after) + sanitized[after...].replacingOccurrences(of: ".", with: "")
-        }
-        if let dot = sanitized.firstIndex(of: ".") {
-            let fractionStart = sanitized.index(after: dot)
-            let fraction = sanitized[fractionStart...]
-            let limit = isPrimaryCrypto ? 8 : 2
-            if fraction.count > limit {
-                sanitized = String(sanitized[..<sanitized.index(dot, offsetBy: limit + 1)])
+        var sanitized: String
+        
+        // For ₿ (satoshis), only allow integers - no decimal points or commas
+        if isPrimaryCrypto && primarySymbol == "₿" {
+            sanitized = newValue.filter { "0123456789".contains($0) }
+        } else {
+            // For other currencies, allow decimal input
+            sanitized = newValue.replacingOccurrences(of: ",", with: ".")
+            sanitized = sanitized.filter { "0123456789.".contains($0) }
+            if let firstDot = sanitized.firstIndex(of: ".") {
+                let after = sanitized.index(after: firstDot)
+                sanitized = sanitized.prefix(upTo: after) + sanitized[after...].replacingOccurrences(of: ".", with: "")
+            }
+            if let dot = sanitized.firstIndex(of: ".") {
+                let fractionStart = sanitized.index(after: dot)
+                let fraction = sanitized[fractionStart...]
+                let limit = isPrimaryCrypto ? 8 : 2
+                if fraction.count > limit {
+                    sanitized = String(sanitized[..<sanitized.index(dot, offsetBy: limit + 1)])
+                }
             }
         }
+        
         if sanitized != newValue {
             amountText = sanitized
         }

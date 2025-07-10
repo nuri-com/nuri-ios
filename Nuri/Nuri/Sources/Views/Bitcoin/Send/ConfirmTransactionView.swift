@@ -45,7 +45,7 @@ struct ConfirmTransactionView: View {
                     HStack(spacing: 8) {
                         Text("₿")
                             .font(.system(size: 40, weight: .semibold))
-                        Text(String(format: "%0.8f", btcAmount).trimTrailingZeros())
+                        Text(String(UInt64(btcAmount * 100_000_000)))
                             .font(.system(size: 40, weight: .semibold))
                     }
                     Text(String(format: "~ %.2f EUR", eurAmount))
@@ -64,7 +64,7 @@ struct ConfirmTransactionView: View {
                                 .font(.custom("Inter", size: 16))
                                 .foregroundColor(Color("PrimaryNuriBlack"))
                             Spacer()
-                            Text(String(format: "%0.8f BTC", btcAmount))
+                            Text("₿\(String(UInt64(btcAmount * 100_000_000)))")
                                 .font(.custom("Inter", size: 16).weight(.medium))
                                 .foregroundColor(Color("PrimaryNuriBlack"))
                         }
@@ -84,7 +84,7 @@ struct ConfirmTransactionView: View {
                                 .foregroundColor(Color("PrimaryNuriBlack"))
                             Spacer()
                             if let txInfo = transactionInfo {
-                                Text(String(format: "%0.8f BTC", txInfo.feeBTC))
+                                Text("₿\(String(txInfo.feeSats))")
                                     .font(.custom("Inter", size: 16).weight(.medium))
                                     .foregroundColor(Color("PrimaryNuriBlack"))
                             } else {
@@ -175,7 +175,7 @@ struct ConfirmTransactionView: View {
     }
 
     private var formattedBtc: String {
-        String(format: "%0.8f", btcAmount).trimTrailingZeros()
+        "₿\(String(UInt64(btcAmount * 100_000_000)))"
     }
     
     // MARK: - Transaction Methods

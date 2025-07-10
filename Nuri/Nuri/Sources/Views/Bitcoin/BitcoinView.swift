@@ -226,11 +226,8 @@ private struct AmountAndCurrency: View {
 
     var body: some View {
         let btc = Double(sats) / 100_000_000
-        let btcString = String(format: "%.8f", btc)
         let eurString = String(format: "%.2f", btc * rate)
-        let parts = btcString.split(separator: ".")
-        let intPart = String(parts.first ?? "0")
-        let fracPart = parts.count > 1 ? String(parts[1]) : "0"
+        let satsString = String(sats)
 
         HStack(spacing: 8) {
             if isBalanceHidden {
@@ -239,11 +236,9 @@ private struct AmountAndCurrency: View {
             } else {
                 HStack(spacing: 10) {
                     if isPrimaryBTC {
-                        Text("₿")
                         HStack(spacing: 0) {
-                            Text("\(intPart).")
-                                .foregroundColor(Color.gray.opacity(0.55))
-                            Text(fracPart)
+                            Text("₿")
+                            Text(satsString)
                         }
                     } else {
                         HStack(spacing: 0) {
@@ -278,14 +273,14 @@ private struct SecondaryCurrencyAndAmount: View {
                 Text("********")
             } else {
                 let btc = Double(sats) / 100_000_000
-                let btcString = String(format: "%.8f", btc)
                 let eurString = String(format: "%.2f", btc * rate)
+                let satsString = String(sats)
                 HStack(spacing: 0) {
                     if isPrimaryBTC {
                         Text("€ ")
                         Text(eurString)
                     } else {
-                        Text("₿ \(btcString)")
+                        Text("₿ \(satsString)")
                     }
                 }
             }
