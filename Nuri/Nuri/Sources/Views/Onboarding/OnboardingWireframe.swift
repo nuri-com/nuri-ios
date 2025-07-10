@@ -61,8 +61,8 @@ final class OnboardingWireframe: OnboardingWireframeType {
         }
     }
 
-    private func passkeyLoginViewController() -> UIViewController {
-        // PasskeyViewController removed - will be replaced with new integration
+    private func authLoginViewController() -> UIViewController {
+        // AuthViewController removed - will be replaced with new integration
         return UIViewController()
     }
 

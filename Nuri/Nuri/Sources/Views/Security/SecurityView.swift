@@ -2,10 +2,10 @@ import SwiftUI
 import AuthenticationServices
 
 struct SecurityView: View {
-    @State private var passkeyEnabled: Bool = true
+    @State private var authEnabled: Bool = true
     @State private var iCloudBackupEnabled: Bool = true
-    @State private var showPasskeyOptions: Bool = false
-    @State private var isLinkingPasskey: Bool = false
+    @State private var showAuthOptions: Bool = false
+    @State private var isLinkingAuth: Bool = false
     @State private var linkingError: String?
     @State private var showAlert: Bool = false
     @State private var showSuccess: Bool = false
@@ -26,9 +26,9 @@ struct SecurityView: View {
             VStack(spacing: 16) {
             
                 NuriMenuRow(
-                    icon: "passkey-new",
-                    title: "Passkeys",
-                    subtitle: passkeyEnabled ? "Enabled" : "Disabled"
+                    icon: "lock",
+                    title: "Authentication",
+                    subtitle: authEnabled ? "Enabled" : "Disabled"
                 ) {
                     Image(systemName: "chevron.right")
                 }
@@ -51,7 +51,7 @@ struct SecurityView: View {
                         .tint(Color("PrimaryNuriLilac"))
                 }
                 
-                // Passkey functionality removed - will be replaced with new integration
+                // Authentication functionality removed - will be replaced with new integration
                 
 
                 
@@ -64,26 +64,26 @@ struct SecurityView: View {
         } message: {
             Text(linkingError ?? "An error occurred")
         }
-        .confirmationDialog("Choose Passkey Type", isPresented: $showPasskeyOptions, titleVisibility: .visible) {
-            Button("Platform Passkey (Face ID/Touch ID)") {
-                // linkPlatformPasskey() removed - will be replaced with new integration
-                print("Platform passkey linking disabled")
+        .confirmationDialog("Choose Authentication Type", isPresented: $showAuthOptions, titleVisibility: .visible) {
+            Button("Platform Authentication (Face ID/Touch ID)") {
+                // Platform authentication removed - will be replaced with new integration
+                print("Platform authentication linking disabled")
             }
             
             Button("Hardware Security Key (YubiKey/FIDO2)") {
-                // linkHardwarePasskey() removed - will be replaced with new integration
-                print("Hardware passkey linking disabled")
+                // Hardware authentication removed - will be replaced with new integration
+                print("Hardware authentication linking disabled")
             }
             
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Select the type of passkey you want to add to your account.")
+            Text("Select the type of authentication you want to add to your account.")
         }
         .sheet(isPresented: $showSuccess) {
             SuccessView(
-                illustration: "passkey-new",
+                illustration: "lock",
                 title: "Success!",
-                subtitle: "Your new passkey has been added",
+                subtitle: "Your new authentication has been added",
                 onDone: {
                     showSuccess = false
                 }
@@ -92,8 +92,8 @@ struct SecurityView: View {
         // Wallet info sheet removed - will be replaced with new integration
     }
     
-    // MARK: - Passkey Functions removed
-    // Passkey functionality will be replaced with new integration
+    // MARK: - Authentication Functions removed
+    // Authentication functionality will be replaced with new integration
     
 }
 

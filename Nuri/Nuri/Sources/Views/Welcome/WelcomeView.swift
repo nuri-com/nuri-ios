@@ -56,7 +56,7 @@ struct WelcomeView: View {
     }
     
     private func skipForNow() {
-        print("⏩ [WelcomeView] User skipped passkey setup")
+        print("⏩ [WelcomeView] User skipped authentication setup")
         dismiss()
     }
     

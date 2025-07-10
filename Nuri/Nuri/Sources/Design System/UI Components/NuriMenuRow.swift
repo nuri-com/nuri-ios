@@ -70,7 +70,7 @@ public extension NuriMenuRow where Trailing == EmptyView {
 #if DEBUG
 #Preview {
     VStack(spacing: 0) {
-        NuriMenuRow(icon: "passkey-new", title: "Passkey", subtitle: "Account is secured with Apple iCloud Passkey") {
+        NuriMenuRow(icon: "lock", title: "Security", subtitle: "Account is secured with authentication") {
             Image(systemName: "chevron.right")
         }
         NuriMenuRow(icon: "icloud-download", title: "iCloud Backup", subtitle: "We automatically saved a recovery key to iCloud") {
