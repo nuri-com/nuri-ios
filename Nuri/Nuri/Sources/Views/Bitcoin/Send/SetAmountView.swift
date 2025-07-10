@@ -8,6 +8,7 @@ struct SetAmountView: View {
 
     @State private var navigateToConfirm = false
     @State private var satsToEurRate: Double = 0
+    @State private var btcToEurRate: Double = 0
 
     // Amounts to forward to confirmation screen  
     @State private var btcAmount: Double = 0 // Still in BTC for compatibility with ConfirmTransactionView
@@ -20,42 +21,48 @@ struct SetAmountView: View {
                 primarySymbol: "₿",
                 secondarySymbol: "€",
                 initialPrimaryIsCrypto: true,
-                exchangeRate: satsToEurRate,
+                exchangeRate: $satsToEurRate,
                 actionIcon: "bitcoin-circle",
                 actionTitle: "Confirm Amount",
                 onSubmit: { amount, isCrypto in
-                    Task {
-                        // Fetch latest BTC price to ensure consistency with entry screen
-                        let btcToEurRate = await fetchPrice()
-                        let safeBtcToEurRate = btcToEurRate > 0 ? btcToEurRate : 1
-                        
-                        let btc: Double
-                        let eur: Double
-                        if isCrypto {
-                            // amount is in satoshis, convert to BTC for backend compatibility
-                            btc = amount / 100_000_000
-                            eur = btc * safeBtcToEurRate
-                        } else {
-                            eur = amount
-                            btc = amount / safeBtcToEurRate
-                        }
-                        await MainActor.run {
-                            btcAmount = btc
-                            eurAmount = eur
-                            navigateToConfirm = true
-                        }
+                    print("💰 [SetAmountView] onSubmit called with amount: \(amount), isCrypto: \(isCrypto)")
+                    
+                    let btc: Double
+                    let eur: Double
+                    if isCrypto {
+                        // amount is in satoshis - use the current rates we have
+                        let satsAmount = amount
+                        btc = satsAmount / 100_000_000
+                        eur = satsAmount * satsToEurRate
+                        print("💰 [SetAmountView] Sats: \(satsAmount), BTC: \(btc), EUR: \(eur)")
+                    } else {
+                        // amount is in EUR
+                        eur = amount
+                        let satsAmount = amount / satsToEurRate
+                        btc = satsAmount / 100_000_000
+                        print("💰 [SetAmountView] EUR: \(eur), Sats: \(satsAmount), BTC: \(btc)")
                     }
+                    
+                    btcAmount = btc
+                    eurAmount = eur
+                    navigateToConfirm = true
                 },
                 onClose: {
                     navigation.isSendViewPresented = false
                 }
             )
             .task {
-                // Calculate sats to EUR rate
-                let btcToEurRate = await fetchPrice()
-                let satsToEur = btcToEurRate / 100_000_000
+                // Fetch BTC price and calculate sats rate
+                print("🔄 [SetAmountView] Fetching exchange rates...")
+                let fetchedBtcToEurRate = await fetchPrice()
+                let calculatedSatsToEurRate = fetchedBtcToEurRate / 100_000_000
+                
+                print("📊 [SetAmountView] BTC to EUR rate: \(fetchedBtcToEurRate)")
+                print("📊 [SetAmountView] Sats to EUR rate: \(calculatedSatsToEurRate)")
+                
                 await MainActor.run {
-                    satsToEurRate = satsToEur
+                    btcToEurRate = fetchedBtcToEurRate
+                    satsToEurRate = calculatedSatsToEurRate
                 }
             }
 

@@ -26,7 +26,7 @@ public struct AmountEntryScreen: View {
     public let primarySymbol: String
     public let secondarySymbol: String
     public let initialPrimaryIsCrypto: Bool
-    @State public var exchangeRate: Double // allows live updates
+    @Binding public var exchangeRate: Double // reactive to parent changes
 
     public let actionIcon: String
     public let actionTitle: String
@@ -52,7 +52,7 @@ public struct AmountEntryScreen: View {
                 primarySymbol: String,
                 secondarySymbol: String,
                 initialPrimaryIsCrypto: Bool,
-                exchangeRate: Double,
+                exchangeRate: Binding<Double>,
                 actionIcon: String,
                 actionTitle: String,
                 onSubmit: @escaping (_ amount: Double, _ isCrypto: Bool) -> Void,
@@ -61,7 +61,7 @@ public struct AmountEntryScreen: View {
         self.primarySymbol = primarySymbol
         self.secondarySymbol = secondarySymbol
         self.initialPrimaryIsCrypto = initialPrimaryIsCrypto
-        self._exchangeRate = State(initialValue: exchangeRate)
+        self._exchangeRate = exchangeRate
         self.actionIcon = actionIcon
         self.actionTitle = actionTitle
         self.onSubmit = onSubmit
@@ -114,12 +114,16 @@ public struct AmountEntryScreen: View {
         .background(NuriAsset.background.swiftUIColor)
         .onAppear {
             isFieldFocused = true
+            print("🎬 [AmountEntryScreen] onAppear: exchangeRate = \(exchangeRate)")
             // Don't auto-fetch price for ₿ since it should be provided as sats-to-EUR rate
             if exchangeRate == 0 && primarySymbol != "₿" {
                 Task {
                     await fetchPrice()
                 }
             }
+        }
+        .onChange(of: exchangeRate) { newRate in
+            print("📈 [AmountEntryScreen] Exchange rate updated: \(newRate)")
         }
     }
 
@@ -129,6 +133,7 @@ public struct AmountEntryScreen: View {
         if isPrimaryCrypto {
             let eur = amountValue * exchangeRate
             let twoDec = String(format: "%0.2f", eur)
+            print("🔄 [AmountEntryScreen] Secondary display: \(amountValue) sats * \(exchangeRate) rate = €\(twoDec)")
             return "~ " + secondarySymbol + " " + twoDec
         } else {
             let sats = amountValue / exchangeRate
@@ -227,15 +232,23 @@ public struct AmountEntryScreen: View {
 }
 
 #Preview {
-    AmountEntryScreen(
-        title: "Buy Bitcoin",
-        primarySymbol: "₿",
-        secondarySymbol: "€",
-        initialPrimaryIsCrypto: true,
-        exchangeRate: 91929,
-        actionIcon: "bitcoin-circle",
-        actionTitle: "Buy with Apple Pay",
-        onSubmit: { _, _ in },
-        onClose: {}
-    )
+    struct PreviewWrapper: View {
+        @State private var exchangeRate: Double = 0.00091929 // sats to EUR rate
+        
+        var body: some View {
+            AmountEntryScreen(
+                title: "Buy Bitcoin",
+                primarySymbol: "₿",
+                secondarySymbol: "€",
+                initialPrimaryIsCrypto: true,
+                exchangeRate: $exchangeRate,
+                actionIcon: "bitcoin-circle",
+                actionTitle: "Buy with Apple Pay",
+                onSubmit: { _, _ in },
+                onClose: {}
+            )
+        }
+    }
+    
+    return PreviewWrapper()
 } 
