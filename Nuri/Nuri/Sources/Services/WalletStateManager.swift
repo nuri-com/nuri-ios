@@ -10,6 +10,7 @@ final class WalletStateManager: ObservableObject {
     // MARK: - Published State
     @Published var balance: WalletBalance = WalletBalance()
     @Published var transactions: [CachedTransaction] = []
+    @Published var feeRates: FeeRates = FeeRates()
     @Published var isLoading: Bool = false
     @Published var isSyncing: Bool = false
     @Published var lastSyncTime: Date?
@@ -33,12 +34,15 @@ final class WalletStateManager: ObservableObject {
         static let pendingTransactionsList = "nuri.wallet.pendingTransactions"
         static let transactionsList = "nuri.wallet.transactions.list"
         static let transactionsLastUpdated = "nuri.wallet.transactions.lastUpdated"
+        static let feeRates = "nuri.wallet.feeRates"
+        static let feeRatesLastUpdated = "nuri.wallet.feeRates.lastUpdated"
     }
     
     private init() {
         print("🧠 [WalletStateManager] Initializing wallet state manager")
         loadPersistedBalance()
         loadPersistedTransactions()
+        loadPersistedFeeRates()
         loadPersistedPendingTransactions()
         setupBackgroundSync()
     }
@@ -52,6 +56,32 @@ final class WalletStateManager: ObservableObject {
         
         var isStale: Bool {
             Date().timeIntervalSince(lastUpdated) > 300 // 5 minutes
+        }
+    }
+    
+    struct FeeRates: Codable {
+        var fastestFee: UInt64 = 5        // sat/vB
+        var halfHourFee: UInt64 = 3       // sat/vB  
+        var hourFee: UInt64 = 2           // sat/vB
+        var economyFee: UInt64 = 1        // sat/vB
+        var minimumFee: UInt64 = 1        // sat/vB
+        var lastUpdated: Date = Date()
+        
+        var isStale: Bool {
+            Date().timeIntervalSince(lastUpdated) > 300 // 5 minutes
+        }
+        
+        // Default fee rate for transactions
+        var defaultFee: UInt64 {
+            halfHourFee > 0 ? halfHourFee : 1
+        }
+        
+        // Estimated fee for a transaction (rough calculation)
+        func estimatedFee(amountSats: UInt64, feeRate: UInt64? = nil) -> UInt64 {
+            let rate = feeRate ?? defaultFee
+            // Rough estimate: 1 input (148 bytes) + 2 outputs (34 bytes each) + overhead (10 bytes) = ~226 bytes
+            let estimatedSize: UInt64 = 226
+            return estimatedSize * rate
         }
     }
     
@@ -128,6 +158,23 @@ final class WalletStateManager: ObservableObject {
     
     // MARK: - Public API
     
+    /// Get cached fee rates with smart refresh
+    func getFeeRates(forceRefresh: Bool = false) async -> FeeRates {
+        print("⚡ [WalletStateManager] getFeeRates called (forceRefresh: \(forceRefresh))")
+        print("⚡ [WalletStateManager] Current cached fee rates: fastest=\(feeRates.fastestFee), half-hour=\(feeRates.halfHourFee)")
+        
+        // Check if we need to refresh fee rates
+        if !forceRefresh && !feeRates.isStale {
+            print("⚡ [WalletStateManager] Returning cached fee rates (fresh)")
+            return feeRates
+        }
+        
+        // Fetch fresh fee rates
+        print("⚡ [WalletStateManager] Cache stale or refresh forced, syncing fee rates...")
+        await syncFeeRates()
+        return feeRates
+    }
+
     /// Get cached transactions with smart refresh
     func getTransactions(forceRefresh: Bool = false) async -> [CachedTransaction] {
         print("📋 [WalletStateManager] getTransactions called (forceRefresh: \(forceRefresh))")
@@ -172,6 +219,7 @@ final class WalletStateManager: ObservableObject {
         
         await syncBalance()
         await syncTransactions()
+        await syncFeeRates()
         
         isLoading = false
         lastSyncTime = Date()
@@ -372,6 +420,62 @@ final class WalletStateManager: ObservableObject {
         print("📋 [WalletStateManager] ✅ Transactions updated and persisted")
     }
     
+    private func syncFeeRates() async {
+        print("⚡ [WalletStateManager] Starting fee rates sync...")
+        print("⚡ [WalletStateManager] Current rates: \(feeRates.fastestFee)/\(feeRates.halfHourFee)/\(feeRates.hourFee)")
+        
+        DispatchQueue.main.async {
+            self.isSyncing = true
+        }
+        
+        do {
+            let url = URL(string: "https://mempool.space/api/v1/fees/recommended")!
+            let (data, _) = try await URLSession.shared.data(from: url)
+            
+            if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                print("📡 [WalletStateManager] Received fee rates from mempool.space:")
+                print("📡 [WalletStateManager]   Raw response: \(json)")
+                
+                var newFeeRates = FeeRates()
+                newFeeRates.fastestFee = json["fastestFee"] as? UInt64 ?? 5
+                newFeeRates.halfHourFee = json["halfHourFee"] as? UInt64 ?? 3
+                newFeeRates.hourFee = json["hourFee"] as? UInt64 ?? 2
+                newFeeRates.economyFee = json["economyFee"] as? UInt64 ?? 1
+                newFeeRates.minimumFee = json["minimumFee"] as? UInt64 ?? 1
+                newFeeRates.lastUpdated = Date()
+                
+                print("⚡ [WalletStateManager] ✅ Fee rates parsed:")
+                print("⚡ [WalletStateManager]   Fastest: \(newFeeRates.fastestFee) sat/vB")
+                print("⚡ [WalletStateManager]   Half-hour: \(newFeeRates.halfHourFee) sat/vB")
+                print("⚡ [WalletStateManager]   Hour: \(newFeeRates.hourFee) sat/vB")
+                print("⚡ [WalletStateManager]   Economy: \(newFeeRates.economyFee) sat/vB")
+                print("⚡ [WalletStateManager]   Default: \(newFeeRates.defaultFee) sat/vB")
+                
+                DispatchQueue.main.async {
+                    self.feeRates = newFeeRates
+                    self.isSyncing = false
+                }
+                
+                // Persist the new fee rates
+                persistFeeRates(newFeeRates)
+                
+                print("⚡ [WalletStateManager] ✅ Fee rates updated and persisted")
+            } else {
+                print("❌ [WalletStateManager] Failed to parse fee rates JSON")
+                DispatchQueue.main.async {
+                    self.syncError = "Failed to parse fee rates"
+                    self.isSyncing = false
+                }
+            }
+        } catch {
+            print("❌ [WalletStateManager] Failed to fetch fee rates: \(error)")
+            DispatchQueue.main.async {
+                self.syncError = "Failed to fetch fee rates: \(error.localizedDescription)"
+                self.isSyncing = false
+            }
+        }
+    }
+    
     private func isDataStale() -> Bool {
         guard let lastSync = lastSyncTime else { return true }
         return Date().timeIntervalSince(lastSync) > maxCacheAge
@@ -552,6 +656,47 @@ final class WalletStateManager: ObservableObject {
         // For now, we don't have historical rates stored
         // In the future, we could cache rates by date or use a historical API
         return nil
+    }
+    
+    // MARK: - Fee Rates Persistence Methods
+    
+    private func persistFeeRates(_ feeRates: FeeRates) {
+        print("💾 [WalletStateManager] Persisting fee rates to UserDefaults...")
+        
+        do {
+            let encoder = JSONEncoder()
+            let data = try encoder.encode(feeRates)
+            UserDefaults.standard.set(data, forKey: CacheKeys.feeRates)
+            UserDefaults.standard.set(Date(), forKey: CacheKeys.feeRatesLastUpdated)
+            print("💾 [WalletStateManager] ✅ Fee rates persisted successfully")
+        } catch {
+            print("❌ [WalletStateManager] Failed to persist fee rates: \(error)")
+        }
+    }
+    
+    private func loadPersistedFeeRates() {
+        print("📱 [WalletStateManager] Loading persisted fee rates from UserDefaults...")
+        
+        guard let data = UserDefaults.standard.data(forKey: CacheKeys.feeRates) else {
+            print("📱 [WalletStateManager] No persisted fee rates found, using defaults")
+            return
+        }
+        
+        do {
+            let decoder = JSONDecoder()
+            let persistedFeeRates = try decoder.decode(FeeRates.self, from: data)
+            
+            feeRates = persistedFeeRates
+            
+            let cacheAge = Date().timeIntervalSince(persistedFeeRates.lastUpdated)
+            print("📱 [WalletStateManager] ✅ Loaded persisted fee rates:")
+            print("📱 [WalletStateManager]   Fastest: \(persistedFeeRates.fastestFee) sat/vB")
+            print("📱 [WalletStateManager]   Half-hour: \(persistedFeeRates.halfHourFee) sat/vB")
+            print("📱 [WalletStateManager]   Cache age: \(cacheAge)s")
+            print("📱 [WalletStateManager]   Is stale: \(persistedFeeRates.isStale)")
+        } catch {
+            print("❌ [WalletStateManager] Failed to load persisted fee rates: \(error)")
+        }
     }
 }
 

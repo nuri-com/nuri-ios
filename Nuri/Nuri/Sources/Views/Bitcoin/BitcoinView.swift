@@ -17,6 +17,11 @@ struct BitcoinView: View {
     @State private var showWalletRecoveryAlert = false
     @State private var exchangeRate: Double = 0.0
     
+    // Cache key for exchange rate
+    private let exchangeRateCacheKey = "nuri.exchangeRate.eur"
+    private let exchangeRateTimestampKey = "nuri.exchangeRate.eur.timestamp"
+    private let cacheValidityDuration: TimeInterval = 300 // 5 minutes
+    
     enum WalletStatus {
         case checking
         case loaded
@@ -79,7 +84,8 @@ struct BitcoinView: View {
         }
         .background(NuriAsset.background.swiftUIColor)
         .onAppear {
-            // Don't automatically check wallet status
+            // Load cached exchange rate immediately
+            loadCachedExchangeRate()
         }
         .task {
             await refreshData()
@@ -189,14 +195,49 @@ struct BitcoinView: View {
         }
     }
 
+    // MARK: - Exchange Rate Caching
+    private func loadCachedExchangeRate() {
+        print("💱 [BitcoinView] Loading cached exchange rate...")
+        
+        // Check if we have a cached rate and if it's still valid
+        let cachedRate = UserDefaults.standard.double(forKey: exchangeRateCacheKey)
+        let cachedTimestamp = UserDefaults.standard.object(forKey: exchangeRateTimestampKey) as? Date ?? Date.distantPast
+        
+        let isValid = Date().timeIntervalSince(cachedTimestamp) < cacheValidityDuration
+        
+        if cachedRate > 0 && isValid {
+            exchangeRate = cachedRate
+            print("💱 [BitcoinView] Using cached exchange rate: €\(cachedRate) (age: \(Date().timeIntervalSince(cachedTimestamp))s)")
+        } else {
+            print("💱 [BitcoinView] No valid cached exchange rate found")
+        }
+    }
+    
+    private func cacheExchangeRate(_ rate: Double) {
+        UserDefaults.standard.set(rate, forKey: exchangeRateCacheKey)
+        UserDefaults.standard.set(Date(), forKey: exchangeRateTimestampKey)
+        print("💱 [BitcoinView] Cached exchange rate: €\(rate)")
+    }
+
     // MARK: - Balance
     private func refreshData() async {
         // Use cached balance first, then refresh in background
         let _ = await walletState.getBalance(forceRefresh: false)
         
-        // Fetch exchange rate
-        if let price = await fetchPrice() {
-            await MainActor.run { exchangeRate = price }
+        // Fetch exchange rate only if not cached or stale
+        let cachedTimestamp = UserDefaults.standard.object(forKey: exchangeRateTimestampKey) as? Date ?? Date.distantPast
+        let needsRefresh = Date().timeIntervalSince(cachedTimestamp) >= cacheValidityDuration
+        
+        if needsRefresh {
+            print("💱 [BitcoinView] Exchange rate cache stale, fetching fresh rate...")
+            if let price = await fetchPrice() {
+                await MainActor.run { 
+                    exchangeRate = price
+                    cacheExchangeRate(price)
+                }
+            }
+        } else {
+            print("💱 [BitcoinView] Exchange rate cache is fresh, skipping fetch")
         }
         
         // Refresh wallet data in background if needed
@@ -275,7 +316,7 @@ private struct SecondaryCurrencyAndAmount: View {
                 Text("********")
             } else {
                 let btc = Double(sats) / 100_000_000
-                let eurString = String(format: "%.2f", btc * rate)
+                let eurString = rate > 0 ? String(format: "%.2f", btc * rate) : "Loading..."
                 let satsString = String(sats)
                 HStack(spacing: 0) {
                     if isPrimaryBTC {

@@ -18,6 +18,9 @@ struct ConfirmTransactionView: View {
         print("   💶 eurAmount: \(eurAmount)")
         print("   📍 recipientAddress: \(recipientAddress)")
         print("   💰 Calculated sats: \(UInt64(btcAmount * 100_000_000))")
+        print("   🔍 btcAmount == 0? \(btcAmount == 0)")
+        print("   🔍 btcAmount type: \(type(of: btcAmount))")
+        print("   🔍 Raw btcAmount bytes: \(String(format: "%.20f", btcAmount))")
         print("🏗️ [ConfirmTransactionView] ========== INIT END ==========")
         
         self.btcAmount = btcAmount
@@ -37,6 +40,12 @@ struct ConfirmTransactionView: View {
     // Services
     private let transactionManager = TransactionManager.shared
     @StateObject private var walletState = WalletStateManager.shared
+    
+    // Computed properties
+    private var isInsufficientFunds: Bool {
+        guard let txInfo = transactionInfo else { return false }
+        return txInfo.totalSats > walletState.availableBalance
+    }
 
     var body: some View {
         Screen {
@@ -136,6 +145,46 @@ struct ConfirmTransactionView: View {
 
                     Spacer()
 
+                    // Total Amount Display (above button)
+                    if let txInfo = transactionInfo {
+                        VStack(spacing: 4) {
+                            HStack {
+                                Text("Total Amount:")
+                                    .font(.custom("Inter", size: 16).weight(.medium))
+                                    .foregroundColor(Color("PrimaryNuriBlack"))
+                                Spacer()
+                                Text("₿ \(txInfo.totalSats)")
+                                    .font(.custom("Inter", size: 18).weight(.semibold))
+                                    .foregroundColor(Color("PrimaryNuriBlack"))
+                            }
+                            HStack {
+                                Text("(Amount + Network Fee)")
+                                    .font(.custom("Inter", size: 14))
+                                    .foregroundColor(Color(hex: "#6D6D86"))
+                                Spacer()
+                            }
+                            
+                            // Insufficient funds warning
+                            if txInfo.totalSats > walletState.availableBalance {
+                                HStack {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .foregroundColor(.orange)
+                                        .font(.system(size: 14))
+                                    Text("Insufficient funds")
+                                        .font(.custom("Inter", size: 14).weight(.medium))
+                                        .foregroundColor(.orange)
+                                    Spacer()
+                                }
+                                .padding(.top, 4)
+                            }
+                        }
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+                        .background(Color(hex: "#F8F9FA"))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .padding(.bottom, 16)
+                    }
+
                     Button(action: sendTransaction) {
                         if isSending {
                             HStack {
@@ -149,16 +198,46 @@ struct ConfirmTransactionView: View {
                             .foregroundColor(.white)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                         } else {
-                            NuriButton(icon: "bitcoin-circle", title: "Send Bitcoin", style: .primary)
+                            NuriButton(
+                                icon: "bitcoin-circle", 
+                                title: isInsufficientFunds ? "Insufficient Funds" : "Send Bitcoin", 
+                                style: isInsufficientFunds ? .secondary : .primary
+                            )
                         }
                     }
-                    .disabled(isSending || transactionInfo == nil)
+                    .disabled(isSending || transactionInfo == nil || isInsufficientFunds)
                 }
                 .padding(32)
             }
         }
         .task {
             print("🔄 [ConfirmTransactionView] Task started - about to load transaction info")
+            print("🔄 [ConfirmTransactionView] Current btcAmount in task: \(btcAmount)")
+            
+            // Wait for valid navigation data - retry for up to 2 seconds
+            var attempts = 0
+            let maxAttempts = 20 // 20 attempts * 100ms = 2 seconds max
+            
+            while (btcAmount <= 0 || recipientAddress.isEmpty) && attempts < maxAttempts {
+                print("🔄 [ConfirmTransactionView] Waiting for valid data... attempt \(attempts + 1)")
+                print("🔄 [ConfirmTransactionView]   btcAmount: \(btcAmount), recipientAddress: '\(recipientAddress)'")
+                
+                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                attempts += 1
+            }
+            
+            // Final validation
+            guard btcAmount > 0, !recipientAddress.isEmpty else {
+                print("❌ [ConfirmTransactionView] Invalid data after waiting - btcAmount: \(btcAmount), recipientAddress: '\(recipientAddress)'")
+                await MainActor.run {
+                    self.errorMessage = "Invalid transaction data. Please try again."
+                    self.showError = true
+                    self.isLoadingFee = false
+                }
+                return
+            }
+            
+            print("✅ [ConfirmTransactionView] Valid data received - proceeding with transaction info loading")
             await loadBalanceAndTransactionInfo()
         }
         .alert("Transaction Error", isPresented: $showError) {
@@ -209,31 +288,72 @@ struct ConfirmTransactionView: View {
     // MARK: - Transaction Methods
     
     private func loadBalanceAndTransactionInfo() async {
-        // Get cached balance (instant)
+        // Get cached balance and fee rates (instant)
         let _ = await walletState.getBalance(forceRefresh: false)
+        let _ = await walletState.getFeeRates(forceRefresh: false)
         
-        // Then load transaction info
+        // Then create transaction info using cached fee rates
         await loadTransactionInfo()
     }
     
     private func loadTransactionInfo() async {
+        print("🔧 [ConfirmTransactionView] ========== LOAD TRANSACTION INFO START ==========")
+        print("🔧 [ConfirmTransactionView] Current btcAmount: \(btcAmount)")
+        print("🔧 [ConfirmTransactionView] Current eurAmount: \(eurAmount)")
+        print("🔧 [ConfirmTransactionView] Current recipientAddress: \(recipientAddress)")
+        
         do {
             let amountSats = UInt64(btcAmount * 100_000_000)
+            print("🔧 [ConfirmTransactionView] Calculated amountSats: \(amountSats)")
+            print("🔧 [ConfirmTransactionView] Calculation: \(btcAmount) * 100_000_000 = \(btcAmount * 100_000_000)")
+            print("🔧 [ConfirmTransactionView] UInt64 conversion: UInt64(\(btcAmount * 100_000_000)) = \(amountSats)")
             
-            let txInfo = try await transactionManager.buildTransactionInfo(
+            if amountSats == 0 {
+                print("❌ [ConfirmTransactionView] 🚨 CRITICAL: amountSats is 0!")
+                print("❌ [ConfirmTransactionView] btcAmount: \(btcAmount)")
+                print("❌ [ConfirmTransactionView] btcAmount * 100_000_000: \(btcAmount * 100_000_000)")
+                print("❌ [ConfirmTransactionView] This will cause the 'invalid amount: 0 sats' error!")
+            }
+            
+            // Use cached fee rate instead of recalculating
+            let feeRate = walletState.feeRates.defaultFee
+            print("⚡ [ConfirmTransactionView] Using cached fee rate: \(feeRate) sat/vB")
+            print("⚡ [ConfirmTransactionView] Fee rates object: \(walletState.feeRates)")
+            
+            let estimatedFee = walletState.feeRates.estimatedFee(amountSats: amountSats, feeRate: feeRate)
+            let totalSats = amountSats + estimatedFee
+            
+            print("💰 [ConfirmTransactionView] Fee calculation:")
+            print("   💰 amountSats: \(amountSats)")
+            print("   ⚡ estimatedFee: \(estimatedFee)")
+            print("   📊 totalSats: \(totalSats)")
+            
+            // Create transaction info directly instead of calculating via TransactionManager
+            let txInfo = TransactionManager.TransactionInfo(
                 recipientAddress: recipientAddress,
-                amountSats: amountSats
+                amountSats: amountSats,
+                feeSats: estimatedFee,
+                totalSats: totalSats,
+                feeRate: feeRate
             )
             
-            print("✅ [ConfirmTransactionView] Transaction info loaded successfully:")
-            print("   💰 Amount: \(txInfo.amountSats) sats")
-            print("   💸 Fee: \(txInfo.feeSats) sats")
-            print("   📊 Total: \(txInfo.totalSats) sats")
+            print("✅ [ConfirmTransactionView] Transaction info created using cached fee rates:")
+            print("   📍 recipientAddress: \(txInfo.recipientAddress)")
+            print("   💰 amountSats: \(txInfo.amountSats)")
+            print("   ⚡ feeSats: \(txInfo.feeSats)")
+            print("   📊 totalSats: \(txInfo.totalSats)")
+            print("   ⚡ feeRate: \(txInfo.feeRate)")
             
+            print("🔧 [ConfirmTransactionView] About to set transactionInfo on MainActor...")
             await MainActor.run {
+                print("🔧 [ConfirmTransactionView] Setting transactionInfo and isLoadingFee on MainActor")
                 self.transactionInfo = txInfo
                 self.isLoadingFee = false
+                print("🔧 [ConfirmTransactionView] transactionInfo set: \(String(describing: self.transactionInfo))")
+                print("🔧 [ConfirmTransactionView] isLoadingFee set to: \(self.isLoadingFee)")
             }
+            print("🔧 [ConfirmTransactionView] ========== LOAD TRANSACTION INFO SUCCESS ==========")
+            
         } catch {
             print("❌ [ConfirmTransactionView] Transaction info loading failed: \(error.localizedDescription)")
             if let txError = error as? TransactionManager.TransactionError {
@@ -249,17 +369,50 @@ struct ConfirmTransactionView: View {
     }
     
     private func sendTransaction() {
-        guard let txInfo = transactionInfo else { return }
+        print("🚀 [ConfirmTransactionView] ========== SEND TRANSACTION START ==========")
+        print("🚀 [ConfirmTransactionView] sendTransaction() called")
+        print("🚀 [ConfirmTransactionView] transactionInfo: \(String(describing: transactionInfo))")
         
+        guard let txInfo = transactionInfo else { 
+            print("❌ [ConfirmTransactionView] 🚨 CRITICAL: transactionInfo is nil!")
+            print("❌ [ConfirmTransactionView] Cannot proceed with transaction")
+            return 
+        }
+        
+        print("✅ [ConfirmTransactionView] transactionInfo found:")
+        print("   📍 recipientAddress: \(txInfo.recipientAddress)")
+        print("   💰 amountSats: \(txInfo.amountSats)")
+        print("   ⚡ feeSats: \(txInfo.feeSats)")
+        print("   📊 totalSats: \(txInfo.totalSats)")
+        print("   ⚡ feeRate: \(txInfo.feeRate)")
+        
+        if txInfo.amountSats == 0 {
+            print("❌ [ConfirmTransactionView] 🚨 CRITICAL: txInfo.amountSats is 0!")
+            print("❌ [ConfirmTransactionView] This will definitely cause 'invalid amount: 0 sats' error")
+            print("❌ [ConfirmTransactionView] Original btcAmount: \(btcAmount)")
+            print("❌ [ConfirmTransactionView] Original eurAmount: \(eurAmount)")
+        }
+        
+        print("🚀 [ConfirmTransactionView] Setting isSending = true")
         isSending = true
         
+        print("🚀 [ConfirmTransactionView] Starting async Task for transaction...")
         Task {
             do {
+                print("🚀 [ConfirmTransactionView] About to call TransactionManager.sendTransaction with:")
+                print("   📍 recipientAddress: \(recipientAddress)")
+                print("   💰 amountSats: \(txInfo.amountSats)")
+                print("   ⚡ feeRate: \(txInfo.feeRate)")
+                print("🚀 [ConfirmTransactionView] Calling transactionManager.sendTransaction()...")
+                
                 let txId = try await transactionManager.sendTransaction(
                     recipientAddress: recipientAddress,
                     amountSats: txInfo.amountSats,
                     feeRate: txInfo.feeRate
                 )
+                
+                print("✅ [ConfirmTransactionView] TransactionManager.sendTransaction() completed successfully!")
+                print("   🆔 Transaction ID: \(txId)")
                 
                 // Immediately update wallet state with pending transaction
                 print("✅ [ConfirmTransactionView] Transaction sent successfully, updating state...")

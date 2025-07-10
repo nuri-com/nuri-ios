@@ -28,6 +28,7 @@ public struct AmountEntryScreen: View {
     public let initialPrimaryIsCrypto: Bool
     @Binding public var exchangeRate: Double // reactive to parent changes
     public let availableBalance: UInt64? // Optional balance display
+    let walletState: WalletStateManager? // For fee estimation
 
     public let actionIcon: String
     public let actionTitle: String
@@ -49,12 +50,13 @@ public struct AmountEntryScreen: View {
         return f
     }
 
-    public init(title: String,
+    init(title: String,
                 primarySymbol: String,
                 secondarySymbol: String,
                 initialPrimaryIsCrypto: Bool,
                 exchangeRate: Binding<Double>,
                 availableBalance: UInt64? = nil,
+                walletState: WalletStateManager? = nil,
                 actionIcon: String,
                 actionTitle: String,
                 onSubmit: @escaping (_ amount: Double, _ isCrypto: Bool) -> Void,
@@ -65,6 +67,7 @@ public struct AmountEntryScreen: View {
         self.initialPrimaryIsCrypto = initialPrimaryIsCrypto
         self._exchangeRate = exchangeRate
         self.availableBalance = availableBalance
+        self.walletState = walletState
         self.actionIcon = actionIcon
         self.actionTitle = actionTitle
         self.onSubmit = onSubmit
@@ -119,11 +122,52 @@ public struct AmountEntryScreen: View {
                     .padding(.top, 8)
                 }
                 
+                // Fee estimation display (only for Bitcoin sends)
+                if primarySymbol == "₿" && !amountText.isEmpty {
+                    VStack(spacing: 4) {
+                        HStack(spacing: 4) {
+                            Text("Est. Network Fee:")
+                            Text("₿")
+                            Text("\(estimatedFee)")
+                        }
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(Color(hex: "#6D6D86"))
+                        
+                        HStack(spacing: 4) {
+                            Text("Total Amount:")
+                            Text("₿")
+                            Text("\(totalAmountWithFee)")
+                        }
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(Color("PrimaryNuriBlack"))
+                    }
+                    .padding(.top, 8)
+                }
+                
+                // Insufficient funds warning
+                if isInsufficientFunds {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.orange)
+                            .font(.system(size: 14))
+                        Text("Amount exceeds available balance")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.orange)
+                        Spacer()
+                    }
+                    .padding(.top, 8)
+                }
+                
                 Button(action: {
                     onSubmit(amountValue, isPrimaryCrypto)
                 }) {
-                    NuriButton(icon: actionIcon, title: actionTitle, style: .primary)
+                    NuriButton(
+                        icon: actionIcon, 
+                        title: isInsufficientFunds ? "Insufficient Funds" : actionTitle, 
+                        style: isInsufficientFunds ? .secondary : .primary
+                    )
                 }
+                .disabled(isInsufficientFunds)
             }
             .padding()
         }
@@ -194,6 +238,59 @@ public struct AmountEntryScreen: View {
 
     private var amountValue: Double {
         Double(amountText.replacingOccurrences(of: ",", with: ".")) ?? 0
+    }
+    
+    private var estimatedFee: UInt64 {
+        guard let walletState = walletState, !amountText.isEmpty else { return 0 }
+        
+        let amountInSats = UInt64(amountValue)
+        return walletState.feeRates.estimatedFee(amountSats: amountInSats)
+    }
+    
+    private var totalAmountWithFee: UInt64 {
+        guard !amountText.isEmpty else { return 0 }
+        
+        let amountInSats = UInt64(amountValue)
+        return amountInSats + estimatedFee
+    }
+    
+    private var isInsufficientFunds: Bool {
+        guard let balance = availableBalance, !amountText.isEmpty else { return false }
+        
+        // Get the amount in satoshis regardless of current input currency
+        let amountInSats: Double
+        if isPrimaryCrypto && primarySymbol == "₿" {
+            // Already in satoshis
+            amountInSats = amountValue
+        } else if isPrimaryCrypto {
+            // Other crypto (BTC) - convert to satoshis
+            amountInSats = amountValue * 100_000_000
+        } else {
+            // Fiat currency - convert to satoshis via exchange rate
+            amountInSats = amountValue / exchangeRate
+        }
+        
+        // For Bitcoin transactions, include fee in the check
+        let totalNeeded: UInt64
+        if primarySymbol == "₿" && walletState != nil {
+            totalNeeded = UInt64(amountInSats) + estimatedFee
+        } else {
+            totalNeeded = UInt64(amountInSats)
+        }
+        
+        let insufficient = totalNeeded > balance
+        
+        if insufficient {
+            print("⚠️ [AmountEntryScreen] Insufficient funds detected:")
+            print("   💰 Input amount: \(amountValue) (\(isPrimaryCrypto ? (primarySymbol == "₿" ? "sats" : "crypto") : "fiat"))")
+            print("   💰 Amount in sats: \(amountInSats)")
+            print("   ⚡ Estimated fee: \(estimatedFee) sats")
+            print("   💰 Total needed: \(totalNeeded) sats")
+            print("   💰 Available balance: \(balance) sats")
+            print("   💰 Exceeds by: \(totalNeeded - balance) sats")
+        }
+        
+        return insufficient
     }
 
     private func sanitizeInput(_ newValue: String) {
