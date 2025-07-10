@@ -16,6 +16,23 @@ final class WalletStateManager: ObservableObject {
     @Published var lastSyncTime: Date?
     @Published var syncError: String?
     
+    // MARK: - Transaction Data
+    @Published var pendingTransactionData: PendingTransactionData?
+    
+    struct PendingTransactionData {
+        let btcAmount: Double
+        let eurAmount: Double
+        let recipientAddress: String
+        let amountSats: UInt64
+        
+        init(btcAmount: Double, eurAmount: Double, recipientAddress: String) {
+            self.btcAmount = btcAmount
+            self.eurAmount = eurAmount
+            self.recipientAddress = recipientAddress
+            self.amountSats = UInt64(btcAmount * 100_000_000)
+        }
+    }
+    
     // MARK: - Private Properties
     private let walletService = BitcoinWalletService.shared
     private var syncTimer: Timer?
@@ -712,5 +729,29 @@ extension WalletStateManager {
     /// Get formatted balance string
     var formattedBalance: String {
         "₿ \(balance.confirmed)"
+    }
+    
+    // MARK: - Transaction Data Management
+    
+    /// Set pending transaction data for confirmation screen
+    func setPendingTransactionData(btcAmount: Double, eurAmount: Double, recipientAddress: String) {
+        print("🔄 [WalletStateManager] Setting pending transaction data:")
+        print("   ₿ btcAmount: \(btcAmount)")
+        print("   💶 eurAmount: \(eurAmount)")
+        print("   📍 recipientAddress: \(recipientAddress)")
+        
+        self.pendingTransactionData = PendingTransactionData(
+            btcAmount: btcAmount,
+            eurAmount: eurAmount,
+            recipientAddress: recipientAddress
+        )
+        
+        print("   💰 Calculated amountSats: \(self.pendingTransactionData?.amountSats ?? 0)")
+    }
+    
+    /// Clear pending transaction data
+    func clearPendingTransactionData() {
+        print("🔄 [WalletStateManager] Clearing pending transaction data")
+        self.pendingTransactionData = nil
     }
 }

@@ -91,11 +91,14 @@ struct SetAmountView: View {
                     print("   🔍 btc == 0? \(btc == 0)")
                     print("   🔍 eur == 0? \(eur == 0)")
                     
-                    btcAmount = btc
-                    eurAmount = eur
-                    print("📦 [SetAmountView] Values set:")
-                    print("   ₿ btcAmount is now: \(btcAmount)")
-                    print("   💶 eurAmount is now: \(eurAmount)")
+                    // Store transaction data in WalletStateManager for reliable access
+                    walletState.setPendingTransactionData(
+                        btcAmount: btc,
+                        eurAmount: eur,
+                        recipientAddress: recipientAddress
+                    )
+                    
+                    print("📦 [SetAmountView] Transaction data stored in WalletStateManager")
                     
                     navigateToConfirm = true
                     print("📦 [SetAmountView] navigateToConfirm set to: \(navigateToConfirm)")
@@ -127,16 +130,14 @@ struct SetAmountView: View {
                 }
             }
 
-            NavigationLink(destination: ConfirmTransactionView(btcAmount: btcAmount, eurAmount: eurAmount, recipientAddress: recipientAddress), isActive: $navigateToConfirm) {
+            NavigationLink(destination: ConfirmTransactionView(), isActive: $navigateToConfirm) {
                 EmptyView()
             }
             .hidden()
             .onChange(of: navigateToConfirm) { newValue in
                 if newValue {
                     print("🚀 [SetAmountView] Navigation triggered to ConfirmTransactionView")
-                    print("   ₿ btcAmount being passed: \(btcAmount)")
-                    print("   💶 eurAmount being passed: \(eurAmount)")
-                    print("   📍 recipientAddress: \(recipientAddress)")
+                    print("   📦 Using transaction data from WalletStateManager")
                 }
             }
         }
