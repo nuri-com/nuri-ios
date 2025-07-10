@@ -102,6 +102,16 @@ final class BitcoinWalletService {
         return hasWallet
     }
     
+    /// Get the current wallet instance (for transaction operations)
+    func getWallet() -> Wallet? {
+        return wallet
+    }
+    
+    /// Get the current esplora client (for transaction broadcasting)
+    func getEsploraClient() -> EsploraClient? {
+        return esploraClient
+    }
+    
     func forceCreateNewWallet() {
         print("⚠️ [BitcoinWalletService] Force creating new wallet")
         createAndStoreWallet()

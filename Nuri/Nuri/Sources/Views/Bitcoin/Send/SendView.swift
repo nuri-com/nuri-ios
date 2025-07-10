@@ -51,7 +51,7 @@ struct SendView: View {
                     if let error = scanError {
                         Text(error).foregroundColor(.red)
                     }
-                    NavigationLink(destination: SetAmountView(), isActive: Binding(get: { scannedAddress != nil }, set: { _ in })) { EmptyView() }.hidden()
+                    NavigationLink(destination: SetAmountView(recipientAddress: scannedAddress ?? ""), isActive: Binding(get: { scannedAddress != nil }, set: { _ in })) { EmptyView() }.hidden()
                     Button(action: {
                         if let text = UIPasteboard.general.string, (validator.isValid(address: text) || lightningValidator.isValid(invoice: text)) {
                             scannedAddress = text

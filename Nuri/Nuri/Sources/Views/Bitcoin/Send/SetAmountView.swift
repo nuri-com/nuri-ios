@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct SetAmountView: View {
+    let recipientAddress: String
+    
     @EnvironmentObject var navigation: BitcoinViewNavigation
     @Environment(\.dismiss) private var dismiss
 
@@ -46,7 +48,7 @@ struct SetAmountView: View {
                 }
             )
 
-            NavigationLink(destination: ConfirmTransactionView(btcAmount: btcAmount, eurAmount: eurAmount), isActive: $navigateToConfirm) {
+            NavigationLink(destination: ConfirmTransactionView(btcAmount: btcAmount, eurAmount: eurAmount, recipientAddress: recipientAddress), isActive: $navigateToConfirm) {
                 EmptyView()
             }
             .hidden()
