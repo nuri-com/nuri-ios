@@ -260,14 +260,14 @@ final class TransactionManager {
             
             return txId
             
-        } catch let error as WalletError {
-            throw TransactionError.buildTransactionFailed(error)
+        } catch let error as AddressParseError {
+            throw TransactionError.invalidAddress(recipientAddress)
         } catch let error as SignerError {
             throw TransactionError.signingFailed(error)
         } catch let error as EsploraError {
             throw TransactionError.broadcastFailed(error)
         } catch {
-            throw TransactionError.networkError(error)
+            throw TransactionError.buildTransactionFailed(error)
         }
     }
     
@@ -312,7 +312,7 @@ final class TransactionManager {
         let isSigned = try wallet.sign(psbt: psbt)
         
         if !isSigned {
-            throw TransactionError.signingFailed(WalletError.notSigned)
+            throw TransactionError.signingFailed(NSError(domain: "TransactionManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Transaction not fully signed"]))
         }
         
         return psbt
@@ -324,7 +324,3 @@ final class TransactionManager {
 }
 
 // MARK: - Extensions
-
-private extension WalletError {
-    static let notSigned = WalletError.generic(message: "Transaction not fully signed")
-}
