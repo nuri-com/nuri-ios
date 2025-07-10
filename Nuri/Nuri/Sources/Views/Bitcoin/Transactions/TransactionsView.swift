@@ -204,6 +204,27 @@ private struct RealTransactionRow: View {
         }
         .padding(.horizontal, 24)
         .frame(height: 40)
+        .onTapGesture {
+            handleTransactionTap()
+        }
+    }
+    
+    // MARK: - Transaction Tap Handler
+    private func handleTransactionTap() {
+        print("📋 [RealTransactionRow] Transaction tapped: \(cachedTx.txId)")
+        
+        // Copy transaction ID to clipboard
+        UIPasteboard.general.string = cachedTx.txId
+        print("📋 [RealTransactionRow] Transaction ID copied to clipboard: \(cachedTx.txId)")
+        
+        // Open mempool.space explorer in browser
+        let explorerURL = "https://mempool.space/tx/\(cachedTx.txId)"
+        if let url = URL(string: explorerURL) {
+            UIApplication.shared.open(url)
+            print("📋 [RealTransactionRow] Opening explorer: \(explorerURL)")
+        } else {
+            print("❌ [RealTransactionRow] Failed to create URL: \(explorerURL)")
+        }
     }
 
     // MARK: - Helpers
