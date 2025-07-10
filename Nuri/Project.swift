@@ -7,7 +7,7 @@ let project = Project(
             name: "Nuri",
             destinations: .iOS,
             product: .app,
-            bundleId: "com.nuri.nuri-ios",
+            bundleId: "com.nuri.mobile-ios",
             deploymentTargets: .iOS("18.0"),
             infoPlist: .extendingDefault(with: [
                 "UIUserInterfaceStyle": "Light",
@@ -49,19 +49,18 @@ let project = Project(
                 "com.apple.developer.associated-domains": .array([
                     "webcredentials:nuri.com"
                 ]),
-                "application-identifier": "7NF2K7X2U6.com.nuri.nuri-ios"
+                "application-identifier": "MH2SRQ3N27.com.nuri.mobile-ios"
             ]),
             dependencies: [
                 .project(target: "Authentication", path: "../Authentication"),
                 .external(name: "IdensicMobileSDK"),
-                .external(name: "Privy"),
                 .external(name: "BitcoinDevKit"),
                 .external(name: "KeychainAccess"),
             ],
             settings: .settings(
                 base: [
                     "CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION": "YES",
-                    "DEVELOPMENT_TEAM": "7NF2K7X2U6"
+                    "DEVELOPMENT_TEAM": "MH2SRQ3N27"
                 ],
                 defaultSettings: .recommended
             )

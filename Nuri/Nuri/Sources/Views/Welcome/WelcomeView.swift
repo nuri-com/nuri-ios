@@ -1,7 +1,6 @@
 import SwiftUI
 import UIKit
 import AuthenticationServices
-import PrivySDK
 import BitcoinDevKit
 
 struct WelcomeView: View {
@@ -29,8 +28,8 @@ struct WelcomeView: View {
                 VStack {
                     Spacer()
                     
-                    Button("Login with Biometrics") {
-                        signInOrCreatePasskey()
+                    Button("Get Started") {
+                        continueToApp()
                     }
                     .buttonStyle(ProminentButtonStyle())
                 }
@@ -47,35 +46,13 @@ struct WelcomeView: View {
 
     // MARK: - Actions
     
-    private func signInOrCreatePasskey() {
-        print("👆 [WelcomeView] User tapped 'Sign-in or Create Passkey'")
-        PasskeyAuthCoordinator.shared.signInOrRegister { result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success:
-                    print("✅ [WelcomeView] Passkey operation successful")
-                    
-                    // Get stored tokens and initialize wallet for user
-                    let tokens = PasskeyService.getStoredTokens()
-                    print("📦 [WelcomeView] Stored tokens - Access: \(tokens.0?.prefix(20) ?? "nil")... User: \(tokens.2 ?? "nil")")
-                    
-                    // Initialize Bitcoin wallet for this specific user
-                    if let userID = tokens.2 {
-                        print("🔑 [WelcomeView] Initializing wallet for user: \(userID)")
-                        BitcoinWalletService.shared.initializeForUser(userID)
-                    } else {
-                        print("⚠️ [WelcomeView] No user ID found in tokens")
-                    }
-                    
-                    self.isUserLoggedIn = true
-                    self.dismiss()
-                case .failure(let error):
-                    print("❌ [WelcomeView] Passkey operation failed: \(error)")
-                    self.errorMessage = error.localizedDescription
-                    self.showError = true
-                }
-            }
-        }
+    private func continueToApp() {
+        print("👆 [WelcomeView] User tapped 'Get Started'")
+        print("✅ [WelcomeView] Continuing to app - wallet should already be initialized")
+        
+        // Wallet should already be initialized by NuriApp.init()
+        self.isUserLoggedIn = true
+        self.dismiss()
     }
     
     private func skipForNow() {

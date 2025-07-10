@@ -104,6 +104,24 @@ final class BitcoinWalletService {
         createAndStoreWallet()
     }
     
+    /// Initialize wallet automatically when app starts (no user ID required)
+    func initializeWalletOnAppStart() {
+        print("🔑 [BitcoinWalletService] 🚨 initializeWalletOnAppStart() called")
+        
+        // Check if we're already initialized
+        if wallet != nil {
+            print("✅ [BitcoinWalletService] Wallet already initialized, skipping...")
+            return
+        }
+        
+        // Use a default user ID since Privy is removed
+        let defaultUserID = "default-user"
+        print("🔄 [BitcoinWalletService] Proceeding with initialization for default user...")
+        currentUserID = defaultUserID
+        setupKeychain(for: defaultUserID)
+        initialiseWallet()
+    }
+    
     /// Initialize wallet for a specific user ID (from Privy)
     func initializeForUser(_ userID: String) {
         print("🔑 [BitcoinWalletService] 🚨 initializeForUser() called for user: \(userID)")

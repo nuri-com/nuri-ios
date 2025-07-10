@@ -33,18 +33,13 @@ struct SecurityView: View {
                     Image(systemName: "chevron.right")
                 }
 
-                Button(action: {
-                    showWalletInfo = true
-                }) {
-                    NuriMenuRow(
-                        icon: "wallet",
-                        title: "Wallet Keys",
-                        subtitle: "2-of-2 multi-signature"
-                    ) {
-                        Image(systemName: "chevron.right")
-                    }
+                NuriMenuRow(
+                    icon: "wallet",
+                    title: "Wallet Keys",
+                    subtitle: "2-of-2 multi-signature"
+                ) {
+                    Image(systemName: "chevron.right")
                 }
-                .buttonStyle(PlainButtonStyle())
                 
                 NuriMenuRow(
                     icon: "icloud-download",
@@ -56,9 +51,7 @@ struct SecurityView: View {
                         .tint(Color("PrimaryNuriLilac"))
                 }
                 
-                // Add a Passkey button
-                actionButton()
-                    .padding(.top, 10)
+                // Passkey functionality removed - will be replaced with new integration
                 
 
                 
@@ -73,11 +66,13 @@ struct SecurityView: View {
         }
         .confirmationDialog("Choose Passkey Type", isPresented: $showPasskeyOptions, titleVisibility: .visible) {
             Button("Platform Passkey (Face ID/Touch ID)") {
-                linkPlatformPasskey()
+                // linkPlatformPasskey() removed - will be replaced with new integration
+                print("Platform passkey linking disabled")
             }
             
             Button("Hardware Security Key (YubiKey/FIDO2)") {
-                linkHardwarePasskey()
+                // linkHardwarePasskey() removed - will be replaced with new integration
+                print("Hardware passkey linking disabled")
             }
             
             Button("Cancel", role: .cancel) {}
@@ -94,72 +89,12 @@ struct SecurityView: View {
                 }
             )
         }
-        .sheet(isPresented: $showWalletInfo) {
-            PrivyWallet(onClose: {
-                showWalletInfo = false
-            })
-        }
+        // Wallet info sheet removed - will be replaced with new integration
     }
     
-    // MARK: - Passkey Functions
+    // MARK: - Passkey Functions removed
+    // Passkey functionality will be replaced with new integration
     
-    private func actionButton() -> some View {
-        Button(action: {
-            print("🔘 [SecurityView] Add a Passkey button tapped")
-            
-            // Check if user is authenticated via stored tokens
-            if PrivyWorkaroundService.shared.isAuthenticated {
-                print("✅ [SecurityView] User is authenticated via tokens")
-                print("   👤 User ID: \(PrivyWorkaroundService.shared.currentUserId ?? "nil")")
-                showPasskeyOptions = true
-            } else {
-                print("❌ [SecurityView] User is not authenticated")
-                showAlert = true
-                linkingError = "Please sign in first before adding additional passkeys"
-            }
-        }) {
-            NuriButton(
-                icon: "touch-id",
-                title: "Add a Passkey",
-                style: .primary
-            )
-        }
-        .padding(.horizontal, 24)
-    }
-    
-    private func linkPlatformPasskey() {
-        print("🔐 [SecurityView] Linking platform passkey...")
-        isLinkingPasskey = true
-        linkingError = nil
-        
-        PasskeyAuthCoordinator.shared.linkAdditionalPasskey { result in
-            DispatchQueue.main.async {
-                self.isLinkingPasskey = false
-                
-                switch result {
-                case .success:
-                    print("✅ [SecurityView] Platform passkey linked successfully")
-                    self.showSuccess = true
-                case .failure(let error):
-                    print("❌ [SecurityView] Failed to link platform passkey: \(error)")
-                    self.linkingError = error.localizedDescription
-                    self.showAlert = true
-                }
-            }
-        }
-    }
-    
-    private func linkHardwarePasskey() {
-        print("🔐 [SecurityView] Linking hardware passkey...")
-        isLinkingPasskey = true
-        linkingError = nil
-        
-        // Hardware keys would need special handling or web-based flow
-        // For now, show that it's not supported
-        self.linkingError = "Hardware security keys require special handling not yet implemented"
-        self.showAlert = true
-        self.isLinkingPasskey = false
-    }
 }
 
 #if DEBUG

@@ -1,5 +1,4 @@
 import UIKit
-import PrivySDK
 
 final class AppDelegate: NSObject, UIApplicationDelegate {
 
@@ -35,7 +34,6 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             // Since iOS 15 `scrollEdgeAppearance` controls the translucent state when scrolled to edge
             UITabBar.appearance().scrollEdgeAppearance = tabBarAppearance
         }
-        _ = PrivyManager.shared // initializes Privy SDK
         return true
     }
 

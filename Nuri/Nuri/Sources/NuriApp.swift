@@ -7,12 +7,10 @@ struct NuriApp: App {
     @AppStorage("isUserLoggedIn") var isUserLoggedIn: Bool = false
 
     init() {
-        // Initialize Privy SDK
-        _ = PrivyManager.shared
+        // Initialize Bitcoin wallet automatically when app starts
+        print("🔑 [NuriApp] App started - initializing Bitcoin wallet")
+        BitcoinWalletService.shared.initializeWalletOnAppStart()
         
-        // Simple check - don't trust stored tokens, always start with welcome screen
-        // Let Privy and the welcome screen handle authentication state properly
-        print("🔑 [NuriApp] App started - user will authenticate via welcome screen")
         isUserLoggedIn = true
     }
 

@@ -130,26 +130,20 @@ struct BitcoinView: View {
             return
         }
         
-        // Try to initialize wallet with stored user ID
-        let tokens = PasskeyService.getStoredTokens()
-        if let userID = tokens.2 {
-            print("🔑 [BitcoinView] 🚨 WALLET RE-INITIALIZATION - This should NOT happen if wallet was already loaded!")
-            print("🔑 [BitcoinView] Initializing wallet for user: \(userID)")
-            walletStatus = .checking
-            
-            walletService.initializeForUser(userID)
-            
-            // Check if initialization was successful
-            if walletService.hasWallet() {
-                walletStatus = .loaded
-                completion()
-            } else {
-                walletStatus = .needsRecovery
-                showWalletRecoveryAlert = true
-            }
+        // Initialize wallet with default user - should already be done by app start
+        print("🔑 [BitcoinView] 🚨 WALLET RE-INITIALIZATION - This should NOT happen if wallet was already loaded!")
+        print("🔑 [BitcoinView] Initializing wallet with default user")
+        walletStatus = .checking
+        
+        walletService.initializeWalletOnAppStart()
+        
+        // Check if initialization was successful
+        if walletService.hasWallet() {
+            walletStatus = .loaded
+            completion()
         } else {
-            print("⚠️ [BitcoinView] No user ID found - wallet cannot be initialized")
-            walletStatus = .failed
+            walletStatus = .needsRecovery
+            showWalletRecoveryAlert = true
         }
     }
     
@@ -163,45 +157,35 @@ struct BitcoinView: View {
     private func retryWalletLoad() {
         walletStatus = .checking
         
-        // Re-initialize wallet with user ID
-        let tokens = PasskeyService.getStoredTokens()
-        if let userID = tokens.2 {
-            let walletService = BitcoinWalletService.shared
-            walletService.initializeForUser(userID)
-            
-            // Check status after a moment
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                if walletService.hasWallet() {
-                    walletStatus = .loaded
-                } else {
-                    walletStatus = .needsRecovery
-                    showWalletRecoveryAlert = true
-                }
+        // Re-initialize wallet with default user
+        let walletService = BitcoinWalletService.shared
+        walletService.initializeWalletOnAppStart()
+        
+        // Check status after a moment
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            if walletService.hasWallet() {
+                walletStatus = .loaded
+            } else {
+                walletStatus = .needsRecovery
+                showWalletRecoveryAlert = true
             }
-        } else {
-            walletStatus = .failed
         }
     }
     
     private func createNewWallet() {
         walletStatus = .checking
         
-        let tokens = PasskeyService.getStoredTokens()
-        if let userID = tokens.2 {
-            let walletService = BitcoinWalletService.shared
-            walletService.initializeForUser(userID)
-            walletService.forceCreateNewWallet()
-            
-            // Check status after a moment
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                if walletService.hasWallet() {
-                    walletStatus = .loaded
-                } else {
-                    walletStatus = .failed
-                }
+        let walletService = BitcoinWalletService.shared
+        walletService.initializeWalletOnAppStart()
+        walletService.forceCreateNewWallet()
+        
+        // Check status after a moment
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            if walletService.hasWallet() {
+                walletStatus = .loaded
+            } else {
+                walletStatus = .failed
             }
-        } else {
-            walletStatus = .failed
         }
     }
 

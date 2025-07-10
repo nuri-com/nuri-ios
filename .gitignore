@@ -71,3 +71,4 @@ Tuist/.build
 
 # Don't ignore GitHub workflows
 !.github/
+.aider*
