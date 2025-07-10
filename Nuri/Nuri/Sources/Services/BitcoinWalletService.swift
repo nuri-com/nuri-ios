@@ -11,6 +11,7 @@ final class BitcoinWalletService {
     private let network: Network = .bitcoin // mainnet
     private var keychain: Keychain?
     private var currentUserID: String?
+    private var esploraClient: EsploraClient?
     private enum Keys {
         static let mnemonic = "nuri.wallet.mnemonic"
         static let descriptor = "nuri.wallet.descriptor"
@@ -32,6 +33,8 @@ final class BitcoinWalletService {
 
     private init() {
         print("🔑 [BitcoinWalletService] Initializing wallet service...")
+        // Initialize Esplora client for mainnet
+        self.esploraClient = EsploraClient(url: "https://blockstream.info/api")
         // Wallet initialization will happen when user ID is available
     }
 
@@ -483,15 +486,155 @@ final class BitcoinWalletService {
     // MARK: - Balance
     /// Syncs the wallet with the blockchain and returns the total balance in satoshis.
     func syncAndGetBalance() async -> UInt64? {
-        guard let wallet else { return nil }
-        do {
-            // Note: This is a placeholder implementation
-            // The actual sync/balance API has changed in the newer BitcoinDevKit version
-            let bal = wallet.balance()
-            return bal.total.toSat()
-        } catch {
-            print("❌ [BitcoinWalletService] Failed to get balance: \(error)")
+        guard let wallet else { 
+            print("❌ [BitcoinWalletService] No wallet available for balance sync")
+            return nil 
+        }
+        
+        guard let esploraClient else {
+            print("❌ [BitcoinWalletService] No Esplora client available for sync")
             return nil
+        }
+        
+        do {
+            print("🔄 [BitcoinWalletService] Starting wallet sync with blockchain...")
+            
+            // Sync wallet with blockchain using correct BDK API
+            try await syncWallet()
+            print("✅ [BitcoinWalletService] Wallet sync completed")
+            
+            // Get updated balance
+            let balance = wallet.balance()
+            let totalSats = balance.total.toSat()
+            let confirmedSats = balance.confirmed.toSat()
+            let pendingSats = balance.trustedPending.toSat() + balance.untrustedPending.toSat()
+            
+            print("💰 [BitcoinWalletService] Balance updated:")
+            print("   📊 Total: \(totalSats) sats")
+            print("   ✅ Confirmed: \(confirmedSats) sats")
+            print("   ⏳ Pending: \(pendingSats) sats")
+            
+            return totalSats
+        } catch {
+            print("❌ [BitcoinWalletService] Failed to sync wallet and get balance: \(error)")
+            return nil
+        }
+    }
+    
+    /// Get detailed balance breakdown (confirmed, pending, total)
+    func getDetailedBalance() async -> (confirmed: UInt64, pending: UInt64, total: UInt64)? {
+        guard let wallet else { return nil }
+        guard let esploraClient else { return nil }
+        
+        do {
+            // Sync first to get latest state
+            try await syncWallet()
+            
+            let balance = wallet.balance()
+            let confirmed = balance.confirmed.toSat()
+            let pending = balance.trustedPending.toSat() + balance.untrustedPending.toSat()
+            let total = balance.total.toSat()
+            
+            print("💰 [BitcoinWalletService] Detailed balance:")
+            print("   ✅ Confirmed: \(confirmed) sats")
+            print("   ⏳ Pending: \(pending) sats")  
+            print("   📊 Total: \(total) sats")
+            
+            return (confirmed: confirmed, pending: pending, total: total)
+        } catch {
+            print("❌ [BitcoinWalletService] Failed to get detailed balance: \(error)")
+            return nil
+        }
+    }
+    
+    // MARK: - Transactions
+    /// Get all transactions for this wallet
+    func getTransactions() async -> [CanonicalTx]? {
+        guard let wallet else {
+            print("❌ [BitcoinWalletService] No wallet available for transaction query")
+            return nil
+        }
+        
+        guard let esploraClient else {
+            print("❌ [BitcoinWalletService] No Esplora client available for transaction query")
+            return nil
+        }
+        
+        do {
+            print("🔄 [BitcoinWalletService] Syncing wallet before fetching transactions...")
+            
+            // Sync wallet first to get latest transactions
+            try await syncWallet()
+            
+            // Get all transactions
+            let transactions = wallet.transactions()
+            print("📋 [BitcoinWalletService] Found \(transactions.count) transactions")
+            
+            // Sort by confirmation time (newest first) using correct BDK API
+            let sortedTransactions = transactions.sorted { (tx1, tx2) in
+                return !tx1.chainPosition.isBefore(tx2.chainPosition)
+            }
+            
+            // Log transaction details for debugging
+            for (index, tx) in sortedTransactions.enumerated() {
+                let txid = tx.transaction.computeTxid()
+                
+                // Check confirmation status based on ChainPosition
+                let (isConfirmed, blockTime) = getTransactionInfo(chainPosition: tx.chainPosition)
+                
+                print("📄 [BitcoinWalletService] Transaction \(index + 1):")
+                print("   🆔 TXID: \(txid)")
+                print("   ✅ Confirmed: \(isConfirmed)")
+                print("   ⏰ Block Time: \(blockTime)")
+                
+                // Get sent/received amounts
+                let sentReceived = wallet.sentAndReceived(tx: tx.transaction)
+                print("   📤 Sent: \(sentReceived.sent.toSat()) sats")
+                print("   📥 Received: \(sentReceived.received.toSat()) sats")
+            }
+            
+            return sortedTransactions
+        } catch {
+            print("❌ [BitcoinWalletService] Failed to get transactions: \(error)")
+            return nil
+        }
+    }
+    
+    // MARK: - Private Sync Methods
+    /// Internal sync method using correct BDK API
+    private func syncWallet() async throws {
+        guard let wallet else { throw WalletError.noExistingWallet }
+        guard let esploraClient else { throw WalletError.keychainAccessFailed }
+        
+        // Create sync inspector for progress tracking
+        let inspector = WalletSyncScriptInspector { inspected, total in
+            // Simple progress tracking - could be enhanced with UI progress bar
+            print("🔄 [BitcoinWalletService] Sync progress: \(inspected)/\(total)")
+        }
+        
+        // Start sync with revealed SPKs (faster than full scan)
+        let syncRequest = try wallet.startSyncWithRevealedSpks()
+            .inspectSpks(inspector: inspector)
+            .build()
+        
+        let update = try esploraClient.sync(
+            request: syncRequest,
+            parallelRequests: UInt64(5)
+        )
+        
+        let _ = try wallet.applyUpdate(update: update)
+        
+        // Persist changes
+        persist()
+    }
+    
+    /// Helper method to extract transaction info from ChainPosition
+    private func getTransactionInfo(chainPosition: ChainPosition) -> (isConfirmed: Bool, blockTime: UInt64) {
+        switch chainPosition {
+        case .confirmed(let blockTime, _):
+            return (true, UInt64(blockTime.blockId.height))
+        case .unconfirmed(let timestamp):
+            return (false, timestamp ?? 0)
         }
     }
     
@@ -575,5 +718,43 @@ final class BitcoinWalletService {
         }
         
         print("✅ [BitcoinWalletService] Wallet loaded with single authentication for user: \(currentUserID ?? "unknown")")
+    }
+}
+
+// MARK: - Sync Script Inspector
+actor WalletSyncScriptInspector: @preconcurrency SyncScriptInspector {
+    private let updateProgress: @Sendable (UInt64, UInt64) -> Void
+    private var inspectedCount: UInt64 = 0
+    private var totalCount: UInt64 = 0
+
+    init(updateProgress: @escaping @Sendable (UInt64, UInt64) -> Void) {
+        self.updateProgress = updateProgress
+    }
+
+    func inspect(script: Script, total: UInt64) {
+        totalCount = total
+        inspectedCount += 1
+        updateProgress(inspectedCount, totalCount)
+    }
+}
+
+// MARK: - ChainPosition Extension
+extension ChainPosition {
+    func isBefore(_ other: ChainPosition) -> Bool {
+        switch (self, other) {
+        case (.unconfirmed, .confirmed):
+            return true
+        case (.confirmed, .unconfirmed):
+            return false
+        case (.unconfirmed(let timestamp1), .unconfirmed(let timestamp2)):
+            return (timestamp1 ?? 0) < (timestamp2 ?? 0)
+        case (
+            .confirmed(let blockTime1, let transitively1),
+            .confirmed(let blockTime2, let transitively2)
+        ):
+            return blockTime1.blockId.height != blockTime2.blockId.height
+                ? blockTime1.blockId.height > blockTime2.blockId.height
+                : (transitively1 != nil) && (transitively2 == nil)
+        }
     }
 }
