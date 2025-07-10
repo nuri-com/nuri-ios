@@ -33,10 +33,10 @@ struct ConfirmTransactionView: View {
     @State private var errorMessage = ""
     @State private var showSuccess = false
     @State private var transactionId = ""
-    @State private var availableBalance: UInt64 = 0
     
     // Services
     private let transactionManager = TransactionManager.shared
+    @StateObject private var walletState = WalletStateManager.shared
 
     var body: some View {
         Screen {
@@ -68,11 +68,11 @@ struct ConfirmTransactionView: View {
                         .foregroundStyle(Color.secondary)
 
                     // Balance display
-                    if availableBalance > 0 {
+                    if walletState.availableBalance > 0 {
                         HStack(spacing: 4) {
                             Text("Balance:")
                             Text("₿")
-                            Text("\(availableBalance)")
+                            Text("\(walletState.availableBalance)")
                         }
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(Color(hex: "#6D6D86"))
@@ -209,11 +209,8 @@ struct ConfirmTransactionView: View {
     // MARK: - Transaction Methods
     
     private func loadBalanceAndTransactionInfo() async {
-        // Load balance first
-        let balance = await BitcoinWalletService.shared.getDetailedBalance()
-        await MainActor.run {
-            availableBalance = balance?.confirmed ?? 0
-        }
+        // Get cached balance (instant)
+        let _ = await walletState.getBalance(forceRefresh: false)
         
         // Then load transaction info
         await loadTransactionInfo()
@@ -264,20 +261,19 @@ struct ConfirmTransactionView: View {
                     feeRate: txInfo.feeRate
                 )
                 
-                // Immediately refresh balance after successful transaction
-                print("✅ [ConfirmTransactionView] Transaction sent successfully, refreshing balance...")
-                let updatedBalance = await BitcoinWalletService.shared.getDetailedBalance()
+                // Immediately update wallet state with pending transaction
+                print("✅ [ConfirmTransactionView] Transaction sent successfully, updating state...")
+                walletState.addPendingTransaction(
+                    txId: txId,
+                    amount: txInfo.amountSats,
+                    recipientAddress: recipientAddress,
+                    fee: txInfo.feeSats
+                )
                 
                 await MainActor.run {
                     self.transactionId = txId
                     self.isSending = false
                     self.showSuccess = true
-                    
-                    // Update balance display immediately
-                    if let balance = updatedBalance {
-                        self.availableBalance = balance.confirmed
-                        print("💰 [ConfirmTransactionView] Balance updated to: \(balance.confirmed) sats")
-                    }
                 }
             } catch {
                 await MainActor.run {

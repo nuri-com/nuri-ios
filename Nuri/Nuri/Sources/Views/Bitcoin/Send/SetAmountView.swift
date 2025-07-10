@@ -5,6 +5,7 @@ struct SetAmountView: View {
     
     @EnvironmentObject var navigation: BitcoinViewNavigation
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var walletState = WalletStateManager.shared
 
     @State private var navigateToConfirm = false
     @State private var satsToEurRate: Double = 0
@@ -13,7 +14,6 @@ struct SetAmountView: View {
     // Amounts to forward to confirmation screen  
     @State private var btcAmount: Double = 0 // Still in BTC for compatibility with ConfirmTransactionView
     @State private var eurAmount: Double = 0
-    @State private var availableBalance: UInt64 = 0
 
     var body: some View {
         ZStack {
@@ -23,7 +23,7 @@ struct SetAmountView: View {
                 secondarySymbol: "€",
                 initialPrimaryIsCrypto: true,
                 exchangeRate: $satsToEurRate,
-                availableBalance: availableBalance > 0 ? availableBalance : nil,
+                availableBalance: walletState.availableBalance,
                 actionIcon: "bitcoin-circle",
                 actionTitle: "Confirm Amount",
                 onSubmit: { amount, isCrypto in
@@ -83,15 +83,13 @@ struct SetAmountView: View {
                 print("📊 [SetAmountView] BTC to EUR rate: \(fetchedBtcToEurRate)")
                 print("📊 [SetAmountView] Sats to EUR rate: \(calculatedSatsToEurRate)")
                 
-                // Fetch wallet balance
-                print("💰 [SetAmountView] Fetching wallet balance...")
-                let balance = await BitcoinWalletService.shared.getDetailedBalance()
+                // Get cached balance (no network call needed)
+                let _ = await walletState.getBalance(forceRefresh: false)
+                print("💰 [SetAmountView] Available balance: \(walletState.availableBalance) sats")
                 
                 await MainActor.run {
                     btcToEurRate = fetchedBtcToEurRate
                     satsToEurRate = calculatedSatsToEurRate
-                    availableBalance = balance?.confirmed ?? 0
-                    print("💰 [SetAmountView] Available balance: \(availableBalance) sats")
                 }
             }
 

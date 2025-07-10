@@ -10,11 +10,11 @@ final class BitcoinViewNavigation: ObservableObject {
 struct BitcoinView: View {
 
     @StateObject private var navigation = BitcoinViewNavigation()
+    @StateObject private var walletState = WalletStateManager.shared
     @State private var isPrimaryBTC = true
     @State private var isBalanceHidden = false
     @State private var walletStatus: WalletStatus = .checking
     @State private var showWalletRecoveryAlert = false
-    @State private var balanceSats: UInt64 = 0
     @State private var exchangeRate: Double = 0.0
     
     enum WalletStatus {
@@ -39,11 +39,11 @@ struct BitcoinView: View {
                         VStack(spacing: 4) {
                             AmountAndCurrency(isPrimaryBTC: $isPrimaryBTC,
                                              isBalanceHidden: $isBalanceHidden,
-                                             sats: balanceSats,
+                                             sats: walletState.balance.confirmed,
                                              rate: exchangeRate)
                             SecondaryCurrencyAndAmount(isPrimaryBTC: $isPrimaryBTC,
                                                        isBalanceHidden: $isBalanceHidden,
-                                                       sats: balanceSats,
+                                                       sats: walletState.balance.confirmed,
                                                        rate: exchangeRate)
                         }
                         .onTapGesture {
@@ -82,7 +82,7 @@ struct BitcoinView: View {
             // Don't automatically check wallet status
         }
         .task {
-            await refreshBalance()
+            await refreshData()
         }
         .alert("Wallet Recovery", isPresented: $showWalletRecoveryAlert) {
             Button("Retry") {
@@ -190,16 +190,18 @@ struct BitcoinView: View {
     }
 
     // MARK: - Balance
-    private func refreshBalance() async {
-        let walletService = BitcoinWalletService.shared
-        if let sats = await walletService.syncAndGetBalance() {
-            await MainActor.run { balanceSats = sats }
-        } else {
-            await MainActor.run { balanceSats = 0 }
-        }
-
+    private func refreshData() async {
+        // Use cached balance first, then refresh in background
+        let _ = await walletState.getBalance(forceRefresh: false)
+        
+        // Fetch exchange rate
         if let price = await fetchPrice() {
             await MainActor.run { exchangeRate = price }
+        }
+        
+        // Refresh wallet data in background if needed
+        if walletState.balance.isStale {
+            await walletState.refreshAll()
         }
     }
 

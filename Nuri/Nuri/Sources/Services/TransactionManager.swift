@@ -12,6 +12,7 @@ final class TransactionManager {
     
     // MARK: - Dependencies
     private let walletService: BitcoinWalletService
+    private let walletState = WalletStateManager.shared
     
     private init(walletService: BitcoinWalletService = .shared) {
         self.walletService = walletService
@@ -119,17 +120,14 @@ final class TransactionManager {
         }
         print("✅ [TransactionManager] Wallet obtained successfully")
         
-        // Get current balance
-        print("🔍 [TransactionManager] Getting balance...")
-        guard let balance = await walletService.getDetailedBalance() else {
-            print("❌ [TransactionManager] Balance not available!")
-            throw TransactionError.walletNotAvailable
-        }
+        // Get current balance from cached state
+        print("🔍 [TransactionManager] Getting balance from state manager...")
+        let balance = await walletState.getBalance(forceRefresh: false)
         
         print("💰 [TransactionManager] Balance details:")
         print("   ✅ Confirmed: \(balance.confirmed) sats")
         print("   ⏳ Pending: \(balance.pending) sats")
-        print("   📊 Total: \(balance.confirmed + balance.pending) sats")
+        print("   📊 Total: \(balance.total) sats")
         
         // Check if we have at least the base amount (we'll check amount + fee later)
         if balance.confirmed < amountSats {
@@ -213,12 +211,9 @@ final class TransactionManager {
         print("   💸 Fee: \(feeSats) sats")
         print("   📊 Total needed: \(totalSats) sats")
         
-        // Verify we have enough funds including fee
+        // Verify we have enough funds including fee (use cached balance for speed)
         print("🔍 [TransactionManager] Final balance check...")
-        guard let balance = await walletService.getDetailedBalance() else {
-            print("❌ [TransactionManager] Cannot get balance for final check!")
-            throw TransactionError.walletNotAvailable
-        }
+        let balance = await walletState.getBalance(forceRefresh: false)
         
         print("💰 [TransactionManager] Final balance comparison:")
         print("   ✅ Confirmed: \(balance.confirmed) sats")
