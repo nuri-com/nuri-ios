@@ -117,7 +117,7 @@ final class BitcoinWalletService {
             return
         }
         
-        // Use a default user ID for wallet initialization
+        // Use a default user ID since Privy is removed
         let defaultUserID = "default-user"
         print("🔄 [BitcoinWalletService] Proceeding with initialization for default user...")
         currentUserID = defaultUserID
@@ -125,7 +125,7 @@ final class BitcoinWalletService {
         initialiseWallet()
     }
     
-    /// Initialize wallet for a specific user ID
+    /// Initialize wallet for a specific user ID (from Privy)
     func initializeForUser(_ userID: String) {
         print("🔑 [BitcoinWalletService] 🚨 initializeForUser() called for user: \(userID)")
         

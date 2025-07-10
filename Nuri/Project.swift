@@ -15,7 +15,7 @@ let project = Project(
                     "Inter.ttf",
                     "Inter-Italic.ttf"
                 ]),
-                "NFCReaderUsageDescription": "NFC access for card reading",
+                "NFCReaderUsageDescription": "Authentication with Passkey",
                 "com.apple.developer.nfc.readersession.felica.systemcodes": .array([]),
                 "com.apple.developer.nfc.readersession.iso7816.select-identifiers": .array([
                     "A000000151000000",

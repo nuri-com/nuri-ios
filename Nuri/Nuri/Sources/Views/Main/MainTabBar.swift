@@ -6,7 +6,7 @@ struct MainTabBar: View {
     enum SelectedTab {
         case bitcoin
         case card
-        case security
+        case passkey
     }
 
     var body: some View {
@@ -22,7 +22,7 @@ struct MainTabBar: View {
                         CardView()
                     }
                 }
-                Tab("Security", image: "lock") {
+                Tab("Passkey", image: "passkey") {
                     NavigationStack {
                         SecurityView()
                     }

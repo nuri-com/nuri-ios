@@ -25,14 +25,14 @@ final class LoginViewModel: NSObject, ObservableObject, LoginViewModelType, Logi
 
         viewState = .init(
             title: "Sign up or Login",
-            subtitle: "Create Account",
+            subtitle: "Using Passkey",
             illustration: "",
             emailTextField: .init(label: "", text: "", placeholder: "Email", submitHandler: .init { [weak self] in
                 self?.startRegistration()
             }),
             orLabel: "- or -",
-            authButton: .init(text: "Authentication Disabled", action: .init { [weak self] in
-                self?.startAuthLogin()
+            passkeyButton: .init(text: "Sign In using Passkey", action: .init { [weak self] in
+                self?.startPasskeyLogin()
             }),
             appleLoginAction: .init { [weak self] in
                 self?.startAppleLogin()
@@ -64,13 +64,13 @@ final class LoginViewModel: NSObject, ObservableObject, LoginViewModelType, Logi
         authController.performRequests()
     }
 
-    private func startAuthLogin() {
-        // Authentication login removed - will be replaced with new integration
-        print("Authentication login disabled - awaiting new integration")
+    private func startPasskeyLogin() {
+        // Passkey login removed - will be replaced with new integration
+        print("Passkey login disabled - awaiting new integration")
     }
 
     private func startAppleLogin() {
-        // Apple login removed - will be replaced with new integration
+        // Apple login via Privy removed - will be replaced with new integration
         print("Apple login disabled - awaiting new integration")
     }
 
@@ -98,7 +98,7 @@ extension LoginViewModel: ASAuthorizationControllerDelegate {
             print(String(data: registration.rawClientDataJSON, encoding: .utf8) ?? "no raw client data")
             self.challenge = (try? JSONDecoder().decode(ClientData.self, from: registration.rawClientDataJSON)).flatMap({ $0.challenge.data(using: .utf8) })
         } else if let credentialAssertion = authorization.credential as? ASAuthorizationSecurityKeyPublicKeyCredentialAssertion {
-            print("Authentication was used to sign in: \(credentialAssertion)")
+            print("A passkey was used to sign in: \(credentialAssertion)")
             delegate?.didFinish(screen: .login)
         }
     }

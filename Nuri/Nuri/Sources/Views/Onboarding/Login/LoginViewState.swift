@@ -4,7 +4,7 @@ struct LoginViewState: ViewModelViewState {
     let illustration: String
     var emailTextField: TextFieldViewState
     let orLabel: String
-    let authButton: TextButtonViewState
+    let passkeyButton: TextButtonViewState
     let appleLoginAction: UserAction
 
 
@@ -15,7 +15,7 @@ struct LoginViewState: ViewModelViewState {
             illustration: "",
             emailTextField: .empty,
             orLabel: "",
-            authButton: .empty,
+            passkeyButton: .empty,
             appleLoginAction: .empty
         )
     }

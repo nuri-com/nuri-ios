@@ -27,7 +27,7 @@ struct LoginView: View {
             AppleSignInButton(action: viewState.appleLoginAction.action)
                 .frame(height: 45)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
-            TextButton(viewState: viewState.authButton)
+            TextButton(viewState: viewState.passkeyButton)
             .buttonStyle(ProminentButtonStyle())
             Spacer()
         }
