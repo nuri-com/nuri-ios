@@ -288,83 +288,54 @@ struct ConfirmTransactionView: View {
     // MARK: - Transaction Methods
     
     private func loadBalanceAndTransactionInfo() async {
-        // Get cached balance and fee rates (instant)
-        let _ = await walletState.getBalance(forceRefresh: false)
-        let _ = await walletState.getFeeRates(forceRefresh: false)
+        print("🔧 [ConfirmTransactionView] Loading transaction info INSTANTLY using cached data")
         
-        // Then create transaction info using cached fee rates
+        // No need to await - we use cached balance and fee rates that are already loaded
+        // The wallet state manager already has this data cached from the main screen
         await loadTransactionInfo()
     }
     
     private func loadTransactionInfo() async {
-        print("🔧 [ConfirmTransactionView] ========== LOAD TRANSACTION INFO START ==========")
-        print("🔧 [ConfirmTransactionView] Current btcAmount: \(btcAmount)")
-        print("🔧 [ConfirmTransactionView] Current eurAmount: \(eurAmount)")
-        print("🔧 [ConfirmTransactionView] Current recipientAddress: \(recipientAddress)")
+        print("🔧 [ConfirmTransactionView] ========== INSTANT TRANSACTION INFO ==========")
+        print("🔧 [ConfirmTransactionView] Using cached fee rates for instant calculation")
         
-        do {
-            let amountSats = UInt64(btcAmount * 100_000_000)
-            print("🔧 [ConfirmTransactionView] Calculated amountSats: \(amountSats)")
-            print("🔧 [ConfirmTransactionView] Calculation: \(btcAmount) * 100_000_000 = \(btcAmount * 100_000_000)")
-            print("🔧 [ConfirmTransactionView] UInt64 conversion: UInt64(\(btcAmount * 100_000_000)) = \(amountSats)")
-            
-            if amountSats == 0 {
-                print("❌ [ConfirmTransactionView] 🚨 CRITICAL: amountSats is 0!")
-                print("❌ [ConfirmTransactionView] btcAmount: \(btcAmount)")
-                print("❌ [ConfirmTransactionView] btcAmount * 100_000_000: \(btcAmount * 100_000_000)")
-                print("❌ [ConfirmTransactionView] This will cause the 'invalid amount: 0 sats' error!")
-            }
-            
-            // Use cached fee rate instead of recalculating
-            let feeRate = walletState.feeRates.defaultFee
-            print("⚡ [ConfirmTransactionView] Using cached fee rate: \(feeRate) sat/vB")
-            print("⚡ [ConfirmTransactionView] Fee rates object: \(walletState.feeRates)")
-            
-            let estimatedFee = walletState.feeRates.estimatedFee(amountSats: amountSats, feeRate: feeRate)
-            let totalSats = amountSats + estimatedFee
-            
-            print("💰 [ConfirmTransactionView] Fee calculation:")
-            print("   💰 amountSats: \(amountSats)")
-            print("   ⚡ estimatedFee: \(estimatedFee)")
-            print("   📊 totalSats: \(totalSats)")
-            
-            // Create transaction info directly instead of calculating via TransactionManager
-            let txInfo = TransactionManager.TransactionInfo(
-                recipientAddress: recipientAddress,
-                amountSats: amountSats,
-                feeSats: estimatedFee,
-                totalSats: totalSats,
-                feeRate: feeRate
-            )
-            
-            print("✅ [ConfirmTransactionView] Transaction info created using cached fee rates:")
-            print("   📍 recipientAddress: \(txInfo.recipientAddress)")
-            print("   💰 amountSats: \(txInfo.amountSats)")
-            print("   ⚡ feeSats: \(txInfo.feeSats)")
-            print("   📊 totalSats: \(txInfo.totalSats)")
-            print("   ⚡ feeRate: \(txInfo.feeRate)")
-            
-            print("🔧 [ConfirmTransactionView] About to set transactionInfo on MainActor...")
+        let amountSats = UInt64(btcAmount * 100_000_000)
+        print("🔧 [ConfirmTransactionView] amountSats: \(amountSats)")
+        
+        if amountSats == 0 {
+            print("❌ [ConfirmTransactionView] Invalid amount: \(amountSats) sats")
             await MainActor.run {
-                print("🔧 [ConfirmTransactionView] Setting transactionInfo and isLoadingFee on MainActor")
-                self.transactionInfo = txInfo
-                self.isLoadingFee = false
-                print("🔧 [ConfirmTransactionView] transactionInfo set: \(String(describing: self.transactionInfo))")
-                print("🔧 [ConfirmTransactionView] isLoadingFee set to: \(self.isLoadingFee)")
-            }
-            print("🔧 [ConfirmTransactionView] ========== LOAD TRANSACTION INFO SUCCESS ==========")
-            
-        } catch {
-            print("❌ [ConfirmTransactionView] Transaction info loading failed: \(error.localizedDescription)")
-            if let txError = error as? TransactionManager.TransactionError {
-                print("   🔍 Error type: \(txError)")
-            }
-            
-            await MainActor.run {
-                self.errorMessage = error.localizedDescription
+                self.errorMessage = "Invalid transaction amount"
                 self.showError = true
                 self.isLoadingFee = false
             }
+            return
+        }
+        
+        // Use cached fee rate - no network calls needed!
+        let feeRate = walletState.feeRates.defaultFee
+        let estimatedFee = walletState.feeRates.estimatedFee(amountSats: amountSats, feeRate: feeRate)
+        let totalSats = amountSats + estimatedFee
+        
+        print("⚡ [ConfirmTransactionView] INSTANT calculation:")
+        print("   💰 Amount: \(amountSats) sats")
+        print("   ⚡ Fee: \(estimatedFee) sats (at \(feeRate) sat/vB)")
+        print("   📊 Total: \(totalSats) sats")
+        
+        // Create transaction info instantly
+        let txInfo = TransactionManager.TransactionInfo(
+            recipientAddress: recipientAddress,
+            amountSats: amountSats,
+            feeSats: estimatedFee,
+            totalSats: totalSats,
+            feeRate: feeRate
+        )
+        
+        // Set immediately on main thread
+        await MainActor.run {
+            self.transactionInfo = txInfo
+            self.isLoadingFee = false
+            print("✅ [ConfirmTransactionView] Transaction info set INSTANTLY!")
         }
     }
     
@@ -403,9 +374,10 @@ struct ConfirmTransactionView: View {
                 print("   📍 recipientAddress: \(recipientAddress)")
                 print("   💰 amountSats: \(txInfo.amountSats)")
                 print("   ⚡ feeRate: \(txInfo.feeRate)")
-                print("🚀 [ConfirmTransactionView] Calling transactionManager.sendTransaction()...")
+                print("🚀 [ConfirmTransactionView] Calling transactionManager.sendTransactionDirect()...")
                 
-                let txId = try await transactionManager.sendTransaction(
+                // Use direct transaction sending to bypass expensive fee recalculation
+                let txId = try await transactionManager.sendTransactionDirect(
                     recipientAddress: recipientAddress,
                     amountSats: txInfo.amountSats,
                     feeRate: txInfo.feeRate

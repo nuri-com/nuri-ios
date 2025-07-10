@@ -254,7 +254,7 @@ final class TransactionManager {
         return transactionInfo
     }
     
-    /// Sends Bitcoin transaction
+    /// Sends Bitcoin transaction with fee recalculation (slower)
     func sendTransaction(
         recipientAddress: String,
         amountSats: UInt64,
@@ -308,6 +308,79 @@ final class TransactionManager {
             try broadcastTransaction(esploraClient: esploraClient, transaction: transaction)
             
             print("✅ [TransactionManager] Transaction sent successfully!")
+            print("   🆔 Transaction ID: \(txId)")
+            
+            return txId
+            
+        } catch let error as AddressParseError {
+            throw TransactionError.invalidAddress(recipientAddress)
+        } catch let error as SignerError {
+            throw TransactionError.signingFailed(error)
+        } catch let error as EsploraError {
+            throw TransactionError.broadcastFailed(error)
+        } catch {
+            throw TransactionError.buildTransactionFailed(error)
+        }
+    }
+    
+    /// Sends Bitcoin transaction directly without fee recalculation (faster)
+    /// Use this when you already have validated amount and fee rate from UI
+    func sendTransactionDirect(
+        recipientAddress: String,
+        amountSats: UInt64,
+        feeRate: UInt64
+    ) async throws -> String {
+        
+        print("🚀 [TransactionManager] Starting DIRECT Bitcoin transaction (no fee recalc)")
+        print("   📍 To: \(recipientAddress)")
+        print("   💰 Amount: \(amountSats) sats")
+        print("   ⚡ Fee rate: \(feeRate) sat/vB")
+        
+        // Basic validation only - skip expensive fee calculation
+        guard validateAddress(recipientAddress) else {
+            throw TransactionError.invalidAddress(recipientAddress)
+        }
+        
+        guard validateAmount(amountSats) else {
+            throw TransactionError.invalidAmount("\(amountSats) sats")
+        }
+        
+        guard let wallet = await getWallet() else {
+            throw TransactionError.walletNotAvailable
+        }
+        
+        guard let esploraClient = await getEsploraClient() else {
+            throw TransactionError.walletNotAvailable
+        }
+        
+        do {
+            // Sync wallet before creating transaction
+            print("🔄 [TransactionManager] Syncing wallet before transaction...")
+            _ = try await walletService.syncAndGetBalance()
+            
+            // Build transaction directly
+            print("🔧 [TransactionManager] Building transaction...")
+            let psbt = try buildTransaction(
+                wallet: wallet,
+                recipientAddress: recipientAddress,
+                amountSats: amountSats,
+                feeRate: feeRate
+            )
+            
+            // Sign transaction
+            print("✍️ [TransactionManager] Signing transaction...")
+            let signedPsbt = try signTransaction(wallet: wallet, psbt: psbt)
+            
+            // Extract final transaction
+            print("📤 [TransactionManager] Extracting transaction...")
+            let transaction = try signedPsbt.extractTx()
+            let txId = transaction.computeTxid()
+            
+            // Broadcast transaction
+            print("📡 [TransactionManager] Broadcasting transaction...")
+            try broadcastTransaction(esploraClient: esploraClient, transaction: transaction)
+            
+            print("✅ [TransactionManager] DIRECT transaction sent successfully!")
             print("   🆔 Transaction ID: \(txId)")
             
             return txId
