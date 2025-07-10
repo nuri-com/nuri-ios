@@ -77,7 +77,7 @@ struct BuyBitcoinView: View {
                 Text("1 ₿ = 1 sat ≈ € " + String(format: "%0.8f", exchangeRate / 100_000_000))
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(Color(hex: "#6D6D86"))
-                NavigationLink(destination: SuccessView(illustration: "hand-plant", title: "Bitcoin purchased!", subtitle: "You've purchased ₿91,230,000!") {
+                NavigationLink(destination: SuccessView(illustration: "hand-plant", title: "Bitcoin purchased!", subtitle: "You've purchased ₿ 91,230,000!") {
                     isPresented = false
                 }) {
                     NuriButton(icon: "bitcoin-circle", title: "Buy with Apple Pay", style: .primary)

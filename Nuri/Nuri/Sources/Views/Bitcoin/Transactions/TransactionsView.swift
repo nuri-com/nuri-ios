@@ -81,7 +81,7 @@ private struct TransactionRow: View {
         let isPositive = sats > 0
         let color: Color = isPositive ? Color(hex: "#02542d") : Color("PrimaryNuriBlack")
 
-        return Text("\(isPositive ? "" : "-")₿\(abs(sats))")
+        return Text("\(isPositive ? "" : "-")₿ \(abs(sats))")
             .foregroundColor(color)
             .font(.custom("Inter", size: 16).weight(.medium))
     }

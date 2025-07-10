@@ -114,7 +114,8 @@ public struct AmountEntryScreen: View {
         .background(NuriAsset.background.swiftUIColor)
         .onAppear {
             isFieldFocused = true
-            if exchangeRate == 0 && primarySymbol == "₿" {
+            // Don't auto-fetch price for ₿ since it should be provided as sats-to-EUR rate
+            if exchangeRate == 0 && primarySymbol != "₿" {
                 Task {
                     await fetchPrice()
                 }
@@ -130,8 +131,14 @@ public struct AmountEntryScreen: View {
             let twoDec = String(format: "%0.2f", eur)
             return "~ " + secondarySymbol + " " + twoDec
         } else {
-            let btc = amountValue / exchangeRate
-            return "~ " + formatter.string(from: NSNumber(value: btc))! + " " + primarySymbol
+            let sats = amountValue / exchangeRate
+            if primarySymbol == "₿" {
+                // For satoshis, show as integer with space
+                return "~ ₿ " + String(Int(sats))
+            } else {
+                // For other crypto, use decimal format
+                return "~ " + formatter.string(from: NSNumber(value: sats))! + " " + primarySymbol
+            }
         }
     }
 
@@ -148,7 +155,7 @@ public struct AmountEntryScreen: View {
         } else { // Switching from Fiat to Crypto (e.g., EUR to sats)
             let crypto = current / exchangeRate
             if primarySymbol == "₿" {
-                // For satoshis, show as integer
+                // For satoshis, show as integer (input field will show just the number)
                 amountText = String(Int(crypto))
             } else {
                 // For other crypto, use decimal format
@@ -203,9 +210,14 @@ public struct AmountEntryScreen: View {
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
             if let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let eur = dict["EUR"] as? Double {
+               let eurPerBtc = dict["EUR"] as? Double {
                 await MainActor.run {
-                    exchangeRate = eur
+                    // If this is for ₿ (satoshis), convert BTC rate to sats rate
+                    if primarySymbol == "₿" {
+                        exchangeRate = eurPerBtc / 100_000_000
+                    } else {
+                        exchangeRate = eurPerBtc
+                    }
                 }
             }
         } catch {

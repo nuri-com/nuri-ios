@@ -236,7 +236,7 @@ private struct AmountAndCurrency: View {
             } else {
                 HStack(spacing: 10) {
                     if isPrimaryBTC {
-                        HStack(spacing: 0) {
+                        HStack(spacing: 4) {
                             Text("₿")
                             Text(satsString)
                         }
