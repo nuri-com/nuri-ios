@@ -2,15 +2,19 @@ import SwiftUI
 
 struct TransactionsView: View {
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var walletState = WalletStateManager.shared
+    @State private var isLoading = false
 
-    // MARK: - Sample Data (Matches Figma "transactions-v3" frame) - Updated to use satoshis
-    private let transactions: [Transaction] = [
+    // MARK: - Mock Data (Commented out - replaced with real transactions)
+    /*
+    private let mockTransactions: [Transaction] = [
         .init(iconName: "list-item-icon-paperplane_send", title: "Send Bitcoin",    sats: -5_300_000,    fiat: -1_000, date: "Nov 27"),
         .init(iconName: "vector-icon-card",             title: "Card Spend",      sats: nil,          fiat:  -10.53, date: "Nov 27"),
         .init(iconName: "money_topup",                   title: "Card Top-Up",     sats: nil,          fiat:   100,   date: "Nov 27"),
         .init(iconName: "list-item-icon-paperplane_send", title: "Send Bitcoin",    sats: -100_000,     fiat:  -100,   date: "Nov 27"),
         .init(iconName: "bitcoin_hand",                  title: "Bought Bitcoin",  sats: 133_700,      fiat:   133,   date: "Nov 27")
     ]
+    */
 
     var body: some View {
         ZStack {
@@ -21,13 +25,41 @@ struct TransactionsView: View {
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
-                        ForEach(Array(transactions.enumerated()), id: \.offset) { index, tx in
-                            TransactionRow(tx: tx)
+                        if isLoading || walletState.isSyncing {
+                            // Loading state
+                            VStack(spacing: 16) {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle())
+                                Text("Loading transactions...")
+                                    .font(.custom("Inter", size: 16).weight(.medium))
+                                    .foregroundColor(Color(hex: "#6D6D86"))
+                            }
+                            .padding(.top, 40)
+                        } else if walletState.transactions.isEmpty {
+                            // Empty state
+                            VStack(spacing: 16) {
+                                Image(systemName: "bitcoin.circle")
+                                    .font(.system(size: 48))
+                                    .foregroundColor(Color(hex: "#6D6D86"))
+                                Text("No transactions yet")
+                                    .font(.custom("Inter", size: 18).weight(.medium))
+                                    .foregroundColor(Color("PrimaryNuriBlack"))
+                                Text("Your Bitcoin transactions will appear here")
+                                    .font(.custom("Inter", size: 14).weight(.medium))
+                                    .foregroundColor(Color(hex: "#6D6D86"))
+                                    .multilineTextAlignment(.center)
+                            }
+                            .padding(.top, 40)
+                        } else {
+                            // Real transactions
+                            ForEach(Array(walletState.transactions.enumerated()), id: \.offset) { index, cachedTx in
+                                RealTransactionRow(cachedTx: cachedTx)
 
-                            if index != transactions.count - 1 {
-                                Color.clear.frame(height: 8)             // Top gutter (8 pt)
-                                Color(hex: "#E0E0E0").frame(height: 1)  // Divider (1 pt)
-                                Color.clear.frame(height: 8)             // Bottom gutter (8 pt)
+                                if index != walletState.transactions.count - 1 {
+                                    Color.clear.frame(height: 8)             // Top gutter (8 pt)
+                                    Color(hex: "#E0E0E0").frame(height: 1)  // Divider (1 pt)
+                                    Color.clear.frame(height: 8)             // Bottom gutter (8 pt)
+                                }
                             }
                         }
                     }
@@ -36,6 +68,30 @@ struct TransactionsView: View {
                 Spacer(minLength: 0)
             }
         }
+        .task {
+            await loadTransactions()
+        }
+        .refreshable {
+            await refreshTransactions()
+        }
+    }
+    
+    // MARK: - Data Loading Methods
+    
+    private func loadTransactions() async {
+        print("📋 [TransactionsView] Loading transactions...")
+        isLoading = true
+        
+        // Get cached transactions (fast) and refresh in background if needed
+        let _ = await walletState.getTransactions(forceRefresh: false)
+        
+        isLoading = false
+    }
+    
+    private func refreshTransactions() async {
+        print("📋 [TransactionsView] Refreshing transactions...")
+        // Force refresh transactions from network
+        let _ = await walletState.getTransactions(forceRefresh: true)
     }
 }
 
@@ -102,6 +158,72 @@ private struct TransactionRow: View {
                 .foregroundColor(color)
                 .font(.custom("Inter", size: 16).weight(.medium))
         }
+    }
+}
+
+// MARK: - Real Transaction Row
+private struct RealTransactionRow: View {
+    let cachedTx: WalletStateManager.CachedTransaction
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 7) {
+            Image(cachedTx.iconName)
+                .resizable()
+                .frame(width: 32, height: 32)
+
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 4) {
+                    Text(cachedTx.type.rawValue)
+                        .foregroundColor(Color("PrimaryNuriBlack"))
+                        .font(.custom("Inter", size: 16).weight(.medium))
+                    
+                    // Show pending status if not confirmed
+                    if let statusText = cachedTx.statusText {
+                        Text("(\(statusText))")
+                            .foregroundColor(Color(hex: "#6D6D86"))
+                            .font(.custom("Inter", size: 14).weight(.medium))
+                    }
+                }
+                
+                Text(cachedTx.displayDate)
+                    .foregroundColor(Color(hex: "#6D6D86"))
+                    .font(.custom("Inter", size: 14).weight(.medium))
+                    .tracking(-0.25)
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 0) {
+                // Bitcoin amount with sign
+                satsText(sats: cachedTx.amountWithSign)
+                
+                // EUR amount with sign  
+                fiatText(fiat: cachedTx.eurAmountWithSign)
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .padding(.horizontal, 24)
+        .frame(height: 40)
+    }
+
+    // MARK: - Helpers
+    private func satsText(sats: Int64) -> Text {
+        let isPositive = sats > 0
+        let color: Color = isPositive ? Color(hex: "#02542d") : Color("PrimaryNuriBlack")
+
+        return Text("\(isPositive ? "" : "-")₿ \(abs(sats))")
+            .foregroundColor(color)
+            .font(.custom("Inter", size: 16).weight(.medium))
+    }
+
+    private func fiatText(fiat: Double) -> Text {
+        let isPositive = fiat > 0
+
+        // Secondary fiat line under sats amount (same styling as original)
+        return Text(String(format: "%@%.0f €", isPositive ? "" : "-", abs(fiat)))
+            .foregroundColor(Color(hex: "#6D6D86"))
+            .font(.custom("Inter", size: 14).weight(.medium))
+            .tracking(-0.25)
     }
 }
 

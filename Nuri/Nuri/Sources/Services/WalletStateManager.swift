@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import BitcoinDevKit
 
 /// Manages wallet state with intelligent caching and background sync
 @MainActor
@@ -8,6 +9,7 @@ final class WalletStateManager: ObservableObject {
     
     // MARK: - Published State
     @Published var balance: WalletBalance = WalletBalance()
+    @Published var transactions: [CachedTransaction] = []
     @Published var isLoading: Bool = false
     @Published var isSyncing: Bool = false
     @Published var lastSyncTime: Date?
@@ -29,11 +31,14 @@ final class WalletStateManager: ObservableObject {
         static let balanceTotal = "nuri.wallet.balance.total"
         static let balanceLastUpdated = "nuri.wallet.balance.lastUpdated"
         static let pendingTransactionsList = "nuri.wallet.pendingTransactions"
+        static let transactionsList = "nuri.wallet.transactions.list"
+        static let transactionsLastUpdated = "nuri.wallet.transactions.lastUpdated"
     }
     
     private init() {
         print("🧠 [WalletStateManager] Initializing wallet state manager")
         loadPersistedBalance()
+        loadPersistedTransactions()
         loadPersistedPendingTransactions()
         setupBackgroundSync()
     }
@@ -50,8 +55,98 @@ final class WalletStateManager: ObservableObject {
         }
     }
     
+    struct CachedTransaction: Identifiable, Codable {
+        let id = UUID()
+        let txId: String
+        let type: TransactionType
+        let amountSats: UInt64
+        let eurAmount: Double
+        let eurRate: Double  // Exchange rate at time of transaction
+        let date: Date
+        let isConfirmed: Bool
+        let blockTime: UInt64?
+        
+        enum TransactionType: String, Codable {
+            case send = "Send Bitcoin"
+            case receive = "Receive Bitcoin"
+        }
+        
+        // For UI display
+        var iconName: String {
+            switch type {
+            case .send:
+                return "list-item-icon-paperplane_send"  // Plain/error icon as requested
+            case .receive:
+                return "bitcoin_hand"  // Same as "Bought Bitcoin" icon
+            }
+        }
+        
+        var amountWithSign: Int64 {
+            switch type {
+            case .send:
+                return -Int64(amountSats)
+            case .receive:
+                return Int64(amountSats)
+            }
+        }
+        
+        var eurAmountWithSign: Double {
+            switch type {
+            case .send:
+                return -eurAmount
+            case .receive:
+                return eurAmount
+            }
+        }
+        
+        var displayDate: String {
+            let now = Date()
+            let timeInterval = now.timeIntervalSince(date)
+            
+            if timeInterval < 3600 { // Less than 1 hour
+                let minutes = Int(timeInterval / 60)
+                return "\(minutes) min ago"
+            } else if timeInterval < 86400 { // Less than 24 hours
+                let hours = Int(timeInterval / 3600)
+                return "\(hours) hours ago"
+            } else if timeInterval < 604800 { // Less than 7 days
+                let days = Int(timeInterval / 86400)
+                return "\(days) days ago"
+            } else {
+                // Use actual date format
+                let formatter = DateFormatter()
+                formatter.dateStyle = .medium
+                formatter.timeStyle = .none
+                return formatter.string(from: date)
+            }
+        }
+        
+        var statusText: String? {
+            return isConfirmed ? nil : "Pending"
+        }
+    }
+    
     // MARK: - Public API
     
+    /// Get cached transactions with smart refresh
+    func getTransactions(forceRefresh: Bool = false) async -> [CachedTransaction] {
+        print("📋 [WalletStateManager] getTransactions called (forceRefresh: \(forceRefresh))")
+        print("📋 [WalletStateManager] Current cached transactions: \(transactions.count)")
+        
+        // Check if we need to refresh transactions
+        let transactionsStale = isTransactionsStale()
+        
+        if !forceRefresh && !transactionsStale && !transactions.isEmpty {
+            print("📋 [WalletStateManager] Returning cached transactions: \(transactions.count) items")
+            return transactions
+        }
+        
+        // Fetch fresh transactions
+        print("📋 [WalletStateManager] Cache stale or refresh forced, syncing transactions...")
+        await syncTransactions()
+        return transactions
+    }
+
     /// Get current balance with smart caching
     func getBalance(forceRefresh: Bool = false) async -> WalletBalance {
         print("💰 [WalletStateManager] getBalance called (forceRefresh: \(forceRefresh))")
@@ -76,6 +171,7 @@ final class WalletStateManager: ObservableObject {
         isLoading = true
         
         await syncBalance()
+        await syncTransactions()
         
         isLoading = false
         lastSyncTime = Date()
@@ -179,6 +275,103 @@ final class WalletStateManager: ObservableObject {
         }
     }
     
+    private func syncTransactions() async {
+        print("📋 [WalletStateManager] Starting transaction sync...")
+        print("📋 [WalletStateManager] Current cached transactions: \(transactions.count)")
+        
+        DispatchQueue.main.async {
+            self.isSyncing = true
+        }
+        
+        guard let bdkTransactions = await walletService.getTransactions() else {
+            print("❌ [WalletStateManager] Failed to fetch transactions from wallet service")
+            DispatchQueue.main.async {
+                self.syncError = "Failed to fetch transactions"
+                self.isSyncing = false
+            }
+            return
+        }
+        
+        print("📡 [WalletStateManager] Received \(bdkTransactions.count) transactions from BDK")
+        
+        // Get current exchange rate for transactions without historical rate
+        let currentExchangeRate = await fetchCurrentExchangeRate()
+        print("💱 [WalletStateManager] Current exchange rate: \(currentExchangeRate) EUR/BTC")
+        
+        var cachedTransactions: [CachedTransaction] = []
+        
+        for (index, bdkTx) in bdkTransactions.enumerated() {
+            let txId = bdkTx.transaction.computeTxid()
+            print("📄 [WalletStateManager] Processing transaction \(index + 1): \(txId)")
+            
+            // Get sent/received amounts to determine transaction type
+            guard let wallet = walletService.getWallet() else { continue }
+            let sentReceived = wallet.sentAndReceived(tx: bdkTx.transaction)
+            
+            let sent = sentReceived.sent.toSat()
+            let received = sentReceived.received.toSat()
+            
+            print("📄 [WalletStateManager]   Sent: \(sent) sats, Received: \(received) sats")
+            
+            // Determine transaction type and amount
+            let (type, amountSats): (CachedTransaction.TransactionType, UInt64)
+            if sent == 0 && received > 0 {
+                type = .receive
+                amountSats = received
+            } else if sent > 0 {
+                type = .send
+                amountSats = sent > received ? sent - received : sent
+            } else {
+                print("📄 [WalletStateManager]   Skipping transaction with no clear direction")
+                continue
+            }
+            
+            // Get confirmation status and timing
+            let (isConfirmed, blockTime) = getTransactionInfo(chainPosition: bdkTx.chainPosition)
+            let date = getTransactionDate(chainPosition: bdkTx.chainPosition)
+            
+            print("📄 [WalletStateManager]   Type: \(type.rawValue)")
+            print("📄 [WalletStateManager]   Amount: \(amountSats) sats")
+            print("📄 [WalletStateManager]   Confirmed: \(isConfirmed)")
+            print("📄 [WalletStateManager]   Date: \(date)")
+            
+            // Check if we have cached exchange rate for this transaction
+            let exchangeRate = getHistoricalExchangeRate(for: date) ?? currentExchangeRate
+            let eurAmount = Double(amountSats) * exchangeRate / 100_000_000.0 // Convert sats to BTC then to EUR
+            
+            print("📄 [WalletStateManager]   Exchange rate: \(exchangeRate) EUR/BTC")
+            print("📄 [WalletStateManager]   EUR amount: \(eurAmount)")
+            
+            let cachedTx = CachedTransaction(
+                txId: txId,
+                type: type,
+                amountSats: amountSats,
+                eurAmount: eurAmount,
+                eurRate: exchangeRate,
+                date: date,
+                isConfirmed: isConfirmed,
+                blockTime: blockTime
+            )
+            
+            cachedTransactions.append(cachedTx)
+        }
+        
+        // Sort by date (newest first)
+        cachedTransactions.sort { $0.date > $1.date }
+        
+        print("📋 [WalletStateManager] ✅ Processed \(cachedTransactions.count) transactions")
+        
+        DispatchQueue.main.async {
+            self.transactions = cachedTransactions
+            self.isSyncing = false
+        }
+        
+        // Persist transactions
+        persistTransactions(cachedTransactions)
+        
+        print("📋 [WalletStateManager] ✅ Transactions updated and persisted")
+    }
+    
     private func isDataStale() -> Bool {
         guard let lastSync = lastSyncTime else { return true }
         return Date().timeIntervalSince(lastSync) > maxCacheAge
@@ -263,6 +456,102 @@ final class WalletStateManager: ObservableObject {
     private func persistPendingTransactions() {
         UserDefaults.standard.set(Array(pendingTransactions), forKey: CacheKeys.pendingTransactionsList)
         print("💾 [WalletStateManager] Persisted \(pendingTransactions.count) pending transactions")
+    }
+    
+    // MARK: - Transaction Persistence Methods
+    
+    private func persistTransactions(_ transactions: [CachedTransaction]) {
+        print("💾 [WalletStateManager] Persisting \(transactions.count) transactions to UserDefaults...")
+        
+        do {
+            let encoder = JSONEncoder()
+            let data = try encoder.encode(transactions)
+            UserDefaults.standard.set(data, forKey: CacheKeys.transactionsList)
+            UserDefaults.standard.set(Date(), forKey: CacheKeys.transactionsLastUpdated)
+            print("💾 [WalletStateManager] ✅ Transactions persisted successfully")
+        } catch {
+            print("❌ [WalletStateManager] Failed to persist transactions: \(error)")
+        }
+    }
+    
+    private func loadPersistedTransactions() {
+        print("📱 [WalletStateManager] Loading persisted transactions from UserDefaults...")
+        
+        guard let data = UserDefaults.standard.data(forKey: CacheKeys.transactionsList) else {
+            print("📱 [WalletStateManager] No persisted transactions found")
+            return
+        }
+        
+        do {
+            let decoder = JSONDecoder()
+            let persistedTransactions = try decoder.decode([CachedTransaction].self, from: data)
+            let lastUpdated = UserDefaults.standard.object(forKey: CacheKeys.transactionsLastUpdated) as? Date ?? Date.distantPast
+            
+            transactions = persistedTransactions
+            
+            let cacheAge = Date().timeIntervalSince(lastUpdated)
+            print("📱 [WalletStateManager] ✅ Loaded \(persistedTransactions.count) persisted transactions")
+            print("📱 [WalletStateManager]   Cache age: \(cacheAge)s")
+            print("📱 [WalletStateManager]   Is stale: \(isTransactionsStale())")
+        } catch {
+            print("❌ [WalletStateManager] Failed to load persisted transactions: \(error)")
+        }
+    }
+    
+    // MARK: - Transaction Helper Methods
+    
+    private func isTransactionsStale() -> Bool {
+        guard let lastUpdated = UserDefaults.standard.object(forKey: CacheKeys.transactionsLastUpdated) as? Date else {
+            return true
+        }
+        return Date().timeIntervalSince(lastUpdated) > maxCacheAge
+    }
+    
+    private func getTransactionInfo(chainPosition: ChainPosition) -> (isConfirmed: Bool, blockTime: UInt64?) {
+        switch chainPosition {
+        case .confirmed(let blockTime, _):
+            return (true, UInt64(blockTime.blockId.height))
+        case .unconfirmed(_):
+            return (false, nil)
+        }
+    }
+    
+    private func getTransactionDate(chainPosition: ChainPosition) -> Date {
+        switch chainPosition {
+        case .confirmed(let blockTime, _):
+            return blockTime.confirmationTime.toDate()
+        case .unconfirmed(let timestamp):
+            return timestamp?.toDate() ?? Date()
+        }
+    }
+    
+    private func fetchCurrentExchangeRate() async -> Double {
+        // Reuse the same API as the main app
+        do {
+            let url = URL(string: "https://api.coinbase.com/v2/exchange-rates?currency=BTC")!
+            let (data, _) = try await URLSession.shared.data(from: url)
+            
+            if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let responseData = json["data"] as? [String: Any],
+               let rates = responseData["rates"] as? [String: String],
+               let eurRate = rates["EUR"],
+               let rate = Double(eurRate) {
+                print("💱 [WalletStateManager] Fetched current EUR rate: \(rate)")
+                return rate
+            }
+        } catch {
+            print("❌ [WalletStateManager] Failed to fetch exchange rate: \(error)")
+        }
+        
+        // Fallback rate
+        print("💱 [WalletStateManager] Using fallback EUR rate: 50000.0")
+        return 50000.0
+    }
+    
+    private func getHistoricalExchangeRate(for date: Date) -> Double? {
+        // For now, we don't have historical rates stored
+        // In the future, we could cache rates by date or use a historical API
+        return nil
     }
 }
 
