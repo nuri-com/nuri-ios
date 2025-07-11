@@ -1,0 +1,78 @@
+default_platform(:ios)
+
+platform :ios do
+  desc "Build and upload to TestFlight"
+  lane :beta do
+    # Ensure we're on the right branch
+    ensure_git_status_clean
+    
+    # Increment build number
+    increment_build_number(
+      build_number: latest_testflight_build_number + 1
+    )
+    
+    # Build the app
+    build_app(
+      workspace: "Nuri.xcworkspace",
+      scheme: "Nuri",
+      export_method: "app-store",
+      export_options: {
+        provisioningProfiles: {
+          "com.nuri.mobile-ios" => "match AppStore com.nuri.mobile-ios"
+        }
+      },
+      output_directory: "./builds",
+      output_name: "Nuri.ipa"
+    )
+    
+    # Upload to TestFlight
+    upload_to_testflight(
+      skip_waiting_for_build_processing: true,
+      apple_id: "6736962812" # You'll need to replace this with your app's Apple ID
+    )
+    
+    # Commit the version bump
+    commit_version_bump
+    
+    # Push to remote
+    push_to_git_remote
+  end
+  
+  desc "Build for TestFlight without uploading"
+  lane :build_only do
+    # Build the app
+    build_app(
+      workspace: "Nuri.xcworkspace",
+      scheme: "Nuri",
+      export_method: "app-store",
+      output_directory: "./builds",
+      output_name: "Nuri-TestFlight.ipa",
+      export_options: {
+        signingStyle: "manual",
+        teamID: "MH2SRQ3N27",
+        signingCertificate: "Apple Distribution",
+        provisioningProfiles: {
+          "com.nuri.mobile-ios" => "com.nuri.mobile-ios AppStore"
+        }
+      }
+    )
+  end
+  
+  desc "Upload existing IPA to TestFlight"
+  lane :upload_ipa do
+    upload_to_testflight(
+      ipa: "./builds/Nuri-TestFlight.ipa",
+      skip_waiting_for_build_processing: true,
+      skip_submission: true
+    )
+  end
+  
+  desc "Build and upload to TestFlight"
+  lane :build_and_upload do
+    # Build the app
+    build_only
+    
+    # Upload to TestFlight
+    upload_ipa
+  end
+end
