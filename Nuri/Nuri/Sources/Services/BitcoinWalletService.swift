@@ -115,6 +115,26 @@ final class BitcoinWalletService {
         createAndStoreWallet()
     }
     
+    /// Force a full rescan of the blockchain to find all transactions
+    func forceFullRescan() async -> Bool {
+        print("🔄 [BitcoinWalletService] Force full rescan requested")
+        
+        guard wallet != nil else {
+            print("❌ [BitcoinWalletService] Cannot rescan - no wallet available")
+            return false
+        }
+        
+        do {
+            print("🔍 [BitcoinWalletService] Starting forced full blockchain scan...")
+            try await syncWallet()
+            print("✅ [BitcoinWalletService] Full rescan completed successfully")
+            return true
+        } catch {
+            print("❌ [BitcoinWalletService] Full rescan failed: \(error)")
+            return false
+        }
+    }
+    
     /// Initialize wallet automatically when app starts (no user ID required)
     func initializeWalletOnAppStart() {
         print("🔑 [BitcoinWalletService] 🚨 initializeWalletOnAppStart() called")
@@ -433,11 +453,23 @@ final class BitcoinWalletService {
     }
 
     private func persist() {
-        guard let wallet, let connection else { return }
+        guard let wallet, let connection else {
+            print("⚠️ [BitcoinWalletService] Cannot persist - wallet or connection is nil")
+            return
+        }
+        
         do {
-            _ = try wallet.persist(connection: connection)
+            print("💾 [BitcoinWalletService] Persisting wallet changes to database...")
+            let changeSet = try wallet.persist(connection: connection)
+            if changeSet {
+                print("✅ [BitcoinWalletService] Wallet changes persisted successfully")
+            } else {
+                print("ℹ️ [BitcoinWalletService] No wallet changes to persist")
+            }
         } catch {
-            print("⚠️ Persist error: \(error)")
+            print("❌ [BitcoinWalletService] Failed to persist wallet changes: \(error)")
+            print("   🔍 Error type: \(type(of: error))")
+            print("   🔍 Error description: \(error.localizedDescription)")
         }
     }
     
@@ -642,6 +674,7 @@ final class BitcoinWalletService {
             }
             
             // Log transaction details for debugging
+            print("📋 [BitcoinWalletService] Transaction details:")
             for (index, tx) in sortedTransactions.enumerated() {
                 let txid = tx.transaction.computeTxid()
                 
@@ -655,8 +688,19 @@ final class BitcoinWalletService {
                 
                 // Get sent/received amounts
                 let sentReceived = wallet.sentAndReceived(tx: tx.transaction)
+                let netAmount = Int64(sentReceived.received.toSat()) - Int64(sentReceived.sent.toSat())
                 print("   📤 Sent: \(sentReceived.sent.toSat()) sats")
                 print("   📥 Received: \(sentReceived.received.toSat()) sats")
+                print("   💵 Net: \(netAmount > 0 ? "+" : "")\(netAmount) sats")
+                
+                // Log addresses involved in the transaction
+                print("   📍 Addresses in this transaction:")
+                for (outputIndex, output) in tx.transaction.output().enumerated() {
+                    if let address = output.scriptPubkey.toAddress(network: network) {
+                        let isMine = wallet.isMine(script: output.scriptPubkey)
+                        print("      Output \(outputIndex): \(address.description) (mine: \(isMine))")
+                    }
+                }
             }
             
             return sortedTransactions
@@ -672,26 +716,85 @@ final class BitcoinWalletService {
         guard let wallet else { throw WalletError.noExistingWallet }
         guard let esploraClient else { throw WalletError.keychainAccessFailed }
         
+        print("🔄 [BitcoinWalletService] Starting wallet sync...")
+        print("   🌐 Using Esplora URL: https://blockstream.info/api")
+        print("   🔍 Sync method: FULL SCAN (scanning all addresses)")
+        
         // Create sync inspector for progress tracking
         let inspector = WalletSyncScriptInspector { inspected, total in
             // Simple progress tracking - could be enhanced with UI progress bar
-            print("🔄 [BitcoinWalletService] Sync progress: \(inspected)/\(total)")
+            print("🔄 [BitcoinWalletService] Sync progress: \(inspected)/\(total) scripts")
         }
         
-        // Start sync with revealed SPKs (faster than full scan)
-        let syncRequest = try wallet.startSyncWithRevealedSpks()
-            .inspectSpks(inspector: inspector)
-            .build()
-        
-        let update = try esploraClient.sync(
-            request: syncRequest,
-            parallelRequests: UInt64(5)
-        )
-        
-        let _ = try wallet.applyUpdate(update: update)
-        
-        // Persist changes
-        persist()
+        do {
+            // Use FULL SCAN to find all transactions, not just revealed addresses
+            print("🔍 [BitcoinWalletService] Starting full scan of all addresses...")
+            let syncRequest = try wallet.startFullScan()
+                .inspectSpks(inspector: inspector)
+                .build()
+            
+            print("📡 [BitcoinWalletService] Syncing with blockchain (5 parallel requests)...")
+            let update = try esploraClient.sync(
+                request: syncRequest,
+                parallelRequests: UInt64(5)
+            )
+            
+            print("📝 [BitcoinWalletService] Applying sync update to wallet...")
+            let _ = try wallet.applyUpdate(update: update)
+            
+            // Persist changes to database
+            print("💾 [BitcoinWalletService] Persisting wallet state to database...")
+            persist()
+            
+            // Log wallet state after sync
+            let balance = wallet.balance()
+            let transactions = wallet.transactions()
+            print("✅ [BitcoinWalletService] Sync completed successfully!")
+            print("   💰 Balance: \(balance.total.toSat()) sats")
+            print("   📋 Transactions found: \(transactions.count)")
+            
+            // Log first few addresses to verify scanning
+            print("🔑 [BitcoinWalletService] Sample addresses from wallet:")
+            let revealedAddresses = wallet.revealedAddresses(keychain: .external)
+            print("   📊 Total revealed external addresses: \(revealedAddresses.count)")
+            
+            for i in 0..<min(5, revealedAddresses.count) {
+                if let addr = wallet.peek(index: UInt32(i), keychain: .external) {
+                    print("   Address \(i): \(addr.address.description)")
+                }
+            }
+            
+            // Check specifically for the address with known transactions
+            let targetAddress = "bc1p66fmpw0eck2wu6cml7x5mj8vnesq9vkcg5qxvkcpnx3d775gwu8q60v9sx"
+            print("🔍 [BitcoinWalletService] Checking for target address: \(targetAddress)")
+            
+            // Check all revealed addresses to see if we found the target
+            var foundTargetAddress = false
+            for i in 0..<revealedAddresses.count {
+                if let addr = wallet.peek(index: UInt32(i), keychain: .external) {
+                    if addr.address.description == targetAddress {
+                        foundTargetAddress = true
+                        print("✅ [BitcoinWalletService] Found target address at index \(i)!")
+                        break
+                    }
+                }
+            }
+            
+            if !foundTargetAddress {
+                print("⚠️ [BitcoinWalletService] Target address not found in revealed addresses")
+                print("   💡 This may indicate the wallet derivation path is different")
+            }
+            
+        } catch let error as EsploraError {
+            print("❌ [BitcoinWalletService] Esplora sync error: \(error)")
+            print("   🔍 Error type: EsploraError")
+            throw error
+        } catch {
+            print("❌ [BitcoinWalletService] Unexpected sync error: \(error)")
+            print("   🔍 Error type: \(type(of: error))")
+            print("   🔍 Error description: \(error.localizedDescription)")
+            throw error
+        }
     }
     
     /// Helper method to extract transaction info from ChainPosition
