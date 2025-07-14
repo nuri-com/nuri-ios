@@ -7,5 +7,6 @@ let package = Package(
         .package(url: "https://github.com/SumSubstance/IdensicMobileSDK-iOS", from: "1.36.0"),
         .package(url: "https://github.com/bitcoindevkit/bdk-swift", from: "1.2.0"),
         .package(url: "https://github.com/kishikawakatsumi/KeychainAccess", from: "4.2.2"),
+        .package(url: "https://github.com/Swinject/Swinject", from: "2.8.4"),
     ]
 )

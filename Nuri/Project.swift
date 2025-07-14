@@ -56,6 +56,7 @@ let project = Project(
                 .external(name: "IdensicMobileSDK"),
                 .external(name: "BitcoinDevKit"),
                 .external(name: "KeychainAccess"),
+                .external(name: "Swinject"),
             ],
             settings: .settings(
                 base: [
