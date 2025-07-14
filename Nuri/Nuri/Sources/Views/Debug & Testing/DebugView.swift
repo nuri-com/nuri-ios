@@ -3,7 +3,6 @@ import SwiftUI
 struct DebugView: View {
     @State private var resultText = "Press a button to run a debug action."
     @State private var isLoading = false
-    @State private var showDeleteAlert = false
     
     private let walletService = BitcoinWalletService.shared
 
@@ -32,23 +31,10 @@ struct DebugView: View {
                 }
 
                 
-                Section(header: Text("Danger Zone")) {
-                    Button("DELETE ALL WALLET DATA", role: .destructive) {
-                        showDeleteAlert = true
-                    }
-                }
             }
             .navigationTitle("Debug Menu")
             .navigationBarTitleDisplayMode(.inline)
             .disabled(isLoading)
-            .alert("Delete All Wallet Data?", isPresented: $showDeleteAlert) {
-                Button("DELETE", role: .destructive) {
-                    Task { await deleteAllData() }
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("This will permanently delete the mnemonic, cached address, and all encrypted backups from this device and iCloud. This action cannot be undone. \n\nUSE FOR TESTING ONLY.")
-            }
         }
     }
 
@@ -64,15 +50,6 @@ struct DebugView: View {
         }
     }
     
-    private func deleteAllData() async {
-        isLoading = true
-        resultText = "Deleting all wallet data from keychains..."
-        await walletService.clearAllWalletData()
-        await MainActor.run {
-            resultText = "✅ All wallet data has been deleted. Please restart the app to create a new wallet."
-            isLoading = false
-        }
-    }
 }
 
 struct DebugView_Previews: PreviewProvider {

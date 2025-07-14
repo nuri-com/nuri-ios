@@ -896,42 +896,6 @@ final class BitcoinWalletService {
 
     // MARK: - Encrypted Cloud Backup
     
-    /// FOR DEBUGGING: Clears all wallet-related data from all keychains.
-    func clearAllWalletData() async {
-        print("🚨🚨🚨 [BitcoinWalletService] DELETING ALL WALLET DATA --------------------")
-        
-        let backupServiceKeychain = Keychain(service: "com.nuri.seed-backup-key")
-            .synchronizable(false)
-
-        var messages: [String] = []
-        
-        func delete(key: String, from keychain: Keychain?, description: String) {
-            do {
-                try keychain?.remove(key)
-                let message = "✅ \(description) deleted."
-                print(message)
-                messages.append(message)
-            } catch let error as NSError {
-                if error.code == errSecItemNotFound {
-                    let message = "ℹ️ \(description) not found (already deleted)."
-                    print(message)
-                    messages.append(message)
-                } else {
-                    let message = "❌ Failed to delete \(description): \(error.localizedDescription)"
-                    print(message)
-                    messages.append(message)
-                }
-            }
-        }
-        
-        delete(key: Keys.mnemonic, from: keychain, description: "Local Mnemonic")
-        delete(key: Keys.currentAddress, from: keychain, description: "Local Cached Address")
-        delete(key: Keys.encryptedMnemonicBackup, from: backupKeychain, description: "iCloud Encrypted Backup")
-        delete(key: "com.nuri.backup.encryptionKey", from: backupServiceKeychain, description: "Backup Encryption Key")
-
-        print("🚨🚨🚨 [BitcoinWalletService] FINISHED DELETING ALL WALLET DATA --------------------")
-    }
-    
     /// FOR DEBUGGING: returns the decrypted seed phrase from the iCloud backup.
     func testDecryptCloudBackup() async -> String {
         print("🧪 [BitcoinWalletService] Starting DEBUG decryption test...")
