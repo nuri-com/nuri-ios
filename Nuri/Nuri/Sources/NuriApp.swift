@@ -7,9 +7,9 @@ struct NuriApp: App {
     @AppStorage("isUserLoggedIn") var isUserLoggedIn: Bool = false
 
     init() {
-        // Initialize Bitcoin wallet automatically when app starts
-        print("🔑 [NuriApp] App started - initializing Bitcoin wallet")
-        BitcoinWalletService.shared.initializeWalletOnAppStart()
+        // Don't initialize wallet on app start to avoid creating keychain entries
+        print("🔑 [NuriApp] App started")
+        // BitcoinWalletService will be initialized when Bitcoin tab is accessed
         
         isUserLoggedIn = true
     }

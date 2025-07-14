@@ -1,8 +1,15 @@
 import UIKit
+import SwiftUI
 
 final class AppDelegate: NSObject, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+        print("🚀 [AppDelegate] App launched")
+        
+        // Don't authenticate on app launch - wait for wallet access
+        // authenticateUser()
+        
+        // Continue with existing UI customization
         if let baseFont = UIFont(name: "Inter", size: 14) {
             let interFont = UIFontMetrics(forTextStyle: .caption1).scaledFont(for: baseFont)
             UILabel.appearance(whenContainedInInstancesOf: [UITabBar.self]).font = interFont
@@ -35,6 +42,18 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             UITabBar.appearance().scrollEdgeAppearance = tabBarAppearance
         }
         return true
+    }
+    
+    func applicationWillEnterForeground(_ application: UIApplication) {
+        print("📱 [AppDelegate] App will enter foreground")
+        // Reset authentication state in AuthenticationService
+        AuthenticationService.shared.resetAuthentication()
+    }
+    
+    func applicationDidEnterBackground(_ application: UIApplication) {
+        print("📱 [AppDelegate] App entered background")
+        // Reset authentication state
+        AuthenticationService.shared.resetAuthentication()
     }
 
     func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {

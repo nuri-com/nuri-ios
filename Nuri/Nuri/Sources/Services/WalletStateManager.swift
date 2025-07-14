@@ -39,7 +39,7 @@ final class WalletStateManager: ObservableObject {
     private var pendingTransactions: Set<String> = []
     
     // MARK: - Configuration
-    private let backgroundSyncInterval: TimeInterval = 30 // 30 seconds
+    private let backgroundSyncInterval: TimeInterval = 300 // 5 minutes (was 30 seconds)
     private let maxCacheAge: TimeInterval = 900 // 15 minutes
     
     // MARK: - Persistent Cache Keys
@@ -57,11 +57,19 @@ final class WalletStateManager: ObservableObject {
     
     private init() {
         print("🧠 [WalletStateManager] Initializing wallet state manager")
+        // Defer loading to improve startup time
+        Task { @MainActor in
+            loadPersistedData()
+            setupBackgroundSync()
+        }
+    }
+    
+    private func loadPersistedData() {
+        print("💾 [WalletStateManager] Loading persisted data...")
         loadPersistedBalance()
         loadPersistedTransactions()
         loadPersistedFeeRates()
         loadPersistedPendingTransactions()
-        setupBackgroundSync()
     }
     
     // MARK: - Data Models

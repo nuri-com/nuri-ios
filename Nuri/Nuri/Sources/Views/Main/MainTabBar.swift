@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct MainTabBar: View {
-    @State private var selectedTab: SelectedTab = .bitcoin
+    @State private var selectedTab: SelectedTab = .passkey
 
     enum SelectedTab {
         case bitcoin
@@ -22,7 +22,7 @@ struct MainTabBar: View {
                         CardView()
                     }
                 }
-                Tab("Passkey", image: "passkey") {
+                Tab("Keys", image: "passkey") {
                     NavigationStack {
                         SecurityView()
                     }

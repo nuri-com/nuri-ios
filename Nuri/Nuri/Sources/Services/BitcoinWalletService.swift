@@ -13,10 +13,8 @@ final class BitcoinWalletService {
     private var currentUserID: String?
     private var esploraClient: EsploraClient?
     private enum Keys {
-        static let mnemonic = "nuri.wallet.mnemonic"
-        static let descriptor = "nuri.wallet.descriptor"
-        static let changeDescriptor = "nuri.wallet.changeDescriptor"
-        static let currentAddress = "nuri.wallet.currentAddress"
+        static let mnemonic = "bitcoin.wallet.mnemonic"
+        static let currentAddress = "bitcoin.wallet.currentAddress"
     }
     
     // MARK: - Error Types
@@ -152,16 +150,12 @@ final class BitcoinWalletService {
     }
     
     private func setupKeychain(for userID: String) {
-        let bundleId = Bundle.main.bundleIdentifier ?? "com.nuri.wallet"
-        // Sanitize user ID for keychain service name (remove colons and special characters)
-        let sanitizedUserID = userID.replacingOccurrences(of: ":", with: "-")
-                                   .replacingOccurrences(of: " ", with: "")
-        let keychainService = "\(bundleId).\(sanitizedUserID)"
-        print("🔑 [BitcoinWalletService] Setting up keychain for service: \(keychainService)")
-        print("🔑 [BitcoinWalletService] Original user ID: \(userID)")
-        print("🔑 [BitcoinWalletService] Sanitized user ID: \(sanitizedUserID)")
-        print("🔑 [BitcoinWalletService] Bundle ID: \(bundleId)")
-        print("🔑 [BitcoinWalletService] Final keychain service: \(keychainService)")
+        // Use a single, consistent keychain service for all wallet operations
+        // This prevents creating multiple keychain entries
+        let keychainService = "com.nuri.bitcoin-wallet"
+        print("🔑 [BitcoinWalletService] Setting up keychain")
+        print("🔑 [BitcoinWalletService] Keychain service: \(keychainService)")
+        print("🔑 [BitcoinWalletService] User ID: \(userID)")
         
         // Check biometric availability
         let context = LAContext()
@@ -188,18 +182,16 @@ final class BitcoinWalletService {
             }
         }
         
-        // Create user-specific keychain with biometric authentication
-        // NOTE: `synchronizable` cannot be combined with `authenticationPolicy`
-        // so iCloud sync is disabled when biometrics are required.
-        // TEMPORARY: Remove biometric requirement to debug multiple Face ID issue
+        // Create keychain with iCloud sync enabled
+        // We'll handle Face ID at the app level, not per-keychain-item
         keychain = Keychain(service: keychainService)
             .accessibility(.whenUnlocked)
-            .synchronizable(true)  // Enable iCloud sync without biometrics for now
+            .synchronizable(true)
 
         print("🔑 [BitcoinWalletService] Keychain configured:")
-        print("   🌩️ iCloud sync: ENABLED (temporary for debugging)")
-        print("   🔐 Biometric auth: DISABLED (temporary for debugging)")
+        print("   🌩️ iCloud sync: ENABLED")
         print("   🔓 Accessibility: .whenUnlocked")
+        print("   📱 Face ID: Handled at app level")
     }
 
     // MARK: - Private helpers
@@ -238,9 +230,10 @@ final class BitcoinWalletService {
         
         // Try to get mnemonic with detailed error reporting and biometric auth
         print("🔐 [BitcoinWalletService] About to request mnemonic from keychain (will trigger Face ID)...")
+        var mnemonicStr: String?
         do {
-            let mnemonic = try keychain.get(Keys.mnemonic)
-            if let mnemonic = mnemonic {
+            mnemonicStr = try keychain.get(Keys.mnemonic)
+            if let mnemonic = mnemonicStr {
                 print("✅ [BitcoinWalletService] Found mnemonic in keychain after biometric auth (length: \(mnemonic.count))")
             } else {
                 print("❌ [BitcoinWalletService] Mnemonic key exists but value is nil")
@@ -260,54 +253,44 @@ final class BitcoinWalletService {
             throw WalletError.noExistingWallet
         }
         
-        // Try to get descriptors with biometric auth
-        print("🔐 [BitcoinWalletService] About to request descriptors from keychain (may trigger Face ID again)...")
-        do {
-            let descriptor = try keychain.get(Keys.descriptor)
-            let changeDescriptor = try keychain.get(Keys.changeDescriptor)
-            
-            guard let descriptor = descriptor, let changeDescriptor = changeDescriptor else {
-                print("❌ [BitcoinWalletService] Mnemonic found but descriptors missing")
-                throw WalletError.walletCorrupted
-            }
-            
-            print("✅ [BitcoinWalletService] Found descriptors in keychain after biometric auth")
-            print("   📝 External descriptor length: \(descriptor.count)")
-            print("   📝 Internal descriptor length: \(changeDescriptor.count)")
-            print("   📝 External descriptor preview: \(String(descriptor.prefix(50)))...")
-            print("   📝 Internal descriptor preview: \(String(changeDescriptor.prefix(50)))...")
-            
-            // Load wallet with existing descriptors
-            print("🔧 [BitcoinWalletService] About to load wallet with existing descriptors...")
-            try loadWallet(descriptor: descriptor, changeDescriptor: changeDescriptor)
-            print("✅ [BitcoinWalletService] Wallet loaded successfully from descriptors")
-            
-            // Load cached address from keychain (don't generate new one)
-            if let cachedAddress = loadAddressFromKeychain() {
-                currentBitcoinAddress = cachedAddress
-                print("🔑 [BitcoinWalletService] Existing wallet loaded, cached address restored: \(cachedAddress)")
-            } else {
-                // Only generate address if no cached address exists
-                if let wallet = self.wallet {
-                    let addressInfo = wallet.revealNextAddress(keychain: .external)
-                    currentBitcoinAddress = addressInfo.address.description
-                    saveAddressToKeychain(currentBitcoinAddress!)
-                    persist()
-                    print("🔑 [BitcoinWalletService] Existing wallet loaded, first address generated: \(currentBitcoinAddress!)")
-                }
-            }
-            
-            print("✅ [BitcoinWalletService] Wallet successfully loaded from keychain for user: \(currentUserID ?? "unknown")")
-        } catch let error as NSError {
-            print("❌ [BitcoinWalletService] Failed to load descriptors or wallet: \(error)")
-            print("   📋 Error domain: \(error.domain)")
-            print("   📋 Error code: \(error.code)")
-            print("   📋 Error description: \(error.localizedDescription)")
-            if let statusMessage = SecCopyErrorMessageString(OSStatus(error.code), nil) {
-                print("   📋 OSStatus description: \(statusMessage as String)")
-            }
-            throw error
+        // Always regenerate descriptors from mnemonic instead of storing them
+        print("🔧 [BitcoinWalletService] Regenerating descriptors from mnemonic...")
+        guard let mnemonicString = mnemonicStr else {
+            throw WalletError.noExistingWallet
         }
+        
+        let mnemonicObj = try Mnemonic.fromString(mnemonic: mnemonicString)
+        let secretKey = DescriptorSecretKey(network: network, mnemonic: mnemonicObj, password: nil)
+        let descriptor = Descriptor.newBip86(secretKey: secretKey, keychain: .external, network: network).toStringWithSecret()
+        let changeDescriptor = Descriptor.newBip86(secretKey: secretKey, keychain: .internal, network: network).toStringWithSecret()
+        print("✅ [BitcoinWalletService] Descriptors regenerated successfully")
+        
+        // Clean up any old descriptor entries from previous versions
+        print("🧹 [BitcoinWalletService] Cleaning up old descriptor entries...")
+        try? keychain.remove("nuri.wallet.descriptor")
+        try? keychain.remove("nuri.wallet.changeDescriptor")
+        
+        // Load wallet with regenerated descriptors
+        print("🔧 [BitcoinWalletService] Loading wallet with regenerated descriptors...")
+        try loadWallet(descriptor: descriptor, changeDescriptor: changeDescriptor)
+        print("✅ [BitcoinWalletService] Wallet loaded successfully from regenerated descriptors")
+        
+        // Load cached address from keychain (don't generate new one)
+        if let cachedAddress = loadAddressFromKeychain() {
+            currentBitcoinAddress = cachedAddress
+            print("🔑 [BitcoinWalletService] Existing wallet loaded, cached address restored: \(cachedAddress)")
+        } else {
+            // Only generate address if no cached address exists
+            if let wallet = self.wallet {
+                let addressInfo = wallet.revealNextAddress(keychain: .external)
+                currentBitcoinAddress = addressInfo.address.description
+                saveAddressToKeychain(currentBitcoinAddress!)
+                persist()
+                print("🔑 [BitcoinWalletService] Existing wallet loaded, first address generated: \(currentBitcoinAddress!)")
+            }
+        }
+        
+        print("✅ [BitcoinWalletService] Wallet successfully loaded from keychain for user: \(currentUserID ?? "unknown")")
     }
 
     private func walletDBPath() throws -> String {
@@ -356,33 +339,77 @@ final class BitcoinWalletService {
             return
         }
         
+        // CRITICAL: Check if seed already exists - NEVER overwrite
         do {
-            print("🔧 [BitcoinWalletService] Creating new wallet for user: \(currentUserID ?? "unknown")")
+            if let existingSeed = try keychain.get(Keys.mnemonic) {
+                print("🚫 [BitcoinWalletService] SEED ALREADY EXISTS - WILL NOT CREATE NEW WALLET")
+                print("🔄 [BitcoinWalletService] Recovering from existing seed instead...")
+                
+                // Recover from existing seed
+                let mnemonicObj = try Mnemonic.fromString(mnemonic: existingSeed)
+                let secretKey = DescriptorSecretKey(network: network, mnemonic: mnemonicObj, password: nil)
+                let externalDesc = Descriptor.newBip86(secretKey: secretKey, keychain: .external, network: network)
+                let internalDesc = Descriptor.newBip86(secretKey: secretKey, keychain: .internal, network: network)
+                
+                // Create wallet from existing seed
+                let dbPath = try walletDBPath()
+                let conn = try Connection(path: dbPath)
+                let wallet = try Wallet(descriptor: externalDesc, changeDescriptor: internalDesc, network: network, connection: conn)
+                self.wallet = wallet
+                self.connection = conn
+                
+                // Load or generate address
+                if let cachedAddress = loadAddressFromKeychain() {
+                    currentBitcoinAddress = cachedAddress
+                    print("🔑 [BitcoinWalletService] Recovered wallet with cached address: \(cachedAddress)")
+                } else {
+                    let addressInfo = wallet.revealNextAddress(keychain: .external)
+                    currentBitcoinAddress = addressInfo.address.description
+                    saveAddressToKeychain(currentBitcoinAddress!)
+                    persist()
+                    print("🔑 [BitcoinWalletService] Recovered wallet, generated first address: \(currentBitcoinAddress!)")
+                }
+                
+                print("✅ [BitcoinWalletService] Successfully recovered existing wallet")
+                return
+            }
+        } catch {
+            print("ℹ️ [BitcoinWalletService] No existing seed found, proceeding to create new wallet")
+        }
+        
+        do {
+            print("🔧 [BitcoinWalletService] Creating NEW wallet for user: \(currentUserID ?? "unknown")")
             let mnemonic = Mnemonic(wordCount: .words12)
             let secretKey = DescriptorSecretKey(network: network, mnemonic: mnemonic, password: nil)
             let externalDesc = Descriptor.newBip86(secretKey: secretKey, keychain: .external, network: network)
             let internalDesc = Descriptor.newBip86(secretKey: secretKey, keychain: .internal, network: network)
 
-            print("🔐 [BitcoinWalletService] Storing wallet to user-specific keychain (will trigger Face ID for backup)...")
+            print("🔐 [BitcoinWalletService] Storing NEW mnemonic to keychain...")
             
-            // Store to keychain with biometric authentication
-            print("🔐 [BitcoinWalletService] 🚨 FACE ID TRIGGER #A - Storing mnemonic...")
+            // Double-check we're not overwriting
+            if try keychain.contains(Keys.mnemonic) {
+                print("🚫 [BitcoinWalletService] CRITICAL: Seed already exists! Aborting creation.")
+                throw WalletError.walletCorrupted
+            }
+            
+            // Store ONLY the mnemonic to keychain
+            print("🔐 [BitcoinWalletService] Storing mnemonic to iCloud keychain...")
             try keychain.set(mnemonic.description, key: Keys.mnemonic)
-            print("   ✅ Mnemonic stored successfully")
+            print("   ✅ NEW mnemonic stored successfully")
+            
+            // Clean up any old descriptor entries from previous versions
+            print("🧹 [BitcoinWalletService] Cleaning up any existing descriptor entries...")
+            try? keychain.remove("nuri.wallet.descriptor")
+            try? keychain.remove("nuri.wallet.changeDescriptor")
+            print("   ✅ Descriptor entries cleaned up")
+            
             // Verify mnemonic was stored correctly
             verifyMnemonicStored()
             
-            print("🔐 [BitcoinWalletService] 🚨 FACE ID TRIGGER #B - Storing external descriptor...")
-            try keychain.set(externalDesc.toStringWithSecret(), key: Keys.descriptor)
-            print("   ✅ External descriptor stored successfully")
-            
-            print("🔐 [BitcoinWalletService] 🚨 FACE ID TRIGGER #C - Storing internal descriptor...")
-            try keychain.set(internalDesc.toStringWithSecret(), key: Keys.changeDescriptor)
-            print("   ✅ Internal descriptor stored successfully")
-            
             // Keychain configuration summary
-            print("   🌍 Keychain configured with iCloud sync disabled")
-            print("   🔐 Biometric authentication required for access")
+            print("   🌍 Keychain configured with iCloud sync")
+            print("   📝 Only mnemonic stored (descriptors regenerated on load)")
+            print("   ✅ This reduces keychain entries from 3 to 1")
 
             // Create wallet DB & instance
             let dbPath = try walletDBPath()
@@ -684,36 +711,26 @@ final class BitcoinWalletService {
             throw WalletError.keychainAccessFailed
         }
         
-        print("🔍 [BitcoinWalletService] Loading existing wallet with single auth...")
+        print("🔍 [BitcoinWalletService] Loading existing wallet (mnemonic only)...")
         
-        // Get all keychain data in one authentication session
-        print("🔐 [BitcoinWalletService] Requesting all wallet data from keychain (single Face ID prompt)...")
+        // Get ONLY the mnemonic from keychain
+        print("🔐 [BitcoinWalletService] Requesting mnemonic from keychain...")
         
         var mnemonic: String?
-        var descriptor: String?
-        var changeDescriptor: String?
         var cachedAddress: String?
         
         do {
-            // Once Face ID is triggered for the first item, subsequent accesses should not trigger it again
-            // due to keychain authentication caching
             print("🔐 [BitcoinWalletService] 🚨 FACE ID TRIGGER #1 - Getting mnemonic...")
             mnemonic = try keychain.get(Keys.mnemonic)
-            print("🔐 [BitcoinWalletService] Getting descriptor (should NOT trigger Face ID)...")
-            descriptor = try keychain.get(Keys.descriptor)
-            print("🔐 [BitcoinWalletService] Getting change descriptor (should NOT trigger Face ID)...")
-            changeDescriptor = try keychain.get(Keys.changeDescriptor)
             print("🔐 [BitcoinWalletService] Getting cached address (should NOT trigger Face ID)...")
             cachedAddress = try keychain.get(Keys.currentAddress)
             
-            print("✅ [BitcoinWalletService] Retrieved all data from keychain with single auth")
+            print("✅ [BitcoinWalletService] Retrieved data from keychain")
             print("   📝 Mnemonic: \(mnemonic != nil ? "Found (\(mnemonic!.count) chars)" : "Not found")")
-            print("   📝 External descriptor: \(descriptor != nil ? "Found (\(descriptor!.count) chars)" : "Not found")")
-            print("   📝 Change descriptor: \(changeDescriptor != nil ? "Found (\(changeDescriptor!.count) chars)" : "Not found")")
             print("   📝 Cached address: \(cachedAddress ?? "Not found")")
             
         } catch let error as NSError {
-            print("❌ [BitcoinWalletService] Failed to get wallet data from keychain: \(error)")
+            print("❌ [BitcoinWalletService] Failed to get mnemonic from keychain: \(error)")
             print("   📋 Error domain: \(error.domain)")
             print("   📋 Error code: \(error.code)")
             print("   📋 Error description: \(error.localizedDescription)")
@@ -723,16 +740,27 @@ final class BitcoinWalletService {
             throw WalletError.noExistingWallet
         }
         
-        // Validate we have the required data
-        guard let _ = mnemonic, 
-              let descriptor = descriptor, 
-              let changeDescriptor = changeDescriptor else {
-            print("❌ [BitcoinWalletService] Missing required wallet data")
+        // Validate we have the mnemonic
+        guard let mnemonicStr = mnemonic else {
+            print("❌ [BitcoinWalletService] No mnemonic found in keychain")
             throw WalletError.noExistingWallet
         }
         
-        // Load wallet with existing descriptors
-        print("🔧 [BitcoinWalletService] Loading wallet with retrieved descriptors...")
+        // Always regenerate descriptors from mnemonic
+        print("🔧 [BitcoinWalletService] Regenerating descriptors from mnemonic...")
+        let mnemonicObj = try Mnemonic.fromString(mnemonic: mnemonicStr)
+        let secretKey = DescriptorSecretKey(network: network, mnemonic: mnemonicObj, password: nil)
+        let descriptor = Descriptor.newBip86(secretKey: secretKey, keychain: .external, network: network).toStringWithSecret()
+        let changeDescriptor = Descriptor.newBip86(secretKey: secretKey, keychain: .internal, network: network).toStringWithSecret()
+        print("✅ [BitcoinWalletService] Descriptors regenerated successfully")
+        
+        // Clean up any old descriptor entries from previous versions
+        print("🧹 [BitcoinWalletService] Cleaning up old descriptor entries...")
+        try? keychain.remove("nuri.wallet.descriptor")
+        try? keychain.remove("nuri.wallet.changeDescriptor")
+        
+        // Load wallet with regenerated descriptors
+        print("🔧 [BitcoinWalletService] Loading wallet with regenerated descriptors...")
         try loadWallet(descriptor: descriptor, changeDescriptor: changeDescriptor)
         print("✅ [BitcoinWalletService] Wallet loaded successfully")
         

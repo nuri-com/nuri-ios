@@ -125,31 +125,48 @@ struct BitcoinView: View {
     // MARK: - Wallet Management
     private func ensureWalletInitialized(completion: @escaping () -> Void) {
         let walletService = BitcoinWalletService.shared
+        let authService = AuthenticationService.shared
         
         print("🔍 [BitcoinView] ensureWalletInitialized() called")
         
-        // Check if wallet is already initialized
-        if walletService.hasWallet() {
-            print("✅ [BitcoinView] Wallet already initialized, no Face ID needed")
+        // First check if already authenticated
+        if authService.isAuthenticated && walletService.hasWallet() {
+            print("✅ [BitcoinView] Already authenticated and wallet loaded")
             walletStatus = .loaded
             completion()
             return
         }
         
-        // Initialize wallet with default user - should already be done by app start
-        print("🔑 [BitcoinView] 🚨 WALLET RE-INITIALIZATION - This should NOT happen if wallet was already loaded!")
-        print("🔑 [BitcoinView] Initializing wallet with default user")
-        walletStatus = .checking
-        
-        walletService.initializeWalletOnAppStart()
-        
-        // Check if initialization was successful
-        if walletService.hasWallet() {
-            walletStatus = .loaded
-            completion()
-        } else {
-            walletStatus = .needsRecovery
-            showWalletRecoveryAlert = true
+        // Require Face ID authentication
+        authService.authenticateUser(reason: "Authenticate to access your Bitcoin wallet") { authenticated in
+            guard authenticated else {
+                print("❌ [BitcoinView] Authentication failed")
+                walletStatus = .failed
+                return
+            }
+            
+            // Check if wallet is already initialized
+            if walletService.hasWallet() {
+                print("✅ [BitcoinView] Wallet already initialized after auth")
+                walletStatus = .loaded
+                completion()
+                return
+            }
+            
+            // Initialize wallet
+            print("🔑 [BitcoinView] Initializing wallet after authentication")
+            walletStatus = .checking
+            
+            walletService.initializeWalletOnAppStart()
+            
+            // Check if initialization was successful
+            if walletService.hasWallet() {
+                walletStatus = .loaded
+                completion()
+            } else {
+                walletStatus = .needsRecovery
+                showWalletRecoveryAlert = true
+            }
         }
     }
     
