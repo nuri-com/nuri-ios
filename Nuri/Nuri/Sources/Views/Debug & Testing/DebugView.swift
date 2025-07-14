@@ -1,67 +1,70 @@
 import SwiftUI
 
 struct DebugView: View {
-    @State private var resultText = "Press the button to test decryption."
+    @State private var resultText = "Press a button to run a debug action."
     @State private var isLoading = false
+    @State private var showDeleteAlert = false
+    
     private let walletService = BitcoinWalletService.shared
 
     var body: some View {
-        VStack(spacing: 20) {
-            Text("Wallet Security Debug")
-                .font(.largeTitle)
-                .fontWeight(.bold)
-                .padding(.top)
+        NavigationView {
+            Form {
+                Section(header: Text("Test Results")) {
+                    VStack {
+                        if isLoading {
+                            ProgressView("Performing action...")
+                        } else {
+                            ScrollView {
+                                Text(resultText)
+                                    .font(.system(.body, design: .monospaced))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                    }
+                    .frame(minHeight: 150)
+                }
+                
+                Section(header: Text("Backup & Recovery")) {
+                    Button(action: testDecryption) {
+                        Label("Test Decrypt iCloud Backup", systemImage: "lock.open.display")
+                    }
+                }
 
-            Text("This screen helps test the encrypted iCloud backup functionality.")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-            
-            Spacer()
-
-            VStack {
-                if isLoading {
-                    ProgressView("Requesting decryption key...")
-                } else {
-                    ScrollView {
-                        Text(resultText)
-                            .font(.system(.body, design: .monospaced))
-                            .multilineTextAlignment(.leading)
-                            .padding()
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color(.secondarySystemBackground))
-                            .cornerRadius(8)
+                Section(header: Text("Wallet Actions")) {
+                    Button("Force Full Rescan") {
+                        Task { await forceRescan() }
+                    }
+                    
+                    Button("Force Create New Wallet (if none exists)") {
+                        walletService.forceCreateNewWallet()
+                        resultText = "Attempted to force-create a new wallet. Check logs for details. You may need to restart the app."
+                    }
+                }
+                
+                Section(header: Text("Danger Zone")) {
+                    Button("DELETE ALL WALLET DATA", role: .destructive) {
+                        showDeleteAlert = true
                     }
                 }
             }
-            .frame(height: 200)
-
-            Spacer()
-
-            Button(action: {
-                testDecryption()
-            }) {
-                HStack {
-                    Image(systemName: "lock.open.display")
-                    Text("Test Decrypt iCloud Backup")
-                }
-                .font(.headline)
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color.accentColor)
-                .foregroundColor(.white)
-                .cornerRadius(10)
-            }
+            .navigationTitle("Debug Menu")
+            .navigationBarTitleDisplayMode(.inline)
             .disabled(isLoading)
+            .alert("Delete All Wallet Data?", isPresented: $showDeleteAlert) {
+                Button("DELETE", role: .destructive) {
+                    Task { await deleteAllData() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will permanently delete the mnemonic, cached address, and all encrypted backups from this device and iCloud. This action cannot be undone. \n\nUSE FOR TESTING ONLY.")
+            }
         }
-        .padding()
-        .navigationTitle("Debug Menu")
-        .navigationBarTitleDisplayMode(.inline)
     }
 
     private func testDecryption() {
         isLoading = true
-        resultText = "Initiating decryption...\n\nPlease use Face ID / Touch ID when prompted to unlock the decryption key."
+        resultText = "Initiating decryption...\n\nPlease use Face ID / Touch ID when prompted."
         Task {
             let result = await walletService.testDecryptCloudBackup()
             await MainActor.run {
@@ -70,12 +73,30 @@ struct DebugView: View {
             }
         }
     }
+    
+    private func forceRescan() async {
+        isLoading = true
+        resultText = "Forcing full blockchain rescan..."
+        let success = await walletService.forceFullRescan()
+        await MainActor.run {
+            resultText = success ? "✅ Full rescan completed successfully." : "❌ Full rescan failed. Check logs."
+            isLoading = false
+        }
+    }
+    
+    private func deleteAllData() async {
+        isLoading = true
+        resultText = "Deleting all wallet data from keychains..."
+        await walletService.clearAllWalletData()
+        await MainActor.run {
+            resultText = "✅ All wallet data has been deleted. Please restart the app to create a new wallet."
+            isLoading = false
+        }
+    }
 }
 
 struct DebugView_Previews: PreviewProvider {
     static var previews: some View {
-        NavigationView {
-            DebugView()
-        }
+        DebugView()
     }
 }
