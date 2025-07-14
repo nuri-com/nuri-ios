@@ -10,11 +10,13 @@ final class BitcoinWalletService {
     // MARK: - Constants
     private let network: Network = .bitcoin // mainnet
     private var keychain: Keychain?
+    private var backupKeychain: Keychain?
     private var currentUserID: String?
     private var esploraClient: EsploraClient?
     private enum Keys {
         static let mnemonic = "bitcoin.wallet.mnemonic"
         static let currentAddress = "bitcoin.wallet.currentAddress"
+        static let encryptedMnemonicBackup = "bitcoin.wallet.encryptedMnemonicBackup"
     }
     
     // MARK: - Error Types
@@ -247,11 +249,17 @@ final class BitcoinWalletService {
         keychain = Keychain(service: keychainService)
             .synchronizable(false) // DO NOT sync seed via iCloud
             .accessibility(.whenUnlockedThisDeviceOnly, authenticationPolicy: .userPresence)
+        
+        // This keychain is SEPARATE and ONLY for the encrypted backup. It's OK to sync.
+        backupKeychain = Keychain(service: "com.nuri.bitcoin-wallet.backup")
+            .synchronizable(true)
+            .accessibility(.afterFirstUnlock) // No biometric check on the encrypted data itself.
 
         print("🔑 [BitcoinWalletService] Keychain configured:")
-        print("   🌩️ iCloud sync: DISABLED for security")
-        print("   🔓 Accessibility: .whenUnlockedThisDeviceOnly")
-        print("   📱 Authentication: .userPresence (biometrics required for access)")
+        print("   (Local Seed) 🌩️ iCloud sync: DISABLED for security")
+        print("   (Local Seed) 🔓 Accessibility: .whenUnlockedThisDeviceOnly")
+        print("   (Local Seed) 📱 Authentication: .userPresence")
+        print("   (Backup)     ☁️ iCloud sync: ENABLED for encrypted backup")
     }
 
     // MARK: - Private helpers
@@ -462,7 +470,13 @@ final class BitcoinWalletService {
             // Store ONLY the mnemonic to keychain
             print("🔐 [BitcoinWalletService] Storing mnemonic to iCloud keychain...")
             try keychain.set(mnemonic.description, key: Keys.mnemonic)
-            print("   ✅ NEW mnemonic stored successfully")
+            print("   ✅ NEW mnemonic stored successfully to LOCAL keychain.")
+
+            // Also create an encrypted backup and store it in iCloud Keychain.
+            // This runs in the background so it doesn't slow down wallet creation.
+            Task {
+                await self.createEncryptedBackup(for: mnemonic.description)
+            }
             
             // Clean up any old descriptor entries from previous versions
             print("🧹 [BitcoinWalletService] Cleaning up any existing descriptor entries...")
@@ -832,6 +846,12 @@ final class BitcoinWalletService {
             print("❌ [BitcoinWalletService] No mnemonic found in keychain")
             throw WalletError.noExistingWallet
         }
+
+        // Now that we have the local seed, verify our encrypted cloud backup.
+        // This runs in the background.
+        Task {
+            await self.verifyCloudBackup(against: mnemonicStr)
+        }
         
         // Always regenerate descriptors from mnemonic
         print("🔧 [BitcoinWalletService] Regenerating descriptors from mnemonic...")
@@ -872,6 +892,67 @@ final class BitcoinWalletService {
         }
         
         print("✅ [BitcoinWalletService] Wallet loaded with single authentication for user: \(currentUserID ?? "unknown")")
+    }
+
+    // MARK: - Encrypted Cloud Backup
+    
+    /// Creates an encrypted backup of the seed phrase and stores it in the iCloud Keychain.
+    private func createEncryptedBackup(for seedPhrase: String) async {
+        print("☁️ [BitcoinWalletService] Preparing to create encrypted iCloud backup...")
+        guard let backupKeychain = backupKeychain else {
+            print("   ❌ Backup keychain not available for creating backup.")
+            return
+        }
+        do {
+            // The SeedBackupService handles generating a device-local key and encrypting the data.
+            // This call will trigger biometrics to get the encryption key.
+            let encryptedSeed = try SeedBackupService.shared.encrypt(seedPhrase: seedPhrase)
+            print("   ✅ Seed successfully encrypted.")
+            
+            // Store the resulting encrypted string in our separate, iCloud-synced keychain.
+            try backupKeychain.set(encryptedSeed, key: Keys.encryptedMnemonicBackup)
+            print("   ✅ Encrypted backup stored in iCloud Keychain.")
+            print("      🔑 Item key: \(Keys.encryptedMnemonicBackup)")
+        } catch {
+            print("   ❌ Failed to create encrypted iCloud backup: \(error.localizedDescription)")
+        }
+    }
+    
+    /// Verifies that an encrypted backup exists in iCloud Keychain and that it can be decrypted.
+    private func verifyCloudBackup(against localSeed: String) async {
+        print("🔎☁️ [BitcoinWalletService] Verifying encrypted iCloud backup...")
+        guard let backupKeychain = backupKeychain else {
+            print("   ❌ Backup keychain not available for verification.")
+            return
+        }
+
+        do {
+            // 1. Try to fetch the encrypted backup from iCloud Keychain.
+            guard let encryptedBackup = try backupKeychain.get(Keys.encryptedMnemonicBackup) else {
+                print("   ℹ️ No encrypted backup found in iCloud Keychain.")
+                print("   🤔 This is normal for a wallet created before this feature was added.")
+                // If no backup exists, create one now for this existing wallet.
+                print("   ☁️ Creating encrypted backup now for existing wallet...")
+                await createEncryptedBackup(for: localSeed)
+                return
+            }
+            
+            print("   ✅ Found encrypted backup data in iCloud Keychain (\(encryptedBackup.count) chars).")
+            
+            // 2. Try to decrypt it. This requires biometrics to access the local encryption key.
+            let decryptedSeed = try SeedBackupService.shared.decrypt(backupString: encryptedBackup)
+            print("   ✅ Backup decrypted successfully.")
+            
+            // 3. Compare the decrypted backup with the seed loaded from the local device.
+            if decryptedSeed == localSeed {
+                print("   ✅ SUCCESS! Decrypted iCloud backup matches the local wallet seed.")
+            } else {
+                print("   🚨 CRITICAL ERROR: Decrypted iCloud backup DOES NOT MATCH the local wallet seed!")
+            }
+        } catch {
+            print("   ❌ Failed to verify or decrypt iCloud backup: \(error.localizedDescription)")
+            // This can happen if the user cancels the biometric prompt, which is not a critical error.
+        }
     }
 }
 
