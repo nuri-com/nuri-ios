@@ -109,6 +109,37 @@ struct SecurityView: View {
                     .foregroundColor(.red)
                 }
                 
+                // Force Full Rescan
+                NuriMenuRow(
+                    icon: "arrow.clockwise",
+                    title: "Full Blockchain Rescan",
+                    subtitle: "Force rescan all addresses"
+                ) {
+                    Button("Rescan") {
+                        Task {
+                            alertMessage = "Starting full blockchain rescan..."
+                            showKeychainAlert = true
+                            
+                            let success = await bitcoinWalletService.forceFullRescan()
+                            
+                            if success {
+                                // Refresh wallet state
+                                await WalletStateManager.shared.refreshAll()
+                                
+                                let balance = await WalletStateManager.shared.getBalance(forceRefresh: true)
+                                let txCount = WalletStateManager.shared.transactions.count
+                                
+                                alertMessage = "✅ Rescan complete!\n\nBalance: \(balance.confirmed) sats\nTransactions: \(txCount)"
+                            } else {
+                                alertMessage = "❌ Rescan failed. Please try again."
+                            }
+                            showKeychainAlert = true
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.orange)
+                }
+                
                 Spacer()
             }
             .padding(.horizontal)
