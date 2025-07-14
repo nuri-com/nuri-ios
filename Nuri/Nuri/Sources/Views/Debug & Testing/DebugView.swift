@@ -31,16 +31,6 @@ struct DebugView: View {
                     }
                 }
 
-                Section(header: Text("Wallet Actions")) {
-                    Button("Force Full Rescan") {
-                        Task { await forceRescan() }
-                    }
-                    
-                    Button("Force Create New Wallet (if none exists)") {
-                        walletService.forceCreateNewWallet()
-                        resultText = "Attempted to force-create a new wallet. Check logs for details. You may need to restart the app."
-                    }
-                }
                 
                 Section(header: Text("Danger Zone")) {
                     Button("DELETE ALL WALLET DATA", role: .destructive) {
@@ -71,16 +61,6 @@ struct DebugView: View {
                 self.resultText = result
                 self.isLoading = false
             }
-        }
-    }
-    
-    private func forceRescan() async {
-        isLoading = true
-        resultText = "Forcing full blockchain rescan..."
-        let success = await walletService.forceFullRescan()
-        await MainActor.run {
-            resultText = success ? "✅ Full rescan completed successfully." : "❌ Full rescan failed. Check logs."
-            isLoading = false
         }
     }
     
