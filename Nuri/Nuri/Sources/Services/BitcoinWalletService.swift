@@ -202,16 +202,17 @@ final class BitcoinWalletService {
             }
         }
         
-        // Create keychain with iCloud sync enabled
-        // We'll handle Face ID at the app level, not per-keychain-item
+        // Create keychain with highest security settings.
+        // The seed will ONLY be stored on this device and will require
+        // biometric authentication (Face ID/Touch ID) for every access.
         keychain = Keychain(service: keychainService)
-            .accessibility(.whenUnlocked)
-            .synchronizable(true)
+            .synchronizable(false) // DO NOT sync seed via iCloud
+            .accessibility(.whenUnlockedThisDeviceOnly, authenticationPolicy: .userPresence)
 
         print("🔑 [BitcoinWalletService] Keychain configured:")
-        print("   🌩️ iCloud sync: ENABLED")
-        print("   🔓 Accessibility: .whenUnlocked")
-        print("   📱 Face ID: Handled at app level")
+        print("   🌩️ iCloud sync: DISABLED for security")
+        print("   🔓 Accessibility: .whenUnlockedThisDeviceOnly")
+        print("   📱 Authentication: .userPresence (biometrics required for access)")
     }
 
     // MARK: - Private helpers
@@ -823,9 +824,12 @@ final class BitcoinWalletService {
         var cachedAddress: String?
         
         do {
-            print("🔐 [BitcoinWalletService] 🚨 FACE ID TRIGGER #1 - Getting mnemonic...")
+            // With enhanced security, each keychain access now requires biometrics.
+            // This might result in two separate prompts for the user.
+            print("🔐 [BitcoinWalletService] Requesting mnemonic from keychain (biometrics required)...")
             mnemonic = try keychain.get(Keys.mnemonic)
-            print("🔐 [BitcoinWalletService] Getting cached address (should NOT trigger Face ID)...")
+            
+            print("🔐 [BitcoinWalletService] Requesting cached address from keychain (biometrics required)...")
             cachedAddress = try keychain.get(Keys.currentAddress)
             
             print("✅ [BitcoinWalletService] Retrieved data from keychain")
