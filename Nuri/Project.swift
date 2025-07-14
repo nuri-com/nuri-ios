@@ -40,7 +40,7 @@ let project = Project(
                     ])
                 ])
             ]),
-            sources: ["Nuri/Sources/**"],
+            sources: ["Nuri/Sources/**/*.swift"],
             resources: ["Nuri/Resources/**"],
             entitlements: .dictionary([
                 "com.apple.developer.nfc.readersession.formats": .array([
