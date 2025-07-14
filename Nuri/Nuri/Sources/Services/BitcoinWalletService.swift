@@ -896,6 +896,38 @@ final class BitcoinWalletService {
 
     // MARK: - Encrypted Cloud Backup
     
+    /// FOR DEBUGGING: returns the decrypted seed phrase from the iCloud backup.
+    func testDecryptCloudBackup() async -> String {
+        print("🧪 [BitcoinWalletService] Starting DEBUG decryption test...")
+        guard let backupKeychain = backupKeychain else {
+            let message = "   ❌ Backup keychain not available."
+            print(message)
+            return message
+        }
+
+        do {
+            guard let encryptedBackup = try backupKeychain.get(Keys.encryptedMnemonicBackup) else {
+                let message = "   ℹ️ No encrypted backup found in iCloud Keychain."
+                print(message)
+                return message
+            }
+            
+            print("   ✅ Found encrypted backup data in iCloud Keychain.")
+            
+            // This call will trigger biometrics to get the local encryption key.
+            let decryptedSeed = try SeedBackupService.shared.decrypt(backupString: encryptedBackup)
+            
+            let message = "✅ SUCCESS!\n\n\(decryptedSeed)"
+            print("   \(message)")
+            return message
+            
+        } catch {
+            let message = "❌ FAILED to decrypt iCloud backup: \(error.localizedDescription)"
+            print("   \(message)")
+            return message
+        }
+    }
+    
     /// Creates an encrypted backup of the seed phrase and stores it in the iCloud Keychain.
     private func createEncryptedBackup(for seedPhrase: String) async {
         print("☁️ [BitcoinWalletService] Preparing to create encrypted iCloud backup...")
