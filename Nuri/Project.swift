@@ -40,7 +40,7 @@ let project = Project(
                     ])
                 ])
             ]),
-            sources: ["Nuri/Sources/**/*.swift"],
+            sources: ["Nuri/Sources/**"],
             resources: ["Nuri/Resources/**"],
             entitlements: .dictionary([
                 "com.apple.developer.nfc.readersession.formats": .array([
@@ -56,7 +56,6 @@ let project = Project(
                 .external(name: "IdensicMobileSDK"),
                 .external(name: "BitcoinDevKit"),
                 .external(name: "KeychainAccess"),
-                .external(name: "Swinject"),
             ],
             settings: .settings(
                 base: [
