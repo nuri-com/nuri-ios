@@ -12,7 +12,7 @@ struct SecurityView: View {
         Screen {
             // Header
             NuriHeader<AnyView, AnyView>.logoAndCTA(
-                title: "Security",
+                title: "Security (Updated)",
                 cta: "",
                 onCTA: {}
             )
