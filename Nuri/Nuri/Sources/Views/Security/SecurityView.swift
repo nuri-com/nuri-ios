@@ -2,182 +2,44 @@ import SwiftUI
 import AuthenticationServices
 
 struct SecurityView: View {
-    @State private var keysEnabled: Bool = true
-    @State private var iCloudBackupEnabled: Bool = true
-    @State private var showKeysOptions: Bool = false
-    @State private var isLinkingKeys: Bool = false
-    @State private var linkingError: String?
-    @State private var showAlert: Bool = false
-    @State private var showSuccess: Bool = false
-    @State private var showWalletInfo: Bool = false
-    
-    // Seed storage management
-    @State private var alertMessage = ""
-    @State private var showKeychainAlert = false
-    @State private var showManualSeedEntry = false
-    @State private var manualSeedPhrase = ""
+    @State private var resultText = "Press the button to test the encrypted iCloud backup."
+    @State private var isLoading = false
     private let bitcoinWalletService = BitcoinWalletService.shared
     
 
 
     var body: some View {
         Screen {
-            // Header – displays screen title and CTA
+            // Header
             NuriHeader<AnyView, AnyView>.logoAndCTA(
-                title: "",
-                cta: "+ Add Key",
+                title: "Security",
+                cta: "",
                 onCTA: {}
             )
         } content: {
-            // Body content fills the screen between header and footer
-            VStack(spacing: 16) {
-            
-                NuriMenuRow(
-                    icon: "passkey-new",
-                    title: "Keys",
-                    subtitle: keysEnabled ? "Enabled" : "Disabled"
-                ) {
-                    Image(systemName: "chevron.right")
-                }
-
-                NuriMenuRow(
-                    icon: "wallet",
-                    title: "Wallet Keys",
-                    subtitle: "2-of-2 multi-signature"
-                ) {
-                    Image(systemName: "chevron.right")
-                }
-                
-                NuriMenuRow(
-                    icon: "icloud-download",
-                    title: "iCloud backup",
-                    subtitle: iCloudBackupEnabled ? "Enabled" : "Disabled"
-                ) {
-                    Toggle("", isOn: $iCloudBackupEnabled)
-                        .labelsHidden()
-                        .tint(Color("PrimaryNuriLilac"))
-                }
-                
-                // Seed Storage Options
-                NuriMenuRow(
-                    icon: "key",
-                    title: "Store Seed in Keychain",
-                    subtitle: "Secure biometric backup"
-                ) {
-                    Button("Store") {
-                        storeTestSeed()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Color("PrimaryNuriLilac"))
-                }
-                
-                NuriMenuRow(
-                    icon: "key",
-                    title: "Recover Seed from Keychain",
-                    subtitle: "Restore from backup"
-                ) {
-                    Button("Recover") {
-                        recoverTestSeed()
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(Color("PrimaryNuriLilac"))
-                }
-                
-                // Debug: Verify Keychain
-                NuriMenuRow(
-                    icon: "checkmark.circle",
-                    title: "Verify Keychain Sync",
-                    subtitle: "Check Mac visibility"
-                ) {
-                    Button("Verify") {
-                        verifyKeychainSync()
-                    }
-                    .buttonStyle(.bordered)
-                    .foregroundColor(.orange)
-                }
-                
-                // Debug: Test Independent Storage
-                NuriMenuRow(
-                    icon: "hammer",
-                    title: "Test Keychain (Debug)",
-                    subtitle: "Test with fake seed"
-                ) {
-                    Button("Test") {
-                        testIndependentKeychain()
-                    }
-                    .buttonStyle(.bordered)
-                    .foregroundColor(.red)
-                }
-                
-                // Force Full Rescan
-                NuriMenuRow(
-                    icon: "arrow.clockwise",
-                    title: "Full Blockchain Rescan",
-                    subtitle: "Force rescan all addresses"
-                ) {
-                    Button("Rescan") {
-                        Task {
-                            alertMessage = "Starting full blockchain rescan..."
-                            showKeychainAlert = true
-                            
-                            let success = await bitcoinWalletService.forceFullRescan()
-                            
-                            if success {
-                                // Refresh wallet state
-                                await WalletStateManager.shared.refreshAll()
-                                
-                                let balance = await WalletStateManager.shared.getBalance(forceRefresh: true)
-                                let txCount = WalletStateManager.shared.transactions.count
-                                
-                                alertMessage = "✅ Rescan complete!\n\nBalance: \(balance.confirmed) sats\nTransactions: \(txCount)"
-                            } else {
-                                alertMessage = "❌ Rescan failed. Please try again."
+            Form {
+                Section(header: Text("Test Results")) {
+                    VStack {
+                        if isLoading {
+                            ProgressView("Performing test...")
+                        } else {
+                            ScrollView {
+                                Text(resultText)
+                                    .font(.system(.body, design: .monospaced))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                             }
-                            showKeychainAlert = true
                         }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.orange)
+                    .frame(minHeight: 150)
                 }
                 
-                Spacer()
-            }
-            .padding(.horizontal)
-        }
-        .alert("Error", isPresented: $showAlert) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text(linkingError ?? "An error occurred")
-        }
-        .alert("Biometric Keychain Test", isPresented: $showKeychainAlert) {
-            Button("OK") { }
-        } message: {
-            Text(alertMessage)
-        }
-        .confirmationDialog("Choose Key Type", isPresented: $showKeysOptions, titleVisibility: .visible) {
-            Button("Platform Passkey (Face ID/Touch ID)") {
-                // linkPlatformPasskey() removed - will be replaced with new integration
-                print("Platform passkey linking disabled")
-            }
-            
-            Button("Hardware Security Key (YubiKey/FIDO2)") {
-                // linkHardwarePasskey() removed - will be replaced with new integration
-                print("Hardware passkey linking disabled")
-            }
-            
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Select the type of key you want to add to your account.")
-        }
-        .sheet(isPresented: $showSuccess) {
-            SuccessView(
-                illustration: "passkey-new",
-                title: "Success!",
-                subtitle: "Your new key has been added",
-                onDone: {
-                    showSuccess = false
+                Section(header: Text("Backup & Recovery Verification")) {
+                    Button(action: testDecryption) {
+                        Label("Test Decrypt iCloud Backup", systemImage: "lock.open.display")
+                    }
                 }
-            )
+            }
+            .disabled(isLoading)
         }
     }
     
