@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: passkey_db
+      POSTGRES_USER: passkey_user
+      POSTGRES_PASSWORD: passkey_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U passkey_user"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://passkey_user:passkey_password@postgres:5432/passkey_db
+      PORT: 3000
+      RP_ID: localhost
+      RP_NAME: "Nuri Passkey Server"
+      ORIGIN: https://localhost
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./:/app
+      - /app/node_modules
+    command: npm run dev
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/certs:/etc/nginx/certs
+    depends_on:
+      - server
+
+volumes:
+  postgres_data:

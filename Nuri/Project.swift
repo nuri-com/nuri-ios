@@ -49,14 +49,16 @@ let project = Project(
                 "com.apple.developer.associated-domains": .array([
                     "webcredentials:nuri.com"
                 ]),
-                "application-identifier": "MH2SRQ3N27.com.nuri.mobile-ios"
+                "application-identifier": "MH2SRQ3N27.com.nuri.mobile-ios",
+                "keychain-access-groups": .array([
+                    "$(AppIdentifierPrefix)com.nuri.mobile-ios"
+                ])
             ]),
             dependencies: [
                 .project(target: "Authentication", path: "../Authentication"),
                 .external(name: "IdensicMobileSDK"),
                 .external(name: "BitcoinDevKit"),
                 .external(name: "KeychainAccess"),
-                .external(name: "Swinject"),
             ],
             settings: .settings(
                 base: [

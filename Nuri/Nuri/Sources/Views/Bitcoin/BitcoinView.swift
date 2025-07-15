@@ -16,6 +16,7 @@ struct BitcoinView: View {
     @State private var walletStatus: WalletStatus = .checking
     @State private var showWalletRecoveryAlert = false
     @State private var exchangeRate: Double = 0.0
+    @State private var exchangeRateTimer: Timer?
     
     // Cache key for exchange rate
     private let exchangeRateCacheKey = "nuri.exchangeRate.eur"
@@ -56,9 +57,8 @@ struct BitcoinView: View {
                         }
                         HStack(spacing: 16) {
                             PrimaryHalfButton(title: "Receive", icon: "bitcoin_hand") {
-                                ensureWalletInitialized {
-                                    navigation.isReceiveViewPresented = true
-                                }
+                                // Just open receive view directly without authentication
+                                navigation.isReceiveViewPresented = true
                             }
                             SecondaryHalfButton(title: "Send", icon: "qr_scan") {
                                 ensureWalletInitialized {
@@ -86,9 +86,20 @@ struct BitcoinView: View {
         .onAppear {
             // Load cached exchange rate immediately
             loadCachedExchangeRate()
+            // Set up periodic refresh timer
+            setupExchangeRateTimer()
+        }
+        .onDisappear {
+            // Clean up timer
+            exchangeRateTimer?.invalidate()
+            exchangeRateTimer = nil
+            print("⏰ [BitcoinView] Exchange rate timer stopped")
         }
         .task {
-            await refreshData()
+            print("🔄 [BitcoinView] Starting refresh task...")
+            // The WalletStateManager already handles initial balance fetch
+            // Just refresh exchange rate here
+            await refreshExchangeRate()
         }
         .alert("Wallet Recovery", isPresented: $showWalletRecoveryAlert) {
             Button("Retry") {
@@ -120,9 +131,47 @@ struct BitcoinView: View {
         .fullScreenCover(isPresented: $navigation.isTransactionsPresented) {
             TransactionsView()
         }
+        .onAppear {
+            // Initialize wallet on first appear
+            let walletService = BitcoinWalletService.shared
+            
+            print("🔄 [BitcoinView] View appeared, checking wallet status...")
+            print("   📱 Has wallet: \(walletService.hasWallet())")
+            print("   💰 Cached balance: \(walletState.balance.confirmed) sats")
+            
+            // Initialize wallet if needed
+            if !walletService.hasWallet() {
+                print("🔄 [BitcoinView] No wallet found, initializing...")
+                walletService.initializeWalletOnAppStart()
+            }
+        }
     }
     
     // MARK: - Wallet Management
+    private func initializeWalletInBackground() async {
+        let walletService = BitcoinWalletService.shared
+        
+        print("🔄 [BitcoinView] Initializing wallet in background...")
+        
+        // Check if wallet is already initialized
+        if walletService.hasWallet() {
+            print("✅ [BitcoinView] Wallet already initialized")
+            return
+        }
+        
+        // Initialize wallet without Face ID
+        walletService.initializeWalletOnAppStart()
+        
+        // Give it time to initialize
+        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+        
+        if walletService.hasWallet() {
+            print("✅ [BitcoinView] Wallet initialized successfully in background")
+        } else {
+            print("⚠️ [BitcoinView] Wallet initialization may have failed, will retry when needed")
+        }
+    }
+    
     private func ensureWalletInitialized(completion: @escaping () -> Void) {
         let walletService = BitcoinWalletService.shared
         let authService = AuthenticationService.shared
@@ -159,13 +208,30 @@ struct BitcoinView: View {
             
             walletService.initializeWalletOnAppStart()
             
-            // Check if initialization was successful
-            if walletService.hasWallet() {
-                walletStatus = .loaded
-                completion()
-            } else {
-                walletStatus = .needsRecovery
-                showWalletRecoveryAlert = true
+            // Give it a moment to initialize
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                // Check if initialization was successful
+                if walletService.hasWallet() {
+                    print("✅ [BitcoinView] Wallet loaded successfully")
+                    walletStatus = .loaded
+                    completion()
+                } else {
+                    print("⚠️ [BitcoinView] Wallet not loaded, attempting to create new wallet")
+                    // Automatically create a new wallet instead of showing recovery
+                    walletService.forceCreateNewWallet()
+                    
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        if walletService.hasWallet() {
+                            print("✅ [BitcoinView] New wallet created successfully")
+                            walletStatus = .loaded
+                            completion()
+                        } else {
+                            print("❌ [BitcoinView] Failed to create wallet")
+                            walletStatus = .needsRecovery
+                            showWalletRecoveryAlert = true
+                        }
+                    }
+                }
             }
         }
     }
@@ -212,21 +278,45 @@ struct BitcoinView: View {
         }
     }
 
+    // MARK: - Exchange Rate Timer
+    private func setupExchangeRateTimer() {
+        print("⏰ [BitcoinView] Setting up exchange rate refresh timer (every 60s)")
+        exchangeRateTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
+            Task {
+                print("⏰ [BitcoinView] Timer triggered - refreshing exchange rate")
+                if let price = await fetchPrice() {
+                    await MainActor.run {
+                        if exchangeRate != price {
+                            print("💱 [BitcoinView] Timer update: €\(exchangeRate) -> €\(price)")
+                        } else {
+                            print("💱 [BitcoinView] Timer update: rate unchanged €\(price)")
+                        }
+                        exchangeRate = price
+                        cacheExchangeRate(price)
+                    }
+                }
+            }
+        }
+    }
+    
     // MARK: - Exchange Rate Caching
     private func loadCachedExchangeRate() {
         print("💱 [BitcoinView] Loading cached exchange rate...")
         
-        // Check if we have a cached rate and if it's still valid
+        // Always load the last known rate if available
         let cachedRate = UserDefaults.standard.double(forKey: exchangeRateCacheKey)
         let cachedTimestamp = UserDefaults.standard.object(forKey: exchangeRateTimestampKey) as? Date ?? Date.distantPast
         
-        let isValid = Date().timeIntervalSince(cachedTimestamp) < cacheValidityDuration
+        let cacheAge = Date().timeIntervalSince(cachedTimestamp)
+        let isStale = cacheAge >= cacheValidityDuration
         
-        if cachedRate > 0 && isValid {
+        if cachedRate > 0 {
             exchangeRate = cachedRate
-            print("💱 [BitcoinView] Using cached exchange rate: €\(cachedRate) (age: \(Date().timeIntervalSince(cachedTimestamp))s)")
+            print("💱 [BitcoinView] Loaded cached exchange rate: €\(cachedRate)")
+            print("💱 [BitcoinView]   Cache age: \(Int(cacheAge))s (\(Int(cacheAge/60))m)")
+            print("💱 [BitcoinView]   Is stale: \(isStale) (threshold: \(Int(cacheValidityDuration))s)")
         } else {
-            print("💱 [BitcoinView] No valid cached exchange rate found")
+            print("⚠️ [BitcoinView] No cached exchange rate found, waiting for first fetch")
         }
     }
     
@@ -236,43 +326,81 @@ struct BitcoinView: View {
         print("💱 [BitcoinView] Cached exchange rate: €\(rate)")
     }
 
+    // MARK: - Exchange Rate
+    private func refreshExchangeRate() async {
+        print("💱 [BitcoinView] Refreshing exchange rate...")
+        if let price = await fetchPrice() {
+            await MainActor.run {
+                exchangeRate = price
+                cacheExchangeRate(price)
+                print("💱 [BitcoinView] Exchange rate updated: €\(price)")
+            }
+        }
+    }
+    
     // MARK: - Balance
     private func refreshData() async {
+        print("🔄 [BitcoinView] Starting data refresh...")
+        
         // Use cached balance first, then refresh in background
-        let _ = await walletState.getBalance(forceRefresh: false)
+        let cachedBalance = await walletState.getBalance(forceRefresh: false)
+        print("💰 [BitcoinView] Using cached balance: \(cachedBalance.confirmed) sats")
         
-        // Fetch exchange rate only if not cached or stale
+        // Check if exchange rate needs refresh
         let cachedTimestamp = UserDefaults.standard.object(forKey: exchangeRateTimestampKey) as? Date ?? Date.distantPast
-        let needsRefresh = Date().timeIntervalSince(cachedTimestamp) >= cacheValidityDuration
+        let cacheAge = Date().timeIntervalSince(cachedTimestamp)
+        let needsRefresh = cacheAge >= cacheValidityDuration
         
-        if needsRefresh {
-            print("💱 [BitcoinView] Exchange rate cache stale, fetching fresh rate...")
-            if let price = await fetchPrice() {
-                await MainActor.run { 
-                    exchangeRate = price
-                    cacheExchangeRate(price)
-                }
+        print("💱 [BitcoinView] Exchange rate cache check:")
+        print("💱 [BitcoinView]   Current rate: €\(exchangeRate)")
+        print("💱 [BitcoinView]   Cache age: \(Int(cacheAge))s")
+        print("💱 [BitcoinView]   Needs refresh: \(needsRefresh)")
+        
+        // Always try to fetch fresh data in background
+        if let price = await fetchPrice() {
+            await MainActor.run {
+                print("💱 [BitcoinView] Updating exchange rate: €\(exchangeRate) -> €\(price)")
+                exchangeRate = price
+                cacheExchangeRate(price)
             }
         } else {
-            print("💱 [BitcoinView] Exchange rate cache is fresh, skipping fetch")
+            print("⚠️ [BitcoinView] Failed to fetch new exchange rate, keeping cached: €\(exchangeRate)")
         }
         
-        // Refresh wallet data in background if needed
-        if walletState.balance.isStale {
-            await walletState.refreshAll()
-        }
+        // Refresh wallet data in background
+        print("🔄 [BitcoinView] Refreshing wallet data in background...")
+        await walletState.refreshAll()
+        print("✅ [BitcoinView] Data refresh completed")
     }
 
     private func fetchPrice() async -> Double? {
-        guard let url = URL(string: "https://mempool.space/api/v1/prices") else { return nil }
+        print("💱 [BitcoinView] Fetching exchange rate from mempool.space...")
+        guard let url = URL(string: "https://mempool.space/api/v1/prices") else {
+            print("❌ [BitcoinView] Invalid URL for price API")
+            return nil
+        }
+        
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let startTime = Date()
+            let (data, response) = try await URLSession.shared.data(from: url)
+            let fetchTime = Date().timeIntervalSince(startTime)
+            
+            if let httpResponse = response as? HTTPURLResponse {
+                print("💱 [BitcoinView] API Response: \(httpResponse.statusCode) in \(String(format: "%.2f", fetchTime))s")
+            }
+            
             if let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                let eur = dict["EUR"] as? Double {
+                print("💱 [BitcoinView] ✅ Fetched EUR rate: €\(eur)")
                 return eur
+            } else {
+                print("❌ [BitcoinView] Failed to parse EUR rate from response")
+                if let responseString = String(data: data, encoding: .utf8) {
+                    print("❌ [BitcoinView] Response: \(responseString.prefix(200))...")
+                }
             }
         } catch {
-            print("Price fetch failed", error)
+            print("❌ [BitcoinView] Price fetch failed: \(error.localizedDescription)")
         }
         return nil
     }
@@ -333,12 +461,16 @@ private struct SecondaryCurrencyAndAmount: View {
                 Text("********")
             } else {
                 let btc = Double(sats) / 100_000_000
-                let eurString = rate > 0 ? String(format: "%.2f", btc * rate) : "Loading..."
+                let eurString = rate > 0 ? String(format: "%.2f", btc * rate) : "—"
                 let satsString = String(sats)
                 HStack(spacing: 0) {
                     if isPrimaryBTC {
-                        Text("€ ")
-                        Text(eurString)
+                        if rate > 0 {
+                            Text("€ ")
+                            Text(eurString)
+                        } else {
+                            Text("€ —")
+                        }
                     } else {
                         Text("₿ \(satsString)")
                     }

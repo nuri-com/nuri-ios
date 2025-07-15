@@ -57,10 +57,23 @@ final class WalletStateManager: ObservableObject {
     
     private init() {
         print("🧠 [WalletStateManager] Initializing wallet state manager")
-        // Defer loading to improve startup time
+        // Load persisted data immediately
+        loadPersistedData()
+        
+        // Setup background sync and initial fetch
         Task { @MainActor in
-            loadPersistedData()
             setupBackgroundSync()
+            
+            // Wait a bit for wallet to initialize
+            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+            
+            // Try to fetch fresh balance if we have a wallet
+            if BitcoinWalletService.shared.hasWallet() {
+                print("💰 [WalletStateManager] Wallet exists, fetching fresh balance...")
+                await getBalance(forceRefresh: true)
+            } else {
+                print("⚠️ [WalletStateManager] No wallet found, using cached balance only")
+            }
         }
     }
     
@@ -219,6 +232,36 @@ final class WalletStateManager: ObservableObject {
         return transactions
     }
 
+    // MARK: - Public Methods
+    
+    /// Clear all cached data (used when wallet is reset)
+    func clearAllCache() {
+        print("🗑️ [WalletStateManager] Clearing all cached data...")
+        
+        // Clear balance
+        balance = WalletBalance()
+        UserDefaults.standard.removeObject(forKey: CacheKeys.balanceConfirmed)
+        UserDefaults.standard.removeObject(forKey: CacheKeys.balancePending)
+        UserDefaults.standard.removeObject(forKey: CacheKeys.balanceTotal)
+        UserDefaults.standard.removeObject(forKey: CacheKeys.balanceLastUpdated)
+        
+        // Clear transactions
+        transactions = []
+        UserDefaults.standard.removeObject(forKey: CacheKeys.transactionsList)
+        UserDefaults.standard.removeObject(forKey: CacheKeys.transactionsLastUpdated)
+        
+        // Clear pending transactions
+        pendingTransactions = []
+        UserDefaults.standard.removeObject(forKey: CacheKeys.pendingTransactionsList)
+        
+        // Clear fee rates (but keep defaults)
+        feeRates = FeeRates()
+        UserDefaults.standard.removeObject(forKey: CacheKeys.feeRates)
+        UserDefaults.standard.removeObject(forKey: CacheKeys.feeRatesLastUpdated)
+        
+        print("✅ [WalletStateManager] All cached data cleared")
+    }
+    
     /// Get current balance with smart caching
     func getBalance(forceRefresh: Bool = false) async -> WalletBalance {
         print("💰 [WalletStateManager] getBalance called (forceRefresh: \(forceRefresh))")
@@ -655,26 +698,41 @@ final class WalletStateManager: ObservableObject {
     }
     
     private func fetchCurrentExchangeRate() async -> Double {
-        // Reuse the same API as the main app
+        // First check if we have a cached rate from BitcoinView
+        let cachedRate = UserDefaults.standard.double(forKey: "nuri.exchangeRate.eur")
+        if cachedRate > 0 {
+            print("💱 [WalletStateManager] Using cached EUR rate from BitcoinView: €\(cachedRate)")
+            return cachedRate
+        }
+        
+        // Otherwise fetch from API
+        print("💱 [WalletStateManager] No cached rate, fetching from Coinbase API...")
         do {
             let url = URL(string: "https://api.coinbase.com/v2/exchange-rates?currency=BTC")!
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, response) = try await URLSession.shared.data(from: url)
+            
+            if let httpResponse = response as? HTTPURLResponse {
+                print("💱 [WalletStateManager] Coinbase API Response: \(httpResponse.statusCode)")
+            }
             
             if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                let responseData = json["data"] as? [String: Any],
                let rates = responseData["rates"] as? [String: String],
                let eurRate = rates["EUR"],
                let rate = Double(eurRate) {
-                print("💱 [WalletStateManager] Fetched current EUR rate: \(rate)")
+                print("💱 [WalletStateManager] ✅ Fetched EUR rate from Coinbase: €\(rate)")
+                // Cache it for other components
+                UserDefaults.standard.set(rate, forKey: "nuri.exchangeRate.eur")
+                UserDefaults.standard.set(Date(), forKey: "nuri.exchangeRate.eur.timestamp")
                 return rate
             }
         } catch {
-            print("❌ [WalletStateManager] Failed to fetch exchange rate: \(error)")
+            print("❌ [WalletStateManager] Failed to fetch exchange rate: \(error.localizedDescription)")
         }
         
-        // Fallback rate
-        print("💱 [WalletStateManager] Using fallback EUR rate: 50000.0")
-        return 50000.0
+        // Last resort - use a reasonable default
+        print("⚠️ [WalletStateManager] Using last resort EUR rate: €95000.0")
+        return 95000.0
     }
     
     private func getHistoricalExchangeRate(for date: Date) -> Double? {

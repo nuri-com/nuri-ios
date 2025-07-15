@@ -21,12 +21,13 @@ struct TransactionsView: View {
             Color(hex: "#F0F0F0").ignoresSafeArea()
 
             VStack(spacing: 0) {
+                // Header
                 NuriHeader<AnyView, AnyView>.logo(title: "Transactions", onClose: { dismiss() })
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
-                        if isLoading || walletState.isSyncing {
-                            // Loading state
+                        if walletState.transactions.isEmpty && isLoading {
+                            // Loading state - only show when no cached data
                             VStack(spacing: 16) {
                                 ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle())
@@ -80,7 +81,22 @@ struct TransactionsView: View {
     
     private func loadTransactions() async {
         print("📋 [TransactionsView] Loading transactions...")
-        isLoading = true
+        
+        let walletService = BitcoinWalletService.shared
+        
+        // Ensure wallet is initialized first
+        if !walletService.hasWallet() {
+            print("⚠️ [TransactionsView] Wallet not initialized, initializing now...")
+            walletService.initializeWalletOnAppStart()
+            
+            // Wait for initialization
+            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+        }
+        
+        // Only show loading state if we have no cached transactions
+        if walletState.transactions.isEmpty {
+            isLoading = true
+        }
         
         // Get cached transactions (fast) and refresh in background if needed
         let _ = await walletState.getTransactions(forceRefresh: false)

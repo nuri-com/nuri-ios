@@ -76,34 +76,42 @@ struct ConfirmTransactionView: View {
                 .padding(32)
             } else {
                 VStack(spacing: 16) {
-                    // Amount
-                    if let txData = transactionData {
-                        HStack(spacing: 4) {
-                            Text("₿")
-                                .font(.system(size: 40, weight: .semibold))
-                            Text(String(txData.amountSats))
-                                .font(.system(size: 40, weight: .semibold))
+                    // Amount display - EUR on top, BTC below
+                    if let txData = transactionData, let txInfo = transactionInfo {
+                        // Calculate EUR exchange rate from the original transaction data
+                        let btcAmount = Double(txData.amountSats) / 100_000_000
+                        let eurRate = txData.eurAmount / btcAmount
+                        
+                        // Calculate fee in EUR using the same rate
+                        let feeInBTC = Double(txInfo.feeSats) / 100_000_000
+                        let feeInEUR = feeInBTC * eurRate
+                        let totalEUR = txData.eurAmount + feeInEUR
+                        
+                        VStack(spacing: 4) {
+                            // EUR amount
+                            HStack(spacing: 4) {
+                                Text("€")
+                                    .font(.system(size: 40, weight: .semibold))
+                                Text(String(format: "%.2f", totalEUR))
+                                    .font(.system(size: 40, weight: .semibold))
+                            }
+                            
+                            // Bitcoin amount
+                            HStack(spacing: 4) {
+                                Text("₿")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(Color("PrimaryNuriBlack"))
+                                Text(String(txInfo.totalSats))
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(Color("PrimaryNuriBlack"))
+                            }
                         }
-                        Text(String(format: "~ %.2f EUR", txData.eurAmount))
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(Color.secondary)
                     } else {
                         Text("Loading transaction data...")
                             .font(.system(size: 20, weight: .medium))
                             .foregroundStyle(Color.secondary)
                     }
 
-                    // Balance display
-                    if walletState.availableBalance > 0 {
-                        HStack(spacing: 4) {
-                            Text("Balance:")
-                            Text("₿")
-                            Text("\(walletState.availableBalance)")
-                        }
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(Color(hex: "#6D6D86"))
-                        .padding(.top, 8)
-                    }
 
                     // Details card
                     VStack(alignment: .leading, spacing: 8) {
@@ -164,44 +172,13 @@ struct ConfirmTransactionView: View {
 
                     Spacer()
 
-                    // Total Amount Display (above button)
-                    if let txInfo = transactionInfo {
-                        VStack(spacing: 4) {
-                            HStack {
-                                Text("Total Amount:")
-                                    .font(.custom("Inter", size: 16).weight(.medium))
-                                    .foregroundColor(Color("PrimaryNuriBlack"))
-                                Spacer()
-                                Text("₿ \(txInfo.totalSats)")
-                                    .font(.custom("Inter", size: 18).weight(.semibold))
-                                    .foregroundColor(Color("PrimaryNuriBlack"))
-                            }
-                            HStack {
-                                Text("(Amount + Network Fee)")
-                                    .font(.custom("Inter", size: 14))
-                                    .foregroundColor(Color(hex: "#6D6D86"))
-                                Spacer()
-                            }
-                            
-                            // Insufficient funds warning
-                            if txInfo.totalSats > walletState.availableBalance {
-                                HStack {
-                                    Image(systemName: "exclamationmark.triangle.fill")
-                                        .foregroundColor(.orange)
-                                        .font(.system(size: 14))
-                                    Text("Insufficient funds")
-                                        .font(.custom("Inter", size: 14).weight(.medium))
-                                        .foregroundColor(.orange)
-                                    Spacer()
-                                }
-                                .padding(.top, 4)
-                            }
-                        }
-                        .padding(.vertical, 12)
-                        .padding(.horizontal, 16)
-                        .background(Color(hex: "#F8F9FA"))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .padding(.bottom, 16)
+                    // Fee calculation display (above button)
+                    if let txData = transactionData, let txInfo = transactionInfo {
+                        Text("₿ \(String(txData.amountSats)) Amount + ₿ \(String(txInfo.feeSats)) Fee = ₿ \(String(txInfo.totalSats))")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(Color(hex: "#6D6D86"))
+                            .multilineTextAlignment(.center)
+                            .padding(.vertical, 8)
                     }
 
                     Button(action: sendTransaction) {
@@ -257,25 +234,17 @@ struct ConfirmTransactionView: View {
     // MARK: - Subviews
     @ViewBuilder
     private func recipientView() -> some View {
-        let segments = segmentedRecipient()
-        HStack(spacing: 0) {
-            ForEach(segments.indices, id: \.self) { idx in
-                let seg = segments[idx]
-                Text(seg)
-                    .font(.custom("Inter", size: 16).weight(idx % 2 == 0 ? .semibold : .regular))
-                    .foregroundColor(idx % 2 == 0 ? Color("PrimaryNuriBlack") : Color("TextSecondary"))
-            }
-        }
-        .textSelection(.enabled)
-    }
-
-    private func segmentedRecipient() -> [String] {
-        guard let address = transactionData?.recipientAddress else { return ["Loading..."] }
-        return stride(from: 0, to: address.count, by: 5).map { start in
-            let end = min(start + 5, address.count)
-            let startIdx = address.index(address.startIndex, offsetBy: start)
-            let endIdx = address.index(address.startIndex, offsetBy: end)
-            return String(address[startIdx..<endIdx])
+        if let address = transactionData?.recipientAddress {
+            Text(address)
+                .font(.custom("Inter", size: 16))
+                .foregroundColor(Color("PrimaryNuriBlack"))
+                .textSelection(.enabled)
+                .lineLimit(nil)
+                .multilineTextAlignment(.leading)
+        } else {
+            Text("Loading...")
+                .font(.custom("Inter", size: 16))
+                .foregroundColor(Color("TextSecondary"))
         }
     }
 

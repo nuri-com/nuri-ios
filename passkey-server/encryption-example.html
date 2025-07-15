@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Passkey Encryption Example</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f7;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            color: #1d1d1f;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+        }
+        button {
+            background-color: #007aff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        .code {
+            background: #f5f5f7;
+            padding: 20px;
+            border-radius: 6px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .section {
+            margin: 30px 0;
+        }
+        .success {
+            color: green;
+            margin: 10px 0;
+        }
+        .error {
+            color: red;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Passkey-Based Encryption Example</h1>
+        <p>This demonstrates how to use passkeys to encrypt and store sensitive data like seed phrases.</p>
+
+        <div class="section">
+            <h2>Step 1: Authenticate with Passkey</h2>
+            <input type="text" id="username" placeholder="Enter username">
+            <button onclick="authenticateUser()">Authenticate</button>
+            <div id="authStatus"></div>
+        </div>
+
+        <div class="section">
+            <h2>Step 2: Store Encrypted Data</h2>
+            <input type="email" id="email" placeholder="Email (optional)">
+            <textarea id="seedPhrase" placeholder="Enter seed phrase to encrypt" rows="3"></textarea>
+            <button onclick="encryptAndStore()">Encrypt & Store</button>
+            <div id="storeStatus"></div>
+        </div>
+
+        <div class="section">
+            <h2>Step 3: Retrieve & Decrypt Data</h2>
+            <button onclick="retrieveAndDecrypt()">Retrieve & Decrypt</button>
+            <div id="retrieveStatus"></div>
+            <div class="code" id="decryptedData" style="display:none;"></div>
+        </div>
+
+        <div class="section">
+            <h2>How It Works</h2>
+            <div class="code">
+1. User authenticates with passkey
+2. Generate encryption key from passkey signature
+3. Encrypt sensitive data (seed phrase) client-side
+4. Store encrypted data on server
+5. Only the passkey holder can decrypt
+
+Key Derivation:
+- Use WebAuthn signature as entropy
+- Derive encryption key using PBKDF2/Argon2
+- Never send raw seed phrase to server
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://localhost';
+        let currentUser = null;
+        let authData = null;
+
+        // Helper functions for WebAuthn
+        function base64urlToArrayBuffer(base64url) {
+            const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+            const padded = base64 + (base64.length % 4 === 0 ? '' : '='.repeat(4 - base64.length % 4));
+            const binaryString = atob(padded);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+
+        function arrayBufferToBase64url(buffer) {
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+        }
+
+        // Derive encryption key from passkey signature
+        async function deriveKeyFromSignature(signature) {
+            // Use the signature as entropy for key derivation
+            const encoder = new TextEncoder();
+            const salt = encoder.encode('passkey-encryption-v1');
+            
+            // Import signature as key material
+            const keyMaterial = await crypto.subtle.importKey(
+                'raw',
+                signature,
+                'PBKDF2',
+                false,
+                ['deriveBits', 'deriveKey']
+            );
+
+            // Derive AES key
+            return await crypto.subtle.deriveKey(
+                {
+                    name: 'PBKDF2',
+                    salt: salt,
+                    iterations: 100000,
+                    hash: 'SHA-256'
+                },
+                keyMaterial,
+                { name: 'AES-GCM', length: 256 },
+                true,
+                ['encrypt', 'decrypt']
+            );
+        }
+
+        // Encrypt data
+        async function encryptData(data, key) {
+            const encoder = new TextEncoder();
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            
+            const encrypted = await crypto.subtle.encrypt(
+                { name: 'AES-GCM', iv: iv },
+                key,
+                encoder.encode(data)
+            );
+
+            // Return IV + encrypted data
+            const result = new Uint8Array(iv.length + encrypted.byteLength);
+            result.set(iv, 0);
+            result.set(new Uint8Array(encrypted), iv.length);
+            
+            return arrayBufferToBase64url(result.buffer);
+        }
+
+        // Decrypt data
+        async function decryptData(encryptedData, key) {
+            const data = base64urlToArrayBuffer(encryptedData);
+            const iv = data.slice(0, 12);
+            const ciphertext = data.slice(12);
+
+            const decrypted = await crypto.subtle.decrypt(
+                { name: 'AES-GCM', iv: new Uint8Array(iv) },
+                key,
+                ciphertext
+            );
+
+            const decoder = new TextDecoder();
+            return decoder.decode(decrypted);
+        }
+
+        async function authenticateUser() {
+            const username = document.getElementById('username').value;
+            if (!username) {
+                showStatus('authStatus', 'Please enter username', 'error');
+                return;
+            }
+
+            try {
+                // Get authentication options
+                const optionsResponse = await fetch(`${API_BASE}/generate-authentication-options`);
+                const options = await optionsResponse.json();
+
+                // Convert challenge
+                const publicKeyOptions = {
+                    ...options,
+                    challenge: base64urlToArrayBuffer(options.challenge),
+                    allowCredentials: []
+                };
+
+                // Authenticate
+                const credential = await navigator.credentials.get({
+                    publicKey: publicKeyOptions
+                });
+
+                // Store auth data for encryption
+                authData = {
+                    signature: credential.response.signature,
+                    userHandle: credential.response.userHandle
+                };
+
+                // Verify with server
+                const verifyResponse = await fetch(`${API_BASE}/verify-authentication`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        cred: {
+                            id: credential.id,
+                            rawId: arrayBufferToBase64url(credential.rawId),
+                            type: credential.type,
+                            response: {
+                                authenticatorData: arrayBufferToBase64url(credential.response.authenticatorData),
+                                clientDataJSON: arrayBufferToBase64url(credential.response.clientDataJSON),
+                                signature: arrayBufferToBase64url(credential.response.signature),
+                                userHandle: credential.response.userHandle ? 
+                                    arrayBufferToBase64url(credential.response.userHandle) : null
+                            }
+                        }
+                    })
+                });
+
+                const result = await verifyResponse.json();
+                if (result.verified) {
+                    currentUser = username;
+                    showStatus('authStatus', `✅ Authenticated as ${username}`, 'success');
+                } else {
+                    throw new Error('Authentication failed');
+                }
+            } catch (error) {
+                showStatus('authStatus', `❌ ${error.message}`, 'error');
+            }
+        }
+
+        async function encryptAndStore() {
+            if (!currentUser || !authData) {
+                showStatus('storeStatus', 'Please authenticate first', 'error');
+                return;
+            }
+
+            const email = document.getElementById('email').value;
+            const seedPhrase = document.getElementById('seedPhrase').value;
+
+            if (!seedPhrase) {
+                showStatus('storeStatus', 'Please enter data to encrypt', 'error');
+                return;
+            }
+
+            try {
+                // Derive encryption key from passkey signature
+                const encryptionKey = await deriveKeyFromSignature(authData.signature);
+
+                // Encrypt the seed phrase
+                const encryptedSeed = await encryptData(seedPhrase, encryptionKey);
+
+                // Store encrypted data
+                const response = await fetch(`${API_BASE}/api/users/${currentUser}/seed-backup`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        encryptedSeed: encryptedSeed,
+                        keyDerivationParams: {
+                            algorithm: 'PBKDF2',
+                            iterations: 100000,
+                            hash: 'SHA-256'
+                        }
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to store encrypted data');
+                }
+
+                // Also store email if provided
+                if (email) {
+                    await fetch(`${API_BASE}/api/users/${currentUser}/data`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email })
+                    });
+                }
+
+                showStatus('storeStatus', '✅ Data encrypted and stored successfully', 'success');
+                document.getElementById('seedPhrase').value = '';
+            } catch (error) {
+                showStatus('storeStatus', `❌ ${error.message}`, 'error');
+            }
+        }
+
+        async function retrieveAndDecrypt() {
+            if (!currentUser || !authData) {
+                showStatus('retrieveStatus', 'Please authenticate first', 'error');
+                return;
+            }
+
+            try {
+                // Retrieve encrypted data
+                const response = await fetch(`${API_BASE}/api/users/${currentUser}/data`);
+                if (!response.ok) {
+                    throw new Error('Failed to retrieve data');
+                }
+
+                const userData = await response.json();
+                
+                if (!userData.encryptedData?.seedBackup) {
+                    showStatus('retrieveStatus', 'No encrypted data found', 'error');
+                    return;
+                }
+
+                // Derive decryption key
+                const decryptionKey = await deriveKeyFromSignature(authData.signature);
+
+                // Decrypt the seed
+                const decryptedSeed = await decryptData(
+                    userData.encryptedData.seedBackup.encryptedSeed,
+                    decryptionKey
+                );
+
+                showStatus('retrieveStatus', '✅ Data decrypted successfully', 'success');
+                
+                const displayEl = document.getElementById('decryptedData');
+                displayEl.textContent = `Email: ${userData.email || 'Not set'}\nSeed Phrase: ${decryptedSeed}\nBackup Date: ${userData.encryptedData.seedBackup.backupDate}`;
+                displayEl.style.display = 'block';
+            } catch (error) {
+                showStatus('retrieveStatus', `❌ ${error.message}`, 'error');
+            }
+        }
+
+        function showStatus(elementId, message, type) {
+            const el = document.getElementById(elementId);
+            el.textContent = message;
+            el.className = type;
+        }
+    </script>
+</body>
+</html>

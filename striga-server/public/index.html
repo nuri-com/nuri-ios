@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Striga Sandbox Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    .api-key-section { margin-bottom: 20px; padding: 15px; background: #f0f0f0; border-radius: 5px; }
+    input { padding: 8px; margin: 5px; width: 300px; }
+    button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #0056b3; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    .error { color: red; }
+    .success { color: green; }
+    pre { background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto; }
+  </style>
+  <script>
+    let apiKey = '';
+    
+    function setApiKey() {
+      apiKey = document.getElementById('apiKeyInput').value;
+      const status = document.getElementById('apiKeyStatus');
+      if (apiKey) {
+        status.innerHTML = '<span class="success">API Key set!</span>';
+        document.querySelectorAll('button:not(.api-key-btn)').forEach(btn => btn.disabled = false);
+      } else {
+        status.innerHTML = '<span class="error">Please enter an API key</span>';
+        document.querySelectorAll('button:not(.api-key-btn)').forEach(btn => btn.disabled = true);
+      }
+    }
+    
+    async function callEndpoint(endpoint, data) {
+      if (!apiKey) {
+        document.getElementById('response').innerHTML = '<span class="error">Please set API key first!</span>';
+        return;
+      }
+      
+      const payload = { ...data, apiKey };
+      console.log('Sending request to:', endpoint, payload);
+      
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload)
+        });
+        
+        const result = await response.json();
+        console.log('Response:', result);
+        document.getElementById('response').innerText = JSON.stringify(result, null, 2);
+      } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('response').innerHTML = `<span class="error">Error: ${error.message}</span>`;
+      }
+    }
+    
+    function getUserId() {
+      const userId = prompt('Enter User ID:');
+      return userId || 'enter-user-id';
+    }
+  </script>
+</head>
+<body>
+  <h1>Striga Sandbox Dashboard</h1>
+  
+  <div style="background: #d4edda; padding: 15px; margin: 20px 0; border-radius: 5px; text-align: center;">
+    <h3 style="margin: 0 0 10px 0;">✨ New: Streamlined Signup Flow</h3>
+    <a href="/signup.html" style="background: #28a745; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 5px;">Try Signup Flow</a>
+    <a href="/dashboard.html" style="background: #17a2b8; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 5px;">View All Users</a>
+    <a href="/sms-info.html" style="background: #ffc107; color: #212529; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 5px;">📱 SMS Info</a>
+  </div>
+  
+  <div style="background: #e8f4f8; padding: 15px; margin: 20px 0; border-radius: 5px;">
+    <h3>User Creation Flow:</h3>
+    <ol>
+      <li><strong>Create User</strong> - Creates a new user account</li>
+      <li><strong>Send Phone OTP</strong> - Sends verification code to user's phone</li>
+      <li><strong>Verify Phone</strong> - Confirms the phone with the OTP received</li>
+      <li><strong>Send Email OTP</strong> - Sends verification code to user's email</li>
+      <li><strong>Verify Email</strong> - Confirms the email with the OTP received</li>
+      <li><strong>Start KYC</strong> - Initiates identity verification process</li>
+      <li><strong>Create VIBAN</strong> - Creates a virtual bank account</li>
+      <li><strong>Create Virtual Card</strong> - Issues a virtual payment card</li>
+      <li><strong>Create BTC Wallet</strong> - Creates a Bitcoin wallet</li>
+    </ol>
+    <p><strong>Note:</strong> Save the User ID after creating a user - you'll need it for all subsequent steps!</p>
+  </div>
+  
+  <div class="api-key-section">
+    <label for="apiKeyInput">Striga API Key:</label>
+    <input type="password" id="apiKeyInput" placeholder="Enter your Striga API key" value="_TbS1cXGStMmYBJtcoYSA7we2lQUky_6TMo-aGLvWJM=">
+    <button class="api-key-btn" onclick="setApiKey()">Set API Key</button>
+    <div id="apiKeyStatus"></div>
+    <div style="margin-top: 10px; font-size: 12px; color: #666;">
+      <strong>Your Keys:</strong><br>
+      app-id: 3856e737-52d9-4266-a195-0fcfe8e16600<br>
+      api-key: _TbS1cXGStMmYBJtcoYSA7we2lQUky_6TMo-aGLvWJM=<br>
+      api-secret: 43jBa65VEoLC5O4O48pDruayz5Q43IlhgyGbkYPcMHE=<br>
+      ui-secret: N8UziFzjqP616Rk3+6uRGe1nDJ3TOxnUZzWrqadQalw=
+    </div>
+  </div>
+  
+  <h2>User Management</h2>
+  <button disabled onclick="callEndpoint('/create-user', {firstName: 'Test', lastName: 'User', email: 'test@example.com', mobile: {countryCode: '+49', number: '1701234567'}})">Create User</button>
+  <button disabled onclick="callEndpoint('/send-phone-otp', {userId: getUserId(), mobile: prompt('Enter mobile number (e.g. +491701234567):')||'+491701234567'})">Send Phone OTP</button>
+  <button disabled onclick="callEndpoint('/verify-phone', {userId: getUserId(), verificationCode: prompt('Enter verification code:')})">Verify Phone</button>
+  <button disabled onclick="callEndpoint('/send-email-otp', {userId: getUserId(), email: prompt('Enter email:')||'test@example.com'})">Send Email OTP</button>
+  <button disabled onclick="callEndpoint('/verify-email', {userId: getUserId(), verificationCode: prompt('Enter verification code:')})">Verify Email</button>
+  
+  <h2>KYC & Accounts</h2>
+  <button disabled onclick="callEndpoint('/start-kyc', {userId: getUserId()})">Start KYC</button>
+  <button disabled onclick="callEndpoint('/create-viban', {userId: getUserId()})">Create VIBAN</button>
+  <button disabled onclick="callEndpoint('/create-vcard', {walletId: prompt('Enter Wallet ID:')})">Create Virtual Card</button>
+  <button disabled onclick="callEndpoint('/create-btc-wallet', {userId: getUserId()})">Create BTC Wallet</button>
+  
+  <h2>Response</h2>
+  <pre id="response">No requests made yet...</pre>
+</body>
+</html>

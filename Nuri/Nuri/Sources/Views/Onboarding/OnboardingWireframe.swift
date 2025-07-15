@@ -24,6 +24,14 @@ final class OnboardingWireframe: OnboardingWireframeType {
         return navigationController
     }
 
+    func phoneNumberVerificationFlow() -> UINavigationController {
+        let viewController = phoneNumberViewController()
+        let navigationController = UINavigationController(rootViewController: viewController)
+        navigationController.navigationBar.tintColor = UIColor(NuriAsset.textPrimary.swiftUIColor)
+        self.navigationController = navigationController
+        return navigationController
+    }
+
     private func showNextScreen(after screen: OnboardingScreen) {
         if let nextScreen = nextScreen(after: screen) {
             let viewController = viewController(for: nextScreen)
@@ -42,6 +50,8 @@ final class OnboardingWireframe: OnboardingWireframeType {
         case .setupCardExplanation:
             return .setupCard
         case .setupCard:
+            return .cardViewActive
+        case .cardViewActive:
             return nil
         }
     }
@@ -58,6 +68,8 @@ final class OnboardingWireframe: OnboardingWireframeType {
             return setupCardExplanationViewController()
         case .setupCard:
             return setupCardViewController()
+        case .cardViewActive:
+            return cardViewActiveController()
         }
     }
 
@@ -99,6 +111,11 @@ final class OnboardingWireframe: OnboardingWireframeType {
 //        let viewModel: SetupCardViewModelType = container.resolve()
 //        viewModel.delegate = self
         let view = SetupCardView()
+        return hostingController(view: view)
+    }
+
+    private func cardViewActiveController() -> UIViewController {
+        let view = CardViewActive()
         return hostingController(view: view)
     }
 

@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Passkey Server Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #f5f5f7;
+            color: #1d1d1f;
+            line-height: 1.5;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background-color: #fff;
+            padding: 20px 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            font-size: 32px;
+            font-weight: 600;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: #fff;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        
+        .stat-value {
+            font-size: 36px;
+            font-weight: 600;
+            color: #007aff;
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: #86868b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .users-section, .test-section {
+            background: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            margin-bottom: 30px;
+        }
+        
+        h2 {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        
+        .user-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+        }
+        
+        .user-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .username {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .user-meta {
+            font-size: 12px;
+            color: #86868b;
+        }
+        
+        .passkey-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .passkey-item {
+            background: #f5f5f7;
+            padding: 12px;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .passkey-info {
+            flex: 1;
+        }
+        
+        .passkey-type {
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+        
+        .passkey-details {
+            font-size: 12px;
+            color: #86868b;
+        }
+        
+        .badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .badge-platform {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        
+        .badge-cross-platform {
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+        
+        .badge-backup {
+            background: #fff3e0;
+            color: #e65100;
+        }
+        
+        .data-section {
+            background: #e8f5e9;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 10px;
+        }
+        
+        .data-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .data-controls input, .data-controls textarea {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .data-controls button {
+            padding: 8px 16px;
+            font-size: 14px;
+        }
+        
+        .stored-data {
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-family: monospace;
+            word-break: break-all;
+        }
+        
+        button {
+            background-color: #007aff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        
+        button:hover {
+            opacity: 0.9;
+        }
+        
+        button:active {
+            transform: scale(0.98);
+        }
+        
+        .test-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #86868b;
+        }
+        
+        .refresh-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .error {
+            background: #fee;
+            color: #c00;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+        
+        .success {
+            background: #efe;
+            color: #060;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>🔐 Passkey Server Dashboard</h1>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-value" id="total-users">0</div>
+                <div class="stat-label">Total Users</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="total-passkeys">0</div>
+                <div class="stat-label">Total Passkeys</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="hardware-keys">0</div>
+                <div class="stat-label">Hardware Keys</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="platform-keys">0</div>
+                <div class="stat-label">Platform Keys</div>
+            </div>
+        </div>
+
+        <!-- Login Section -->
+        <div id="login-section" class="test-section">
+            <h2>🔐 Login with Passkey</h2>
+            <div id="login-message"></div>
+            <div class="test-buttons">
+                <button onclick="loginWithPasskey()">Login with Passkey</button>
+                <button onclick="registerAnonymousPasskey()">Register Anonymous Passkey</button>
+                <button onclick="registerNamedPasskey()">Register Passkey with Username</button>
+            </div>
+        </div>
+
+        <!-- User Dashboard (hidden until logged in) -->
+        <div id="user-dashboard" class="test-section" style="display: none;">
+            <h2>👤 Your Account</h2>
+            <div id="user-info"></div>
+            <div class="data-section">
+                <h3>📦 Your Data Storage</h3>
+                <div id="user-data" class="stored-data">Loading...</div>
+                <div class="data-controls">
+                    <input type="text" id="user-email" placeholder="Email (optional)">
+                    <textarea id="user-data-input" placeholder="Enter any data to store (e.g., notes, settings, encrypted seed)" rows="3"></textarea>
+                    <button onclick="storeCurrentUserData()">Store Data</button>
+                    <button onclick="loadCurrentUserData()">Refresh</button>
+                </div>
+            </div>
+            <div style="margin-top: 20px;">
+                <button onclick="logout()" style="background-color: #6c757d;">Logout</button>
+            </div>
+        </div>
+
+        <!-- Admin Section -->
+        <div id="admin-section" class="test-section">
+            <h2>🛠️ Admin Tools</h2>
+            <div id="admin-message"></div>
+            <div class="test-buttons">
+                <button onclick="clearDatabase()" style="background-color: #dc3545;">Clear Database</button>
+                <button onclick="toggleAllUsers()">Toggle All Users View</button>
+            </div>
+        </div>
+
+        <div class="users-section">
+            <h2>Registered Users</h2>
+            <div id="users-container">
+                <div class="no-data">Loading users...</div>
+            </div>
+        </div>
+    </div>
+
+    <button class="refresh-btn" onclick="loadDashboard()">↻</button>
+
+    <script>
+        const API_BASE = 'https://localhost';
+        let currentUser = null;
+        let isLoggedIn = false;
+        let allUsersVisible = false;
+
+        // Show/hide sections based on login state
+        function updateUIState() {
+            const loginSection = document.getElementById('login-section');
+            const userDashboard = document.getElementById('user-dashboard');
+            const usersSection = document.querySelector('.users-section');
+            
+            if (isLoggedIn) {
+                loginSection.style.display = 'none';
+                userDashboard.style.display = 'block';
+                usersSection.style.display = allUsersVisible ? 'block' : 'none';
+            } else {
+                loginSection.style.display = 'block';
+                userDashboard.style.display = 'none';
+                usersSection.style.display = 'none'; // Hide by default when not logged in
+            }
+        }
+
+        async function loadDashboard() {
+            try {
+                const response = await fetch(`${API_BASE}/api/dashboard`, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load dashboard data');
+                }
+                
+                const data = await response.json();
+                updateDashboard(data);
+            } catch (error) {
+                console.error('Dashboard error:', error);
+                document.getElementById('users-container').innerHTML = 
+                    '<div class="error">Failed to load dashboard data</div>';
+            }
+        }
+
+        function updateDashboard(data) {
+            // Update stats
+            document.getElementById('total-users').textContent = data.totalUsers || 0;
+            document.getElementById('total-passkeys').textContent = data.totalPasskeys || 0;
+            document.getElementById('hardware-keys').textContent = data.hardwareKeys || 0;
+            document.getElementById('platform-keys').textContent = data.platformKeys || 0;
+
+            // Update users list
+            const usersContainer = document.getElementById('users-container');
+            
+            if (!data.users || data.users.length === 0) {
+                usersContainer.innerHTML = '<div class="no-data">No users registered yet</div>';
+                return;
+            }
+
+            usersContainer.innerHTML = data.users.map(user => `
+                <div class="user-card">
+                    <div class="user-header">
+                        <div>
+                            <div class="username">${user.username}</div>
+                            <div class="user-meta">User ID: ${user.id} • Created: ${new Date(user.created_at).toLocaleDateString()}</div>
+                        </div>
+                        <div>
+                            <span class="badge badge-platform">${user.authenticators.length} passkey${user.authenticators.length !== 1 ? 's' : ''}</span>
+                        </div>
+                    </div>
+                    <div class="passkey-list">
+                        ${user.authenticators.map(auth => `
+                            <div class="passkey-item">
+                                <div class="passkey-info">
+                                    <div class="passkey-type">
+                                        ${auth.credential_device_type === 'singleDevice' ? '📱 Platform Authenticator' : '🔑 Cross-Platform Authenticator'}
+                                    </div>
+                                    <div class="passkey-details">
+                                        ID: ${auth.credential_id.substring(0, 16)}... • 
+                                        Counter: ${auth.counter} • 
+                                        ${auth.transports ? auth.transports.join(', ') : 'No transports'}
+                                    </div>
+                                </div>
+                                <div>
+                                    ${auth.credential_device_type === 'singleDevice' ? 
+                                        '<span class="badge badge-platform">Platform</span>' : 
+                                        '<span class="badge badge-cross-platform">Cross-Platform</span>'}
+                                    ${auth.credential_backed_up ? 
+                                        '<span class="badge badge-backup">Backed Up</span>' : ''}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="data-section">
+                        <h4>📦 User Data Storage</h4>
+                        <div id="data-${user.username.replace(/[^a-zA-Z0-9]/g, '_')}" class="stored-data">
+                            Loading...
+                        </div>
+                        <div class="data-controls">
+                            <input type="text" id="email-${user.username.replace(/[^a-zA-Z0-9]/g, '_')}" placeholder="Email (optional)">
+                            <textarea id="data-input-${user.username.replace(/[^a-zA-Z0-9]/g, '_')}" placeholder="Enter any data to store (e.g., notes, settings, encrypted seed)" rows="2"></textarea>
+                            <button onclick="storeUserData('${user.username}', '${user.authenticators[0]?.credential_id || ''}')">Store Data</button>
+                            <button onclick="loadUserData('${user.username}', '${user.authenticators[0]?.credential_id || ''}')">Refresh</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            // Load data for each user
+            data.users.forEach(user => {
+                loadUserData(user.username, user.authenticators[0]?.credential_id || '');
+            });
+        }
+
+        // Helper functions for WebAuthn encoding/decoding
+        function base64urlToArrayBuffer(base64url) {
+            // Convert base64url to base64
+            const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+            // Pad with = if needed
+            const padded = base64 + (base64.length % 4 === 0 ? '' : '='.repeat(4 - base64.length % 4));
+            const binaryString = atob(padded);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+
+        function arrayBufferToBase64url(buffer) {
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+        }
+
+        function preparePublicKeyOptions(options) {
+            // Convert base64 strings to ArrayBuffers
+            options.challenge = base64urlToArrayBuffer(options.challenge);
+            options.user.id = base64urlToArrayBuffer(options.user.id);
+            
+            if (options.excludeCredentials) {
+                options.excludeCredentials = options.excludeCredentials.map(cred => ({
+                    ...cred,
+                    id: base64urlToArrayBuffer(cred.id)
+                }));
+            }
+            
+            return options;
+        }
+
+        function prepareCredentialResponse(credential) {
+            // Convert ArrayBuffers to base64url for JSON transmission
+            return {
+                id: credential.id,
+                rawId: arrayBufferToBase64url(credential.rawId),
+                type: credential.type,
+                response: {
+                    attestationObject: arrayBufferToBase64url(credential.response.attestationObject),
+                    clientDataJSON: arrayBufferToBase64url(credential.response.clientDataJSON),
+                    transports: credential.response.getTransports ? credential.response.getTransports() : []
+                }
+            };
+        }
+
+        async function testAnonymousPasskey() {
+            try {
+                showMessage('Generating anonymous registration options...', 'info');
+                
+                // Don't send username for anonymous registration
+                const optionsResponse = await fetch(`${API_BASE}/generate-registration-options`);
+                const options = await optionsResponse.json();
+
+                if (!optionsResponse.ok) {
+                    throw new Error(options.error || 'Failed to generate options');
+                }
+
+                // Store the challenge key from server
+                const challengeKey = options.challengeKey;
+                
+                // Convert base64 to ArrayBuffers
+                const publicKeyOptions = preparePublicKeyOptions(options);
+                
+                showMessage('Please use your passkey (no username required)...', 'info');
+                
+                console.log('Creating anonymous credential with options:', publicKeyOptions);
+                
+                const credential = await navigator.credentials.create({
+                    publicKey: publicKeyOptions
+                });
+                
+                console.log('Anonymous credential created:', credential);
+                console.log('Preparing response...');
+
+                const preparedCred = prepareCredentialResponse(credential);
+                console.log('Sending anonymous credential to server:', preparedCred);
+                
+                const verifyResponse = await fetch(`${API_BASE}/verify-registration`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        cred: preparedCred,
+                        challengeKey: challengeKey
+                    })
+                });
+
+                if (!verifyResponse.ok) {
+                    const errorData = await verifyResponse.json();
+                    console.error('Server error:', errorData);
+                    throw new Error(`Server error: ${errorData.error || verifyResponse.statusText}`);
+                }
+
+                const result = await verifyResponse.json();
+                
+                if (result.verified) {
+                    // Auto-login after successful registration
+                    currentUser = {
+                        username: result.username,
+                        isAnonymous: result.isAnonymous,
+                        credentialId: preparedCred.id
+                    };
+                    isLoggedIn = true;
+                    
+                    showMessage(`✅ Anonymous passkey registered! Auto-logged in as ${result.username}`, 'success');
+                    updateUIState();
+                    updateUserInfo();
+                    loadCurrentUserData();
+                } else {
+                    const errorDetails = result.details || result.error || 'Unknown error';
+                    console.error('Verification failed:', result);
+                    throw new Error(`Verification failed: ${errorDetails}`);
+                }
+            } catch (error) {
+                showMessage(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testPlatformPasskey() {
+            const username = prompt('Enter username for grouped passkeys:');
+            if (!username) return;
+
+            try {
+                showMessage('Generating registration options...', 'info');
+                
+                const optionsResponse = await fetch(`${API_BASE}/generate-registration-options?username=${username}`);
+                const options = await optionsResponse.json();
+
+                if (!optionsResponse.ok) {
+                    throw new Error(options.error || 'Failed to generate options');
+                }
+
+                // Convert base64 to ArrayBuffers
+                const publicKeyOptions = preparePublicKeyOptions(options);
+                
+                // Override to prefer platform authenticator
+                publicKeyOptions.authenticatorSelection = {
+                    ...publicKeyOptions.authenticatorSelection,
+                    authenticatorAttachment: 'platform'
+                };
+
+                showMessage('Please use your device passkey (Touch ID, Face ID, Windows Hello)...', 'info');
+                
+                console.log('Creating credential with options:', publicKeyOptions);
+                
+                const credential = await navigator.credentials.create({
+                    publicKey: publicKeyOptions
+                });
+                
+                console.log('Credential created:', credential);
+                console.log('Preparing response...');
+
+                const preparedCred = prepareCredentialResponse(credential);
+                console.log('Sending credential to server:', preparedCred);
+                
+                const verifyResponse = await fetch(`${API_BASE}/verify-registration`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username,
+                        cred: preparedCred
+                    })
+                });
+
+                if (!verifyResponse.ok) {
+                    const errorData = await verifyResponse.json();
+                    console.error('Server error:', errorData);
+                    throw new Error(`Server error: ${errorData.error || verifyResponse.statusText}`);
+                }
+
+                const result = await verifyResponse.json();
+                
+                if (result.verified) {
+                    // Auto-login after successful registration
+                    currentUser = {
+                        username: result.username,
+                        isAnonymous: result.isAnonymous,
+                        credentialId: preparedCred.id
+                    };
+                    isLoggedIn = true;
+                    
+                    showMessage(`✅ Platform passkey registered for ${username}! Auto-logged in.`, 'success');
+                    updateUIState();
+                    updateUserInfo();
+                    loadCurrentUserData();
+                } else {
+                    const errorDetails = result.details || result.error || 'Unknown error';
+                    console.error('Verification failed:', result);
+                    throw new Error(`Verification failed: ${errorDetails}`);
+                }
+            } catch (error) {
+                showMessage(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testCrossPlatformPasskey() {
+            const username = prompt('Enter username for hardware key:');
+            if (!username) return;
+
+            try {
+                showMessage('Generating registration options...', 'info');
+                
+                const optionsResponse = await fetch(`${API_BASE}/generate-registration-options?username=${username}`);
+                const options = await optionsResponse.json();
+
+                if (!optionsResponse.ok) {
+                    throw new Error(options.error || 'Failed to generate options');
+                }
+
+                // Convert base64 to ArrayBuffers
+                const publicKeyOptions = preparePublicKeyOptions(options);
+                
+                // Override to prefer cross-platform authenticator (USB key)
+                publicKeyOptions.authenticatorSelection = {
+                    ...publicKeyOptions.authenticatorSelection,
+                    authenticatorAttachment: 'cross-platform'
+                };
+
+                showMessage('Please insert and touch your security key (YubiKey, etc.)...', 'info');
+                
+                const credential = await navigator.credentials.create({
+                    publicKey: publicKeyOptions
+                });
+
+                const verifyResponse = await fetch(`${API_BASE}/verify-registration`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username,
+                        cred: prepareCredentialResponse(credential)
+                    })
+                });
+
+                if (!verifyResponse.ok) {
+                    const errorData = await verifyResponse.json();
+                    console.error('Server error:', errorData);
+                    throw new Error(`Server error: ${errorData.error || verifyResponse.statusText}`);
+                }
+
+                const result = await verifyResponse.json();
+                
+                if (result.verified) {
+                    showMessage(`✅ Hardware key registered for ${username}!`, 'success');
+                    loadDashboard();
+                } else {
+                    const errorDetails = result.details || result.error || 'Unknown error';
+                    console.error('Verification failed:', result);
+                    throw new Error(`Verification failed: ${errorDetails}`);
+                }
+            } catch (error) {
+                showMessage(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testAuthentication() {
+            try {
+                showMessage('Generating authentication options...', 'info');
+                
+                const optionsResponse = await fetch(`${API_BASE}/generate-authentication-options`);
+                const options = await optionsResponse.json();
+
+                // Convert base64url to ArrayBuffers
+                const publicKeyOptions = {
+                    ...options,
+                    challenge: base64urlToArrayBuffer(options.challenge),
+                    allowCredentials: options.allowCredentials ? options.allowCredentials.map(cred => ({
+                        ...cred,
+                        id: base64urlToArrayBuffer(cred.id)
+                    })) : []
+                };
+
+                showMessage('Please authenticate with any registered passkey...', 'info');
+                
+                const credential = await navigator.credentials.get({
+                    publicKey: publicKeyOptions
+                });
+
+                const verifyResponse = await fetch(`${API_BASE}/verify-authentication`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        cred: {
+                            id: credential.id,
+                            rawId: arrayBufferToBase64url(credential.rawId),
+                            type: credential.type,
+                            response: {
+                                authenticatorData: arrayBufferToBase64url(credential.response.authenticatorData),
+                                clientDataJSON: arrayBufferToBase64url(credential.response.clientDataJSON),
+                                signature: arrayBufferToBase64url(credential.response.signature),
+                                userHandle: credential.response.userHandle ? arrayBufferToBase64url(credential.response.userHandle) : null
+                            }
+                        }
+                    })
+                });
+
+                if (!verifyResponse.ok) {
+                    const errorData = await verifyResponse.json();
+                    console.error('Server error:', errorData);
+                    throw new Error(`Server error: ${errorData.error || verifyResponse.statusText}`);
+                }
+
+                const result = await verifyResponse.json();
+                
+                if (result.verified) {
+                    showMessage(`✅ Authentication successful! User: ${result.username}`, 'success');
+                } else {
+                    const errorDetails = result.details || result.error || 'Unknown error';
+                    console.error('Authentication failed:', result);
+                    throw new Error(`Authentication failed: ${errorDetails}`);
+                }
+            } catch (error) {
+                showMessage(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        function showMessage(message, type) {
+            const messageEl = document.getElementById('login-message');
+            if (messageEl) {
+                messageEl.className = type === 'error' ? 'error' : type === 'success' ? 'success' : '';
+                messageEl.textContent = message;
+            } else {
+                console.log(`Message (${type}): ${message}`);
+            }
+        }
+
+        async function clearDatabase() {
+            if (!confirm('Are you sure you want to clear all users and passkeys from the database?')) {
+                return;
+            }
+
+            try {
+                showMessage('Clearing database...', 'info');
+                
+                const response = await fetch(`${API_BASE}/api/clear-database`, {
+                    method: 'DELETE',
+                    headers: { 'Accept': 'application/json' }
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`Failed to clear database: ${errorData.error}`);
+                }
+
+                const result = await response.json();
+                showMessage('✅ Database cleared successfully!', 'success');
+                
+                // Reload dashboard to show empty state
+                setTimeout(() => {
+                    loadDashboard();
+                }, 1000);
+            } catch (error) {
+                showMessage(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Login and user management functions
+        async function loginWithPasskey() {
+            try {
+                showLoginMessage('Generating authentication options...', 'info');
+                
+                const optionsResponse = await fetch(`${API_BASE}/generate-authentication-options`);
+                const options = await optionsResponse.json();
+
+                // Convert base64url to ArrayBuffers
+                const publicKeyOptions = {
+                    ...options,
+                    challenge: base64urlToArrayBuffer(options.challenge),
+                    allowCredentials: options.allowCredentials ? options.allowCredentials.map(cred => ({
+                        ...cred,
+                        id: base64urlToArrayBuffer(cred.id)
+                    })) : []
+                };
+
+                showLoginMessage('Please authenticate with your passkey...', 'info');
+                
+                const credential = await navigator.credentials.get({
+                    publicKey: publicKeyOptions
+                });
+
+                const verifyResponse = await fetch(`${API_BASE}/verify-authentication`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        cred: {
+                            id: credential.id,
+                            rawId: arrayBufferToBase64url(credential.rawId),
+                            type: credential.type,
+                            response: {
+                                authenticatorData: arrayBufferToBase64url(credential.response.authenticatorData),
+                                clientDataJSON: arrayBufferToBase64url(credential.response.clientDataJSON),
+                                signature: arrayBufferToBase64url(credential.response.signature),
+                                userHandle: credential.response.userHandle ? 
+                                    arrayBufferToBase64url(credential.response.userHandle) : null
+                            }
+                        }
+                    })
+                });
+
+                if (!verifyResponse.ok) {
+                    const errorData = await verifyResponse.json();
+                    throw new Error(`Authentication failed: ${errorData.error}`);
+                }
+
+                const result = await verifyResponse.json();
+                
+                if (result.verified) {
+                    currentUser = {
+                        username: result.username,
+                        isAnonymous: result.isAnonymous,
+                        credentialId: credential.id
+                    };
+                    isLoggedIn = true;
+                    
+                    showLoginMessage(`✅ Logged in as ${result.username}!`, 'success');
+                    updateUIState();
+                    updateUserInfo();
+                    loadCurrentUserData();
+                } else {
+                    throw new Error('Authentication verification failed');
+                }
+            } catch (error) {
+                showLoginMessage(`❌ Login failed: ${error.message}`, 'error');
+            }
+        }
+
+        function registerAnonymousPasskey() {
+            testAnonymousPasskey();
+        }
+
+        function registerNamedPasskey() {
+            testPlatformPasskey();
+        }
+
+        async function storeCurrentUserData() {
+            if (!isLoggedIn || !currentUser) {
+                alert('Please login first');
+                return;
+            }
+
+            const email = document.getElementById('user-email').value;
+            const dataToStore = document.getElementById('user-data-input').value;
+            
+            if (!dataToStore && !email) {
+                alert('Please enter some data to store');
+                return;
+            }
+            
+            try {
+                const encryptedData = {
+                    plainData: dataToStore,
+                    timestamp: new Date().toISOString(),
+                    note: "This is demo data - in production, this would be encrypted with the passkey"
+                };
+                
+                const response = await fetch(`${API_BASE}/api/users/${currentUser.username}/data`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: email || undefined,
+                        encryptedData: encryptedData,
+                        credentialId: currentUser.credentialId
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to store data');
+                }
+                
+                document.getElementById('user-data-input').value = '';
+                loadCurrentUserData();
+                showLoginMessage('✅ Data stored successfully!', 'success');
+            } catch (error) {
+                console.error('Error storing data:', error);
+                alert('Error storing data: ' + error.message);
+            }
+        }
+
+        async function loadCurrentUserData() {
+            if (!isLoggedIn || !currentUser) return;
+
+            try {
+                let url = `${API_BASE}/api/users/${currentUser.username}/data`;
+                if (currentUser.isAnonymous && currentUser.credentialId) {
+                    url += `?credentialId=${currentUser.credentialId}`;
+                }
+                
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        document.getElementById('user-data').innerHTML = '<em>No data stored yet</em>';
+                        return;
+                    }
+                    throw new Error('Failed to load data');
+                }
+                
+                const userData = await response.json();
+                
+                let displayHtml = '';
+                if (userData.email) {
+                    displayHtml += `<strong>Email:</strong> ${userData.email}<br>`;
+                    document.getElementById('user-email').value = userData.email;
+                }
+                if (userData.encryptedData) {
+                    displayHtml += `<strong>Your Stored Data:</strong><br>`;
+                    displayHtml += `<pre>${JSON.stringify(userData.encryptedData, null, 2)}</pre>`;
+                } else {
+                    displayHtml += '<em>No encrypted data stored</em>';
+                }
+                
+                document.getElementById('user-data').innerHTML = displayHtml;
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('user-data').innerHTML = `<em>Error loading data: ${error.message}</em>`;
+            }
+        }
+
+        function updateUserInfo() {
+            if (!currentUser) return;
+            
+            const userInfoDiv = document.getElementById('user-info');
+            const displayName = currentUser.isAnonymous ? 
+                `Anonymous User (${currentUser.username})` : 
+                currentUser.username;
+            
+            userInfoDiv.innerHTML = `
+                <div class="user-card">
+                    <div class="user-header">
+                        <div>
+                            <div class="username">${displayName}</div>
+                            <div class="user-meta">
+                                ${currentUser.isAnonymous ? '👤 Anonymous Passkey' : '👥 Named Account'} • 
+                                Logged in with passkey
+                            </div>
+                        </div>
+                        <div>
+                            <span class="badge badge-platform">Authenticated</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function logout() {
+            currentUser = null;
+            isLoggedIn = false;
+            allUsersVisible = false;
+            updateUIState();
+            showLoginMessage('Logged out successfully', 'success');
+        }
+
+        function toggleAllUsers() {
+            allUsersVisible = !allUsersVisible;
+            updateUIState();
+            if (allUsersVisible) {
+                loadDashboard();
+            }
+        }
+
+        function showLoginMessage(message, type) {
+            const messageEl = document.getElementById('login-message');
+            messageEl.className = type === 'error' ? 'error' : type === 'success' ? 'success' : '';
+            messageEl.textContent = message;
+        }
+
+        async function storeUserData(username, credentialId) {
+            const sanitizedUsername = username.replace(/[^a-zA-Z0-9]/g, '_');
+            const emailInput = document.getElementById(`email-${sanitizedUsername}`);
+            const dataInput = document.getElementById(`data-input-${sanitizedUsername}`);
+            
+            const email = emailInput.value;
+            const dataToStore = dataInput.value;
+            
+            if (!dataToStore && !email) {
+                alert('Please enter some data to store');
+                return;
+            }
+            
+            try {
+                // Prepare the encrypted data object
+                const encryptedData = {
+                    plainData: dataToStore, // In production, this would be encrypted
+                    timestamp: new Date().toISOString(),
+                    note: "This is demo data - in production, this would be encrypted with the passkey"
+                };
+                
+                const response = await fetch(`${API_BASE}/api/users/${username}/data`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: email || undefined,
+                        encryptedData: encryptedData,
+                        credentialId: credentialId // For anonymous users
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to store data');
+                }
+                
+                // Clear inputs and reload data
+                dataInput.value = '';
+                loadUserData(username, credentialId);
+                showMessage('✅ Data stored successfully!', 'success');
+            } catch (error) {
+                console.error('Error storing data:', error);
+                alert('Error storing data: ' + error.message);
+            }
+        }
+        
+        async function loadUserData(username, credentialId) {
+            const sanitizedUsername = username.replace(/[^a-zA-Z0-9]/g, '_');
+            const dataDiv = document.getElementById(`data-${sanitizedUsername}`);
+            
+            try {
+                let url = `${API_BASE}/api/users/${username}/data`;
+                if (username.startsWith('anon_') && credentialId) {
+                    url += `?credentialId=${credentialId}`;
+                }
+                
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        dataDiv.innerHTML = '<em>No data stored yet</em>';
+                        return;
+                    }
+                    throw new Error('Failed to load data');
+                }
+                
+                const userData = await response.json();
+                
+                // Display the data
+                let displayHtml = '';
+                if (userData.email) {
+                    displayHtml += `<strong>Email:</strong> ${userData.email}<br>`;
+                }
+                if (userData.encryptedData) {
+                    displayHtml += `<strong>Encrypted Data:</strong><br>`;
+                    displayHtml += `<pre>${JSON.stringify(userData.encryptedData, null, 2)}</pre>`;
+                } else {
+                    displayHtml += '<em>No encrypted data stored</em>';
+                }
+                
+                dataDiv.innerHTML = displayHtml;
+                
+                // Update email field if exists
+                const emailInput = document.getElementById(`email-${sanitizedUsername}`);
+                if (emailInput && userData.email) {
+                    emailInput.value = userData.email;
+                }
+            } catch (error) {
+                console.error('Error loading data:', error);
+                dataDiv.innerHTML = `<em>Error loading data: ${error.message}</em>`;
+            }
+        }
+
+        // Initialize dashboard on page load
+        updateUIState();
+        loadDashboard();
+        
+        // Auto-refresh every 10 seconds (but not user data to avoid overwriting inputs)
+        setInterval(() => {
+            if (!isLoggedIn) {
+                const currentData = document.querySelectorAll('[id^="data-input-"]');
+                const hasInput = Array.from(currentData).some(input => input.value.trim() !== '');
+                if (!hasInput) {
+                    loadDashboard();
+                }
+            }
+        }, 10000);
+    </script>
+</body>
+</html>

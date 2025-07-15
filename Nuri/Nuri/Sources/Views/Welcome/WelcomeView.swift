@@ -8,7 +8,6 @@ struct WelcomeView: View {
     @AppStorage("isUserLoggedIn") var isUserLoggedIn: Bool = false
     @State private var showError = false
     @State private var errorMessage = ""
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         GeometryReader { proxy in
@@ -28,8 +27,8 @@ struct WelcomeView: View {
                 VStack {
                     Spacer()
                     
-                    Button("Get Started") {
-                        continueToApp()
+                    Button("Login with Passkey") {
+                        mockPasskeyLogin()
                     }
                     .buttonStyle(ProminentButtonStyle())
                 }
@@ -46,18 +45,13 @@ struct WelcomeView: View {
 
     // MARK: - Actions
     
-    private func continueToApp() {
-        print("👆 [WelcomeView] User tapped 'Get Started'")
-        print("✅ [WelcomeView] Continuing to app - wallet should already be initialized")
+    private func mockPasskeyLogin() {
+        print("🔐 [WelcomeView] Mock passkey login initiated")
+        print("⚡ [WelcomeView] Skipping authentication and going directly to app")
         
-        // Wallet should already be initialized by NuriApp.init()
+        // Mock login - directly set user as logged in without any authentication
         self.isUserLoggedIn = true
-        self.dismiss()
-    }
-    
-    private func skipForNow() {
-        print("⏩ [WelcomeView] User skipped passkey setup")
-        dismiss()
+        // No need to dismiss - NuriApp will automatically switch views
     }
     
     // MARK: - View Helpers
@@ -67,23 +61,3 @@ struct WelcomeView: View {
     WelcomeView()
 }
 
-// MARK: - Apple Sign-In SwiftUI wrapper
-private struct AppleSignInButton: UIViewRepresentable {
-    let action: () -> Void
-
-    func makeUIView(context: Context) -> ASAuthorizationAppleIDButton {
-        let button = ASAuthorizationAppleIDButton(type: .signIn, style: .black)
-        button.addTarget(context.coordinator, action: #selector(Coordinator.didTap), for: .touchUpInside)
-        return button
-    }
-
-    func updateUIView(_ uiView: ASAuthorizationAppleIDButton, context: Context) {}
-
-    func makeCoordinator() -> Coordinator { Coordinator(action: action) }
-
-    final class Coordinator {
-        let action: () -> Void
-        init(action: @escaping () -> Void) { self.action = action }
-        @objc func didTap() { action() }
-    }
-}

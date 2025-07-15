@@ -1,6 +1,8 @@
 import SwiftUI
+import UIKit
 
 struct CardView: View {
+    @State private var showPhoneNumberVerification = false
     var body: some View {
         Screen {
             // Unified header
@@ -32,8 +34,13 @@ struct CardView: View {
                 NuriTitleWithSubtitle(title: "Nuri Card for Apple Pay", subtitle: "")
                 featureList()
                     .padding(.bottom,8)
-                NavigationLink(destination: CardViewActive()) {
+                Button(action: {
+                    showPhoneNumberVerification = true
+                }) {
                     NuriButton(icon: "card_contactless", title: "Get Card", style: .primary)
+                }
+                .sheet(isPresented: $showPhoneNumberVerification) {
+                    PhoneNumberVerificationCoordinator()
                 }
             }
             .padding(.top, 30)

@@ -102,9 +102,20 @@ final class BitcoinWalletService {
     }
     
     func hasWallet() -> Bool {
-        let hasWallet = wallet != nil
-        print("🔍 [BitcoinWalletService] hasWallet() called - result: \(hasWallet)")
-        return hasWallet
+        // First check if wallet is loaded in memory
+        if wallet != nil {
+            print("🔍 [BitcoinWalletService] hasWallet() - wallet loaded in memory: true")
+            return true
+        }
+        
+        // Check if we have a cached address (indicates wallet exists)
+        if let _ = loadAddressFromKeychain() {
+            print("🔍 [BitcoinWalletService] hasWallet() - found cached address: true")
+            return true
+        }
+        
+        print("🔍 [BitcoinWalletService] hasWallet() - no wallet found: false")
+        return false
     }
     
     /// Get the current wallet instance (for transaction operations)
