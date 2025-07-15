@@ -15,12 +15,12 @@ struct TopUpCardView: View {
         return formatter
     }
 
-    @State private var amountText: String = "0.001"
-    @State private var isPrimaryBTC = true // start with BTC primary
+    @State private var amountText: String = ""
+    @State private var isPrimaryBTC = false // start with € primary
 
     @FocusState private var isFieldFocused: Bool
 
-    @State private var exchangeRate: Double = 91458.62 // will update from API
+    @State private var exchangeRate: Double = 0 // will update from API
 
     var body: some View {
         VStack(spacing: 0) {
@@ -32,7 +32,7 @@ struct TopUpCardView: View {
             VStack {
                 Spacer()
                 HStack(spacing: 8) {
-                    Text(isPrimaryBTC ? "₿" : "€ ")
+                    Text(isPrimaryBTC ? "₿" : "€")
                         .font(.system(size: 40, weight: .semibold))
                     TextField("0", text: $amountText)
                         .setWidthAccordingTo(text: amountText)
@@ -49,14 +49,18 @@ struct TopUpCardView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                Text(secondaryText())
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(Color.secondary)
+                if !amountText.isEmpty {
+                    Text(secondaryText())
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(Color.secondary)
+                }
                 Spacer()
-                // Current BTC price label
-                Text("1 BTC ≈ € " + String(format: "%0.2f", exchangeRate))
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(Color(hex: "#6D6D86"))
+                // Current BTC price label - only show if exchange rate is loaded
+                if exchangeRate > 0 {
+                    Text("€ \(formatEuro(exchangeRate)) / Bitcoin")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(Color(hex: "#6D6D86"))
+                }
                 NavigationLink(destination: SuccessView(illustration: "hand-plant", title: "Card topped up!", subtitle: "You've added funds to your card!") {
                     isPresented = false
                 }) {
@@ -80,10 +84,16 @@ struct TopUpCardView: View {
         if isPrimaryBTC {
             let eur = amountValue * exchangeRate
             let twoDec = String(format: "%0.2f", eur)
-            return "~ € " + twoDec
+            return "€ " + twoDec
         } else {
-            let btc = amountValue / exchangeRate
-            return "~ " + formatter.string(from: NSNumber(value: btc))! + " BTC"
+            let sats = (amountValue / exchangeRate) * 100_000_000
+            let satsFormatter = NumberFormatter()
+            satsFormatter.locale = Locale(identifier: "en_US_POSIX")
+            satsFormatter.numberStyle = .decimal
+            satsFormatter.maximumFractionDigits = 0
+            satsFormatter.usesGroupingSeparator = true
+            let formattedSats = satsFormatter.string(from: NSNumber(value: sats)) ?? "0"
+            return "₿ " + formattedSats + " sats"
         }
     }
 
@@ -150,6 +160,15 @@ struct TopUpCardView: View {
         } catch {
             print("Price fetch failed", error)
         }
+    }
+    
+    private func formatEuro(_ amount: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = 0
+        formatter.usesGroupingSeparator = true
+        formatter.groupingSeparator = ","
+        return formatter.string(from: NSNumber(value: amount)) ?? ""
     }
 }
 

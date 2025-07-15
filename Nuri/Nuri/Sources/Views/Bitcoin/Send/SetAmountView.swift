@@ -18,14 +18,14 @@ struct SetAmountView: View {
     var body: some View {
         ZStack {
             AmountEntryScreen(
-                title: "Confirm Amount",
-                primarySymbol: "₿",
-                secondarySymbol: "€",
-                initialPrimaryIsCrypto: true,
-                exchangeRate: $satsToEurRate,
+                title: "₿ \(formatSats(walletState.availableBalance)) Balance",
+                primarySymbol: "€",
+                secondarySymbol: "₿",
+                initialPrimaryIsCrypto: false,
+                exchangeRate: $btcToEurRate,
                 availableBalance: walletState.availableBalance,
                 walletState: walletState,
-                actionIcon: "bitcoin-circle",
+                actionIcon: "money_topup",
                 actionTitle: "Confirm Amount",
                 onSubmit: { amount, isCrypto in
                     print("🚀 [SetAmountView] ========== AMOUNT SUBMISSION START ==========")
@@ -46,42 +46,33 @@ struct SetAmountView: View {
                     let btc: Double
                     let eur: Double
                     if isCrypto {
-                        // amount is in satoshis - use the current rates we have
-                        let satsAmount = amount
-                        btc = satsAmount / 100_000_000
-                        eur = satsAmount * satsToEurRate
-                        print("🪙 [SetAmountView] CRYPTO PATH:")
-                        print("   💰 Sats: \(satsAmount)")
+                        // amount is in BTC
+                        btc = amount
+                        eur = amount * btcToEurRate
+                        print("🪙 [SetAmountView] BTC PATH:")
                         print("   ₿ BTC: \(btc)")
                         print("   💶 EUR: \(eur)")
-                        print("   🧮 Calculation: \(satsAmount) sats / 100M = \(btc) BTC")
-                        print("   🧮 Calculation: \(satsAmount) sats * \(satsToEurRate) rate = \(eur) EUR")
+                        print("   🧮 Calculation: \(btc) BTC * \(btcToEurRate) rate = \(eur) EUR")
                         
                         if btc == 0 {
                             print("❌ [SetAmountView] 🚨 CRITICAL: btc calculated as 0!")
                             print("❌ [SetAmountView] This will cause 'invalid amount: 0 sats' in ConfirmTransactionView")
-                            print("❌ [SetAmountView] satsAmount: \(satsAmount)")
-                            print("❌ [SetAmountView] division result: \(satsAmount / 100_000_000)")
                         }
                     } else {
                         // amount is in EUR
                         eur = amount
-                        let satsAmount = amount / satsToEurRate
-                        btc = satsAmount / 100_000_000
+                        btc = amount / btcToEurRate
                         print("💶 [SetAmountView] EUR PATH:")
                         print("   💶 EUR: \(eur)")
-                        print("   💰 Sats: \(satsAmount)")
                         print("   ₿ BTC: \(btc)")
-                        print("   🧮 Calculation: \(eur) EUR / \(satsToEurRate) rate = \(satsAmount) sats")
-                        print("   🧮 Calculation: \(satsAmount) sats / 100M = \(btc) BTC")
+                        print("   🧮 Calculation: \(eur) EUR / \(btcToEurRate) rate = \(btc) BTC")
                         
                         if btc == 0 {
                             print("❌ [SetAmountView] 🚨 CRITICAL: btc calculated as 0!")
                             print("❌ [SetAmountView] This will cause 'invalid amount: 0 sats' in ConfirmTransactionView")
                             print("❌ [SetAmountView] eur: \(eur)")
-                            print("❌ [SetAmountView] satsToEurRate: \(satsToEurRate)")
-                            print("❌ [SetAmountView] satsAmount: \(satsAmount)")
-                            print("❌ [SetAmountView] btc calculation: \(satsAmount) / 100_000_000 = \(btc)")
+                            print("❌ [SetAmountView] btcToEurRate: \(btcToEurRate)")
+                            print("❌ [SetAmountView] btc: \(btc)")
                         }
                     }
                     
@@ -110,13 +101,11 @@ struct SetAmountView: View {
                 }
             )
             .task {
-                // Fetch BTC price and calculate sats rate
+                // Fetch BTC price
                 print("🔄 [SetAmountView] Fetching exchange rates...")
                 let fetchedBtcToEurRate = await fetchPrice()
-                let calculatedSatsToEurRate = fetchedBtcToEurRate / 100_000_000
                 
                 print("📊 [SetAmountView] BTC to EUR rate: \(fetchedBtcToEurRate)")
-                print("📊 [SetAmountView] Sats to EUR rate: \(calculatedSatsToEurRate)")
                 
                 // Get cached balance and fee rates (no network call needed for cached data)
                 let _ = await walletState.getBalance(forceRefresh: false)
@@ -126,7 +115,7 @@ struct SetAmountView: View {
                 
                 await MainActor.run {
                     btcToEurRate = fetchedBtcToEurRate
-                    satsToEurRate = calculatedSatsToEurRate
+                    satsToEurRate = fetchedBtcToEurRate / 100_000_000
                 }
             }
 
@@ -146,6 +135,10 @@ struct SetAmountView: View {
     }
 
     // MARK: - Helpers
+    private func formatSats(_ sats: UInt64) -> String {
+        return String(sats)
+    }
+    
     private func fetchPrice() async -> Double {
         guard let url = URL(string: "https://mempool.space/api/v1/prices") else { return 0 }
         do {

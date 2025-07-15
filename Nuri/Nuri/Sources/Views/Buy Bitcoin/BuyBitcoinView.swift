@@ -1,6 +1,19 @@
 import SwiftUI
 import PassKit
 
+// Apple Pay Button wrapper
+struct ApplePayButton: UIViewRepresentable {
+    func makeUIView(context: Context) -> PKPaymentButton {
+        let button = PKPaymentButton(paymentButtonType: .buy, paymentButtonStyle: .black)
+        button.isUserInteractionEnabled = false // Let SwiftUI handle the tap
+        return button
+    }
+    
+    func updateUIView(_ uiView: PKPaymentButton, context: Context) {
+        // No updates needed
+    }
+}
+
 struct BuyBitcoinView: View {
 
     @Binding var isPresented: Bool
@@ -15,11 +28,12 @@ struct BuyBitcoinView: View {
     }
 
     @State private var amountText: String = ""
-    @State private var isPrimaryBTC = true // start with ₿ (sats) primary
+    @State private var isPrimaryBTC = false // start with € primary
 
     @FocusState private var isFieldFocused: Bool
 
-    @State private var exchangeRate: Double = 91458.62 // will update from API
+    @State private var exchangeRate: Double = 0 // will update from API
+    @State private var shouldNavigateToSuccess = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -31,7 +45,7 @@ struct BuyBitcoinView: View {
             VStack {
                 Spacer()
                 HStack(spacing: 8) {
-                    Text(isPrimaryBTC ? "₿" : "€ ")
+                    Text(isPrimaryBTC ? "₿" : "€")
                         .font(.system(size: 40, weight: .semibold))
                     TextField("0", text: $amountText)
                         .setWidthAccordingTo(text: amountText)
@@ -69,23 +83,44 @@ struct BuyBitcoinView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                Text(secondaryText())
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(Color.secondary)
+                if !amountText.isEmpty {
+                    Text(secondaryText())
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(Color.secondary)
+                }
                 Spacer()
-                // Current BTC price label
-                Text("1 ₿ = 1 sat ≈ € " + String(format: "%0.8f", exchangeRate / 100_000_000))
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(Color(hex: "#6D6D86"))
-                NavigationLink(destination: SuccessView(illustration: "hand-plant", title: "Bitcoin purchased!", subtitle: "You've purchased ₿ 91,230,000!") {
-                    isPresented = false
-                }) {
-                    NuriButton(icon: "bitcoin-circle", title: "Buy with Apple Pay", style: .primary)
+                // Current BTC price label - only show if exchange rate is loaded
+                if exchangeRate > 0 {
+                    Text("€ \(formatEuro(exchangeRate)) / Bitcoin")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(Color(hex: "#6D6D86"))
+                }
+                if PKPaymentAuthorizationViewController.canMakePayments() {
+                    // Using Apple's official PKPaymentButton
+                    Button(action: {
+                        shouldNavigateToSuccess = true
+                    }) {
+                        ApplePayButton()
+                            .frame(height: 56)
+                            .cornerRadius(28)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    NavigationLink(destination: SuccessView(illustration: "hand-plant", title: "Bitcoin purchased!", subtitle: "You've purchased ₿ 91,230,000!") {
+                        isPresented = false
+                    }) {
+                        NuriButton(icon: "bitcoin-circle", title: "Buy with Apple Pay", style: .primary)
+                    }
                 }
             }
             .padding()
         }
         .background(NuriAsset.background.swiftUIColor)
+        .navigationDestination(isPresented: $shouldNavigateToSuccess) {
+            SuccessView(illustration: "hand-plant", title: "Bitcoin purchased!", subtitle: "You've purchased ₿ 91,230,000!") {
+                isPresented = false
+            }
+        }
         .onAppear {
             isFieldFocused = true
             Task {
@@ -98,10 +133,16 @@ struct BuyBitcoinView: View {
         if isPrimaryBTC {
             let eur = amountValue * exchangeRate
             let twoDec = String(format: "%0.2f", eur)
-            return "~ € " + twoDec
+            return "€ " + twoDec
         } else {
-            let btc = amountValue / exchangeRate
-            return "~ " + formatter.string(from: NSNumber(value: btc))! + " BTC"
+            let sats = (amountValue / exchangeRate) * 100_000_000
+            let satsFormatter = NumberFormatter()
+            satsFormatter.locale = Locale(identifier: "en_US_POSIX")
+            satsFormatter.numberStyle = .decimal
+            satsFormatter.maximumFractionDigits = 0
+            satsFormatter.usesGroupingSeparator = true
+            let formattedSats = satsFormatter.string(from: NSNumber(value: sats)) ?? "0"
+            return "₿ " + formattedSats + " sats"
         }
     }
 
@@ -117,7 +158,7 @@ struct BuyBitcoinView: View {
         if isPrimaryBTC {
             // BTC -> EUR (2 decimals)
             let eur = current * exchangeRate
-            amountText = String(format: "%0.2f", eur)
+            amountText = formatter.string(from: NSNumber(value: eur)) ?? ""
         } else {
             // EUR -> BTC (8 decimals)
             let btc = current / exchangeRate
@@ -145,6 +186,15 @@ struct BuyBitcoinView: View {
         } catch {
             print("Price fetch failed", error)
         }
+    }
+    
+    private func formatEuro(_ amount: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = 0
+        formatter.usesGroupingSeparator = true
+        formatter.groupingSeparator = ","
+        return formatter.string(from: NSNumber(value: amount)) ?? ""
     }
 }
 
