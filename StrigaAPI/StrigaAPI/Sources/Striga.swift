@@ -53,6 +53,12 @@ public final class StrigaService {
         return try await httpClient.post(url: url, input: input)
     }
 
+    @discardableResult
+    public func initiateBankTransfer(_ input: InitiateBankTransfer) async throws -> InitiateBankTransferResponse {
+        let url = try url(for: "v1/wallets/send/initiate/bank")
+        return try await httpClient.post(url: url, input: input)
+    }
+
     // MARK: - Private
 
     private func url(for path: String) throws -> URL {
