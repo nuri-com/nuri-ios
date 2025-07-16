@@ -26,7 +26,9 @@ public struct AmountEntryScreen: View {
     public let primarySymbol: String
     public let secondarySymbol: String
     public let initialPrimaryIsCrypto: Bool
-    @State public var exchangeRate: Double // allows live updates
+    @Binding public var exchangeRate: Double // reactive to parent changes
+    public let availableBalance: UInt64? // Optional balance display
+    let walletState: WalletStateManager? // For fee estimation
 
     public let actionIcon: String
     public let actionTitle: String
@@ -35,7 +37,7 @@ public struct AmountEntryScreen: View {
 
     // MARK: Internal state
     @State private var amountText: String = "" // start empty
-    @State private var isPrimaryCrypto: Bool = true
+    @State private var isPrimaryCrypto: Bool = false // Default to fiat (EUR)
     @FocusState private var isFieldFocused: Bool
 
     private var formatter: NumberFormatter {
@@ -43,15 +45,17 @@ public struct AmountEntryScreen: View {
         f.locale = Locale(identifier: "en_US_POSIX")
         f.numberStyle = .decimal
         f.minimumFractionDigits = 0
-        f.maximumFractionDigits = isPrimaryCrypto ? 8 : 2
+        f.maximumFractionDigits = 0 // No decimals allowed anywhere
         return f
     }
 
-    public init(title: String,
+    init(title: String,
                 primarySymbol: String,
                 secondarySymbol: String,
                 initialPrimaryIsCrypto: Bool,
-                exchangeRate: Double,
+                exchangeRate: Binding<Double>,
+                availableBalance: UInt64? = nil,
+                walletState: WalletStateManager? = nil,
                 actionIcon: String,
                 actionTitle: String,
                 onSubmit: @escaping (_ amount: Double, _ isCrypto: Bool) -> Void,
@@ -60,7 +64,9 @@ public struct AmountEntryScreen: View {
         self.primarySymbol = primarySymbol
         self.secondarySymbol = secondarySymbol
         self.initialPrimaryIsCrypto = initialPrimaryIsCrypto
-        self._exchangeRate = State(initialValue: exchangeRate)
+        self._exchangeRate = exchangeRate
+        self.availableBalance = availableBalance
+        self.walletState = walletState
         self.actionIcon = actionIcon
         self.actionTitle = actionTitle
         self.onSubmit = onSubmit
@@ -75,47 +81,69 @@ public struct AmountEntryScreen: View {
 
             VStack {
                 Spacer()
-                HStack(spacing: 8) {
-                    Text(isPrimaryCrypto ? primarySymbol : secondarySymbol)
-                        .font(.system(size: 40, weight: .semibold))
-                    TextField("0", text: $amountText)
-                        .setWidthAccordingTo(text: amountText)
-                        .focused($isFieldFocused)
-                        .font(.system(size: 40, weight: .semibold))
-                        .keyboardType(.decimalPad)
-                        .tint(Color("PrimaryNuriLilac"))
-                        .onChange(of: amountText, perform: sanitizeInput)
-                    Button(action: toggleCurrency) {
-                        Image("transfer_vertical")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 24, height: 24)
+                VStack(spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text(isPrimaryCrypto ? secondarySymbol : primarySymbol)
+                            .font(.system(size: 40, weight: .semibold))
+                        TextField("0", text: $amountText)
+                            .setWidthAccordingTo(text: amountText)
+                            .focused($isFieldFocused)
+                            .font(.system(size: 40, weight: .semibold))
+                            .keyboardType(.numberPad)
+                            .tint(Color("PrimaryNuriLilac"))
+                            .onChange(of: amountText, perform: sanitizeInput)
+                        Button(action: toggleCurrency) {
+                            Image("transfer_vertical")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 24, height: 24)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
+                    
+                    if !amountText.isEmpty {
+                        Text(secondaryDisplayText())
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(Color("PrimaryNuriBlack"))
+                    }
                 }
-                Text(secondaryDisplayText())
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(Color.secondary)
                 Spacer()
-                Text("1 BTC ≈ € " + String(format: "%0.2f", exchangeRate))
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(Color(hex: "#6D6D86"))
+                
+                // Fee and total display (only show when funds are sufficient)
+                if (primarySymbol == "₿" || secondarySymbol == "₿") && walletState != nil && !amountText.isEmpty && !isInsufficientFunds {
+                    Text("₿ \(String(UInt64(amountInSats))) Amount + ₿ \(String(estimatedFee)) Fee = ₿ \(String(totalAmountWithFee))")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(Color(hex: "#6D6D86"))
+                        .multilineTextAlignment(.center)
+                        .padding(.vertical, 8)
+                }
+                
                 Button(action: {
                     onSubmit(amountValue, isPrimaryCrypto)
                 }) {
-                    NuriButton(icon: actionIcon, title: actionTitle, style: .primary)
+                    NuriButton(
+                        icon: actionIcon, 
+                        title: isInsufficientFunds ? "Insufficient Funds" : actionTitle, 
+                        style: isInsufficientFunds ? .secondary : .primary
+                    )
                 }
+                .disabled(isInsufficientFunds)
             }
             .padding()
         }
         .background(NuriAsset.background.swiftUIColor)
         .onAppear {
             isFieldFocused = true
-            if exchangeRate == 0 && primarySymbol == "₿" {
+            print("🎬 [AmountEntryScreen] onAppear: exchangeRate = \(exchangeRate)")
+            // Auto-fetch price if not already provided
+            if exchangeRate == 0 {
                 Task {
                     await fetchPrice()
                 }
             }
+        }
+        .onChange(of: exchangeRate) { newRate in
+            print("📈 [AmountEntryScreen] Exchange rate updated: \(newRate)")
         }
     }
 
@@ -123,34 +151,56 @@ public struct AmountEntryScreen: View {
     private func secondaryDisplayText() -> String {
         guard !amountText.isEmpty else { return "" }
         if isPrimaryCrypto {
-            let eur = amountValue * exchangeRate
-            let twoDec = String(format: "%0.2f", eur)
-            return "~ " + secondarySymbol + " " + twoDec
+            // When crypto is primary, we need to check which symbol we're actually showing
+            if secondarySymbol == "₿" {
+                // We toggled, so ₿ is now primary, meaning amountValue is in SATOSHIS
+                // Convert sats to EUR: sats -> BTC -> EUR
+                let btcValue = amountValue / 100_000_000
+                let eurValue = btcValue * exchangeRate
+                return "€ " + String(format: "%.2f", eurValue)
+            } else {
+                // Showing BTC, convert to EUR
+                let eurValue = amountValue * exchangeRate
+                return "€ " + String(format: "%.2f", eurValue)
+            }
         } else {
-            let btc = amountValue / exchangeRate
-            return "~ " + formatter.string(from: NSNumber(value: btc))! + " " + primarySymbol
+            // Showing EUR, convert to sats
+            if secondarySymbol == "₿" {
+                let sats = (amountValue / exchangeRate) * 100_000_000
+                return "₿ " + String(Int(round(sats)))
+            } else {
+                // EUR to BTC
+                let btcValue = amountValue / exchangeRate
+                return secondarySymbol + " " + String(format: "%.8f", btcValue)
+            }
         }
     }
 
     private func toggleCurrency() {
         let current = amountValue
-        let limit = isPrimaryCrypto ? 2 : 8
-        let f = NumberFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.minimumFractionDigits = 0
-        f.maximumFractionDigits = limit
-        f.numberStyle = .decimal
-
-    if isPrimaryCrypto { // Switching from Crypto to Fiat (e.g., BTC to EUR)
-            let fiat = current * exchangeRate
-            if fiat == 0 {
-                amountText = "0"
+        
+        if isPrimaryCrypto { // Switching from Crypto to Fiat
+            if secondarySymbol == "₿" {
+                // We're showing ₿ as primary, so current is in SATOSHIS
+                // Converting from sats to EUR
+                let btcValue = current / 100_000_000
+                let eurValue = btcValue * exchangeRate
+                amountText = String(Int(round(eurValue)))
             } else {
-                amountText = String(format: "%0.2f", fiat)
+                // Converting from BTC to EUR
+                let eurValue = current * exchangeRate
+                amountText = String(Int(round(eurValue)))
             }
-        } else { // Switching from Fiat to Crypto (e.g., EUR to BTC)
-            let btc = current / exchangeRate
-            amountText = f.string(from: NSNumber(value: btc)) ?? ""
+        } else { // Switching from Fiat (EUR) to Crypto (sats)
+            if secondarySymbol == "₿" {
+                // Converting from EUR to sats
+                let satsValue = (current / exchangeRate) * 100_000_000
+                amountText = String(Int(round(satsValue)))
+            } else {
+                // Converting from EUR to BTC
+                let btcValue = current / exchangeRate
+                amountText = String(Int(round(btcValue)))
+            }
         }
         isPrimaryCrypto.toggle()
     }
@@ -158,22 +208,88 @@ public struct AmountEntryScreen: View {
     private var amountValue: Double {
         Double(amountText.replacingOccurrences(of: ",", with: ".")) ?? 0
     }
+    
+    private var amountInSats: Double {
+        if isPrimaryCrypto {
+            // When crypto is primary, check what type of crypto
+            if secondarySymbol == "₿" {
+                // ₿ is now primary, so amountValue is already in satoshis
+                return amountValue
+            } else {
+                // BTC is primary, convert to sats
+                return amountValue * 100_000_000
+            }
+        } else {
+            // EUR is primary, convert to sats
+            return (amountValue / exchangeRate) * 100_000_000
+        }
+    }
+
+    private var estimatedFee: UInt64 {
+        guard let walletState = walletState, !amountText.isEmpty else { return 0 }
+        return walletState.feeRates.estimatedFee(amountSats: UInt64(amountInSats))
+    }
+    
+    private var totalAmountWithFee: UInt64 {
+        guard !amountText.isEmpty else { return 0 }
+        return UInt64(amountInSats) + estimatedFee
+    }
+    
+    private var isInsufficientFunds: Bool {
+        guard let balance = availableBalance, !amountText.isEmpty else { return false }
+        
+        // Get the amount in satoshis regardless of current input currency
+        let amountInSats: Double
+        if isPrimaryCrypto {
+            if secondarySymbol == "₿" {
+                // ₿ is primary, amountValue is already in satoshis
+                amountInSats = amountValue
+            } else {
+                // BTC is primary, convert to sats
+                amountInSats = amountValue * 100_000_000
+            }
+        } else {
+            // Primary is fiat (EUR)
+            amountInSats = (amountValue / exchangeRate) * 100_000_000
+        }
+        
+        // For Bitcoin transactions, include fee in the check
+        let totalNeeded: UInt64
+        if (primarySymbol == "₿" || secondarySymbol == "₿") && walletState != nil {
+            totalNeeded = UInt64(amountInSats) + estimatedFee
+        } else {
+            totalNeeded = UInt64(amountInSats)
+        }
+        
+        let insufficient = totalNeeded > balance
+        
+        if insufficient {
+            print("⚠️ [AmountEntryScreen] Insufficient funds detected:")
+            print("   💰 Input amount: \(amountValue) (\(isPrimaryCrypto ? primarySymbol : secondarySymbol))")
+            print("   💰 Amount in sats: \(amountInSats)")
+            print("   ⚡ Estimated fee: \(estimatedFee) sats")
+            print("   💰 Total needed: \(totalNeeded) sats")
+            print("   💰 Available balance: \(balance) sats")
+            print("   💰 Exceeds by: \(totalNeeded - balance) sats")
+        }
+        
+        return insufficient
+    }
 
     private func sanitizeInput(_ newValue: String) {
-        var sanitized = newValue.replacingOccurrences(of: ",", with: ".")
-        sanitized = sanitized.filter { "0123456789.".contains($0) }
-        if let firstDot = sanitized.firstIndex(of: ".") {
-            let after = sanitized.index(after: firstDot)
-            sanitized = sanitized.prefix(upTo: after) + sanitized[after...].replacingOccurrences(of: ".", with: "")
+        // Only allow integers - no decimal points, commas, or any other characters
+        var sanitized = newValue.filter { "0123456789".contains($0) }
+        
+        // Remove all leading zeros
+        while sanitized.hasPrefix("0") && sanitized.count > 1 {
+            sanitized = String(sanitized.dropFirst())
         }
-        if let dot = sanitized.firstIndex(of: ".") {
-            let fractionStart = sanitized.index(after: dot)
-            let fraction = sanitized[fractionStart...]
-            let limit = isPrimaryCrypto ? 8 : 2
-            if fraction.count > limit {
-                sanitized = String(sanitized[..<sanitized.index(dot, offsetBy: limit + 1)])
-            }
+        
+        // If the string was all zeros, keep one zero
+        if sanitized.isEmpty && newValue.contains("0") {
+            sanitized = "0"
         }
+        
         if sanitized != newValue {
             amountText = sanitized
         }
@@ -185,9 +301,14 @@ public struct AmountEntryScreen: View {
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
             if let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let eur = dict["EUR"] as? Double {
+               let eurPerBtc = dict["EUR"] as? Double {
                 await MainActor.run {
-                    exchangeRate = eur
+                    // If this is for ₿ (satoshis), convert BTC rate to sats rate
+                    if primarySymbol == "₿" {
+                        exchangeRate = eurPerBtc / 100_000_000
+                    } else {
+                        exchangeRate = eurPerBtc
+                    }
                 }
             }
         } catch {
@@ -197,15 +318,23 @@ public struct AmountEntryScreen: View {
 }
 
 #Preview {
-    AmountEntryScreen(
-        title: "Buy Bitcoin",
-        primarySymbol: "₿",
-        secondarySymbol: "€",
-        initialPrimaryIsCrypto: true,
-        exchangeRate: 91929,
-        actionIcon: "bitcoin-circle",
-        actionTitle: "Buy with Apple Pay",
-        onSubmit: { _, _ in },
-        onClose: {}
-    )
+    struct PreviewWrapper: View {
+        @State private var exchangeRate: Double = 0.00091929 // sats to EUR rate
+        
+        var body: some View {
+            AmountEntryScreen(
+                title: "Buy Bitcoin",
+                primarySymbol: "₿",
+                secondarySymbol: "€",
+                initialPrimaryIsCrypto: true,
+                exchangeRate: $exchangeRate,
+                actionIcon: "bitcoin-circle",
+                actionTitle: "Buy with Apple Pay",
+                onSubmit: { _, _ in },
+                onClose: {}
+            )
+        }
+    }
+    
+    return PreviewWrapper()
 } 

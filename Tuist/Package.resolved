@@ -1,5 +1,5 @@
 {
-  "originHash" : "7dbbe89d641fe5b2855a8e53381b6757a5b342af9714cf8e9640ec9c41d19d7a",
+  "originHash" : "871171bcfaf06ad2bb7c6d91629086cd2486b52c5477a1566586893ead2ec523",
   "pins" : [
     {
       "identity" : "bdk-swift",
@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/SumSubstance/IdensicMobileSDK-iOS",
       "state" : {
-        "revision" : "de2d8f77baaa5b1bb2ca475d4b6fffa21529be67",
-        "version" : "1.36.0"
+        "revision" : "3f7b0c13a1206961ed53dc8350542f0ba4c9d264",
+        "version" : "1.36.1"
       }
     },
     {
@@ -35,15 +35,6 @@
       "state" : {
         "revision" : "623c84da314e85363236507ca38a4bde65df21c3",
         "version" : "3.3.3001"
-      }
-    },
-    {
-      "identity" : "privy-ios",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/privy-io/privy-ios",
-      "state" : {
-        "branch" : "main",
-        "revision" : "066b2cda4de65d6f253eb7c44c0ad06a27f17e4d"
       }
     },
     {

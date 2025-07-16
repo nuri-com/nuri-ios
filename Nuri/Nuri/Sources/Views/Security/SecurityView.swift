@@ -2,164 +2,295 @@ import SwiftUI
 import AuthenticationServices
 
 struct SecurityView: View {
-    @State private var passkeyEnabled: Bool = true
-    @State private var iCloudBackupEnabled: Bool = true
-    @State private var showPasskeyOptions: Bool = false
-    @State private var isLinkingPasskey: Bool = false
-    @State private var linkingError: String?
-    @State private var showAlert: Bool = false
-    @State private var showSuccess: Bool = false
-    @State private var showWalletInfo: Bool = false
+    @State private var resultText = "Press the button to test the encrypted iCloud backup."
+    @State private var debugKeyText = "Press button to show encryption key info."
+    @State private var isLoading = false
+    @State private var currentPassword = ""
+    @State private var editingPassword = false
+    @State private var importSeedPhrase = ""
+    @State private var showingImportConfirmation = false
+    private let bitcoinWalletService = BitcoinWalletService.shared
     
 
 
     var body: some View {
         Screen {
-            // Header – displays screen title and CTA
+            // Header
             NuriHeader<AnyView, AnyView>.logoAndCTA(
-                title: "",
-                cta: "+ Add Key",
+                title: "Security (Updated)",
+                cta: "",
                 onCTA: {}
             )
         } content: {
-            // Body content fills the screen between header and footer
-            VStack(spacing: 16) {
-            
-                NuriMenuRow(
-                    icon: "passkey-new",
-                    title: "Passkeys",
-                    subtitle: passkeyEnabled ? "Enabled" : "Disabled"
-                ) {
-                    Image(systemName: "chevron.right")
-                }
-
-                Button(action: {
-                    showWalletInfo = true
-                }) {
-                    NuriMenuRow(
-                        icon: "wallet",
-                        title: "Wallet Keys",
-                        subtitle: "2-of-2 multi-signature"
-                    ) {
-                        Image(systemName: "chevron.right")
+            Form {
+                Section(header: Text("Password Configuration")) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Current Password:")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        if editingPassword {
+                            HStack {
+                                TextField("Enter password", text: $currentPassword)
+                                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                                Button("Save") {
+                                    SimpleEncryptionService.shared.setPassword(currentPassword)
+                                    editingPassword = false
+                                }
+                                Button("Cancel") {
+                                    currentPassword = SimpleEncryptionService.shared.getCurrentPassword()
+                                    editingPassword = false
+                                }
+                            }
+                        } else {
+                            HStack {
+                                Text(currentPassword)
+                                    .font(.system(.body, design: .monospaced))
+                                    .padding(8)
+                                    .background(Color.gray.opacity(0.1))
+                                    .cornerRadius(4)
+                                Spacer()
+                                Button("Edit") {
+                                    editingPassword = true
+                                }
+                            }
+                        }
+                    }
+                    
+                    Button(action: testSimpleEncryption) {
+                        Label("Test Simple Encryption", systemImage: "lock.circle")
                     }
                 }
-                .buttonStyle(PlainButtonStyle())
                 
-                NuriMenuRow(
-                    icon: "icloud-download",
-                    title: "iCloud backup",
-                    subtitle: iCloudBackupEnabled ? "Enabled" : "Disabled"
-                ) {
-                    Toggle("", isOn: $iCloudBackupEnabled)
-                        .labelsHidden()
-                        .tint(Color("PrimaryNuriLilac"))
+                Section(header: Text("Encryption Test Results")) {
+                    VStack {
+                        ScrollView {
+                            Text(debugKeyText)
+                                .font(.system(.caption, design: .monospaced))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    .frame(minHeight: 100)
                 }
                 
-                // Add a Passkey button
-                actionButton()
-                    .padding(.top, 10)
+                Section(header: Text("Test Results")) {
+                    VStack {
+                        if isLoading {
+                            ProgressView("Performing test...")
+                        } else {
+                            ScrollView {
+                                Text(resultText)
+                                    .font(.system(.body, design: .monospaced))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                    }
+                    .frame(minHeight: 150)
+                }
                 
-
+                Section(header: Text("Backup & Recovery Verification")) {
+                    Button(action: testDecryption) {
+                        Label("Test Decrypt iCloud Backup", systemImage: "lock.open.display")
+                    }
+                    
+                    Button(action: createManualBackup) {
+                        Label("Create Manual Backup", systemImage: "icloud.and.arrow.up")
+                    }
+                    
+                    Button(action: forceRestoreFromiCloud) {
+                        Label("☁️ Force Restore from iCloud", systemImage: "icloud.and.arrow.down.fill")
+                            .foregroundColor(.blue)
+                    }
+                    
+                    Button(action: forceRefreshEverything) {
+                        Label("🔄 Force Refresh Everything", systemImage: "arrow.clockwise.circle.fill")
+                            .foregroundColor(.green)
+                    }
+                }
                 
-                Spacer()
+                Section(header: Text("Seed Import & Testing")) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Import Seed Phrase:")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        TextField("Enter 12-word seed phrase", text: $importSeedPhrase, axis: .vertical)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .lineLimit(3...6)
+                        
+                        Text("⚠️ WARNING: This will permanently overwrite your current wallet!")
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    }
+                    
+                    Button(action: { showingImportConfirmation = true }) {
+                        Label("🔄 Import & Overwrite Seed", systemImage: "arrow.down.circle.fill")
+                            .foregroundColor(.orange)
+                    }
+                    .disabled(importSeedPhrase.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+                
+                Section(header: Text("Security Testing")) {
+                    Button(action: testSecurityCleanup) {
+                        Label("Test Security Cleanup (DEBUG)", systemImage: "shield.checkered")
+                    }
+                    
+                    Button(action: comprehensiveStorageDiagnostic) {
+                        Label("Comprehensive Storage Diagnostic", systemImage: "magnifyingglass.circle")
+                    }
+                    
+                    Button(action: forceAggressiveCleanup) {
+                        Label("🧹 FORCE AGGRESSIVE CLEANUP", systemImage: "trash.circle.fill")
+                            .foregroundColor(.red)
+                    }
+                }
             }
-            .padding(.horizontal)
+            .disabled(isLoading)
         }
-        .alert("Error", isPresented: $showAlert) {
-            Button("OK", role: .cancel) { }
+        .onAppear {
+            currentPassword = SimpleEncryptionService.shared.getCurrentPassword()
+        }
+        .alert("Confirm Seed Import", isPresented: $showingImportConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Import", role: .destructive) {
+                importSeedPhraseAction()
+            }
         } message: {
-            Text(linkingError ?? "An error occurred")
-        }
-        .confirmationDialog("Choose Passkey Type", isPresented: $showPasskeyOptions, titleVisibility: .visible) {
-            Button("Platform Passkey (Face ID/Touch ID)") {
-                linkPlatformPasskey()
-            }
-            
-            Button("Hardware Security Key (YubiKey/FIDO2)") {
-                linkHardwarePasskey()
-            }
-            
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Select the type of passkey you want to add to your account.")
-        }
-        .sheet(isPresented: $showSuccess) {
-            SuccessView(
-                illustration: "passkey-new",
-                title: "Success!",
-                subtitle: "Your new passkey has been added",
-                onDone: {
-                    showSuccess = false
-                }
-            )
-        }
-        .sheet(isPresented: $showWalletInfo) {
-            PrivyWallet(onClose: {
-                showWalletInfo = false
-            })
+            Text("This will permanently overwrite your current wallet with the imported seed phrase. This action cannot be undone!\n\nCurrent wallet data will be lost forever.")
         }
     }
     
-    // MARK: - Passkey Functions
-    
-    private func actionButton() -> some View {
-        Button(action: {
-            print("🔘 [SecurityView] Add a Passkey button tapped")
-            
-            // Check if user is authenticated via stored tokens
-            if PrivyWorkaroundService.shared.isAuthenticated {
-                print("✅ [SecurityView] User is authenticated via tokens")
-                print("   👤 User ID: \(PrivyWorkaroundService.shared.currentUserId ?? "nil")")
-                showPasskeyOptions = true
-            } else {
-                print("❌ [SecurityView] User is not authenticated")
-                showAlert = true
-                linkingError = "Please sign in first before adding additional passkeys"
+    private func testSimpleEncryption() {
+        debugKeyText = "Testing simple encryption with hardcoded password..."
+        Task {
+            let result = await Task.detached {
+                return SimpleEncryptionService.shared.testRoundtrip(testData: "test seed phrase: abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about")
+            }.value
+            await MainActor.run {
+                debugKeyText = result
             }
-        }) {
-            NuriButton(
-                icon: "touch-id",
-                title: "Add a Passkey",
-                style: .primary
-            )
         }
-        .padding(.horizontal, 24)
     }
     
-    private func linkPlatformPasskey() {
-        print("🔐 [SecurityView] Linking platform passkey...")
-        isLinkingPasskey = true
-        linkingError = nil
+    private func testDecryption() {
+        isLoading = true
+        resultText = "Initiating decryption...\n\nPlease use Face ID / Touch ID when prompted."
+        Task {
+            let result = await bitcoinWalletService.testDecryptCloudBackup()
+            await MainActor.run {
+                self.resultText = result
+                self.isLoading = false
+            }
+        }
+    }
+    
+    private func testSecurityCleanup() {
+        isLoading = true
+        resultText = "Testing security cleanup (no files will be deleted)..."
+        Task {
+            let result = await Task.detached {
+                return bitcoinWalletService.testSecurityCleanup()
+            }.value
+            await MainActor.run {
+                self.resultText = result
+                self.isLoading = false
+            }
+        }
+    }
+    
+    private func comprehensiveStorageDiagnostic() {
+        isLoading = true
+        resultText = "Running comprehensive storage diagnostic..."
+        Task {
+            let result = await Task.detached {
+                return bitcoinWalletService.comprehensiveStorageDiagnostic()
+            }.value
+            await MainActor.run {
+                self.resultText = result
+                self.isLoading = false
+            }
+        }
+    }
+    
+    private func forceAggressiveCleanup() {
+        isLoading = true
+        resultText = "🧹 FORCE AGGRESSIVE CLEANUP\n\nThis will clear ALL wallet data from ALL keychain services and Documents directory.\n\nExecuting..."
+        Task {
+            await Task.detached {
+                bitcoinWalletService.forceCleanAllKeychainServices()
+            }.value
+            await MainActor.run {
+                self.resultText = "🧹 AGGRESSIVE CLEANUP COMPLETED!\n\n✅ All keychain services cleared\n✅ Documents directory cleared\n✅ All wallet data removed\n\n⚠️ Next wallet creation will be completely fresh!\n\n🔄 Restart the app to test fresh wallet creation."
+                self.isLoading = false
+            }
+        }
+    }
+    
+    private func createManualBackup() {
+        isLoading = true
+        resultText = "Creating manual iCloud backup...\n\nThis will encrypt current seed phrase and store in iCloud keychain."
+        Task {
+            let result = await Task.detached {
+                return self.bitcoinWalletService.createManualBackup()
+            }.value
+            await MainActor.run {
+                self.resultText = result
+                self.isLoading = false
+            }
+        }
+    }
+    
+    private func importSeedPhraseAction() {
+        let seedToImport = importSeedPhrase.trimmingCharacters(in: .whitespacesAndNewlines)
         
-        PasskeyAuthCoordinator.shared.linkAdditionalPasskey { result in
-            DispatchQueue.main.async {
-                self.isLinkingPasskey = false
+        guard !seedToImport.isEmpty else {
+            resultText = "❌ Error: Seed phrase cannot be empty"
+            return
+        }
+        
+        isLoading = true
+        resultText = "🔄 IMPORTING SEED PHRASE...\n\n⚠️ This will permanently overwrite your current wallet!\n\nProcessing..."
+        
+        Task {
+            let result = await bitcoinWalletService.importAndOverwriteSeed(newSeedPhrase: seedToImport)
+            await MainActor.run {
+                self.resultText = result
+                self.isLoading = false
                 
-                switch result {
-                case .success:
-                    print("✅ [SecurityView] Platform passkey linked successfully")
-                    self.showSuccess = true
-                case .failure(let error):
-                    print("❌ [SecurityView] Failed to link platform passkey: \(error)")
-                    self.linkingError = error.localizedDescription
-                    self.showAlert = true
+                // Clear the input field after successful import
+                if result.contains("✅ IMPORT COMPLETED SUCCESSFULLY!") {
+                    self.importSeedPhrase = ""
                 }
             }
         }
     }
     
-    private func linkHardwarePasskey() {
-        print("🔐 [SecurityView] Linking hardware passkey...")
-        isLinkingPasskey = true
-        linkingError = nil
+    private func forceRestoreFromiCloud() {
+        isLoading = true
+        resultText = "☁️ FORCE RESTORE FROM ICLOUD...\n\nThis will clear all local data and restore from iCloud backup.\n\nProcessing..."
         
-        // Hardware keys would need special handling or web-based flow
-        // For now, show that it's not supported
-        self.linkingError = "Hardware security keys require special handling not yet implemented"
-        self.showAlert = true
-        self.isLinkingPasskey = false
+        Task {
+            let result = await bitcoinWalletService.forceRestoreFromiCloudBackup()
+            await MainActor.run {
+                self.resultText = result
+                self.isLoading = false
+            }
+        }
     }
+    
+    private func forceRefreshEverything() {
+        isLoading = true
+        resultText = "🔄 FORCE REFRESH EVERYTHING...\n\nClearing all cache and refreshing wallet state...\n\nProcessing..."
+        
+        Task {
+            let result = await bitcoinWalletService.forceRefreshEverything()
+            await MainActor.run {
+                self.resultText = result
+                self.isLoading = false
+            }
+        }
+    }
+    
 }
 
 #if DEBUG

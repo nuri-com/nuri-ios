@@ -5,7 +5,6 @@ struct ReceiveView: View {
     @EnvironmentObject var navigation: BitcoinViewNavigation
     @State private var address: String = ""
     @State private var isLoading = false
-    @State private var seedPhrase: String = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -62,22 +61,6 @@ struct ReceiveView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .padding(.vertical, 16)
 
-                // Temporary seed display for debugging
-                if !seedPhrase.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Seed phrase (debug):")
-                            .font(.caption)
-                            .foregroundStyle(Color.secondary)
-                        Text(seedPhrase)
-                            .font(.footnote)
-                            .lineLimit(nil)
-                            .textSelection(.enabled)
-                    }
-                    .padding(12)
-                    .background(Color.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                }
-
                 Button("Share") {
                     
                 }
@@ -98,38 +81,30 @@ struct ReceiveView: View {
     }
     
     private func loadWalletData() async {
+        print("📱 [ReceiveView] Loading wallet data...")
         await MainActor.run {
             isLoading = true
         }
         
-        // Ensure wallet is properly initialized
         let walletService = BitcoinWalletService.shared
         
-        // If no wallet, try to initialize
+        // Ensure wallet is initialized first
         if !walletService.hasWallet() {
-            print("⚠️ [ReceiveView] No wallet found, attempting to load...")
-            walletService.retryWalletLoad()
+            print("⚠️ [ReceiveView] Wallet not initialized, initializing now...")
+            walletService.initializeWalletOnAppStart()
             
-            // Wait a moment for wallet to load
-            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+            // Wait for initialization
+            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
         }
         
         await MainActor.run {
-            // Get current address
+            // Get current address - this should work without Face ID
             if let addr = walletService.currentAddress() {
                 print("✅ [ReceiveView] Got address: \(addr)")
                 address = addr
             } else {
                 print("❌ [ReceiveView] Failed to get address")
                 address = ""
-            }
-            
-            // Get seed phrase for debugging
-            seedPhrase = walletService.seedPhrase() ?? ""
-            if !seedPhrase.isEmpty {
-                print("✅ [ReceiveView] Got seed phrase: \(seedPhrase.prefix(20))...")
-            } else {
-                print("❌ [ReceiveView] No seed phrase available")
             }
             
             isLoading = false

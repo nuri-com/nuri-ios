@@ -1,7 +1,6 @@
 import SwiftUI
 import UIKit
 import AuthenticationServices
-import PrivySDK
 import BitcoinDevKit
 
 struct WelcomeView: View {
@@ -9,7 +8,6 @@ struct WelcomeView: View {
     @AppStorage("isUserLoggedIn") var isUserLoggedIn: Bool = false
     @State private var showError = false
     @State private var errorMessage = ""
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         GeometryReader { proxy in
@@ -29,8 +27,8 @@ struct WelcomeView: View {
                 VStack {
                     Spacer()
                     
-                    Button("Login with Biometrics") {
-                        signInOrCreatePasskey()
+                    Button("Login with Passkey") {
+                        mockPasskeyLogin()
                     }
                     .buttonStyle(ProminentButtonStyle())
                 }
@@ -47,40 +45,13 @@ struct WelcomeView: View {
 
     // MARK: - Actions
     
-    private func signInOrCreatePasskey() {
-        print("👆 [WelcomeView] User tapped 'Sign-in or Create Passkey'")
-        PasskeyAuthCoordinator.shared.signInOrRegister { result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success:
-                    print("✅ [WelcomeView] Passkey operation successful")
-                    
-                    // Get stored tokens and initialize wallet for user
-                    let tokens = PasskeyService.getStoredTokens()
-                    print("📦 [WelcomeView] Stored tokens - Access: \(tokens.0?.prefix(20) ?? "nil")... User: \(tokens.2 ?? "nil")")
-                    
-                    // Initialize Bitcoin wallet for this specific user
-                    if let userID = tokens.2 {
-                        print("🔑 [WelcomeView] Initializing wallet for user: \(userID)")
-                        BitcoinWalletService.shared.initializeForUser(userID)
-                    } else {
-                        print("⚠️ [WelcomeView] No user ID found in tokens")
-                    }
-                    
-                    self.isUserLoggedIn = true
-                    self.dismiss()
-                case .failure(let error):
-                    print("❌ [WelcomeView] Passkey operation failed: \(error)")
-                    self.errorMessage = error.localizedDescription
-                    self.showError = true
-                }
-            }
-        }
-    }
-    
-    private func skipForNow() {
-        print("⏩ [WelcomeView] User skipped passkey setup")
-        dismiss()
+    private func mockPasskeyLogin() {
+        print("🔐 [WelcomeView] Mock passkey login initiated")
+        print("⚡ [WelcomeView] Skipping authentication and going directly to app")
+        
+        // Mock login - directly set user as logged in without any authentication
+        self.isUserLoggedIn = true
+        // No need to dismiss - NuriApp will automatically switch views
     }
     
     // MARK: - View Helpers
@@ -90,23 +61,3 @@ struct WelcomeView: View {
     WelcomeView()
 }
 
-// MARK: - Apple Sign-In SwiftUI wrapper
-private struct AppleSignInButton: UIViewRepresentable {
-    let action: () -> Void
-
-    func makeUIView(context: Context) -> ASAuthorizationAppleIDButton {
-        let button = ASAuthorizationAppleIDButton(type: .signIn, style: .black)
-        button.addTarget(context.coordinator, action: #selector(Coordinator.didTap), for: .touchUpInside)
-        return button
-    }
-
-    func updateUIView(_ uiView: ASAuthorizationAppleIDButton, context: Context) {}
-
-    func makeCoordinator() -> Coordinator { Coordinator(action: action) }
-
-    final class Coordinator {
-        let action: () -> Void
-        init(action: @escaping () -> Void) { self.action = action }
-        @objc func didTap() { action() }
-    }
-}

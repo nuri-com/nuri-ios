@@ -1,6 +1,5 @@
 import Combine
 import AuthenticationServices
-import PrivySDK
 
 protocol LoginViewModelDelegate: OnboardingScreenDelegate {
     func presentationAnchor() -> UIWindow
@@ -66,33 +65,13 @@ final class LoginViewModel: NSObject, ObservableObject, LoginViewModelType, Logi
     }
 
     private func startPasskeyLogin() {
-        PasskeyAuthCoordinator.shared.start { [weak self] result in
-            switch result {
-            case .success:
-                DispatchQueue.main.async {
-                    self?.delegate?.didFinish(screen: .login)
-                }
-            case .failure(let error):
-                print("Passkey auth failed: \(error)")
-            }
-        }
+        // Passkey login removed - will be replaced with new integration
+        print("Passkey login disabled - awaiting new integration")
     }
 
     private func startAppleLogin() {
-        Task { @MainActor in
-            do {
-                try await PrivyManager.shared.oAuth.login(with: .apple)
-                // Ensure wallets
-                do { try await WalletProvisioner.ensureWallets() }
-                catch { print("⚠️ Wallet provisioning error", error) }
-
-                DispatchQueue.main.async {
-                    self.delegate?.didFinish(screen: .login)
-                }
-            } catch {
-                print("❌ Apple login failed", error)
-            }
-        }
+        // Apple login will be replaced with new integration
+        print("Apple login disabled - awaiting new integration")
     }
 
     func toViewModel() -> LoginViewModel {

@@ -1,0 +1,8 @@
+app_identifier("com.nuri.mobile-ios") # The bundle identifier of your app
+apple_id("proud@me.com") # Your Apple email address - update this if different
+
+team_id("MH2SRQ3N27") # Developer Portal Team ID
+itc_team_id("638945") # App Store Connect Team ID - proud works GmbH
+
+# For more information about the Appfile, see:
+#     https://docs.fastlane.tools/advanced/#appfile
