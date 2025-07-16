@@ -1,30 +1,31 @@
 import Combine
 
-protocol SearchCountryDialCodeViewModelDelegate: AnyObject {
-    func searchCancelled()
-    func didSelectCountry(countryCode: String)
-}
-
-protocol SearchCountryDialCodeViewModelType: AnyObject {
-    func toViewModel() -> SearchCountryDialCodeViewModel
-    var delegate: SearchCountryDialCodeViewModelDelegate? { get set }
+enum SearchCountryDialCodeResult {
+    case cancelled
+    case country(countryCode: String)
 }
 
 protocol SearchCountryDialCodeViewStateProviding {
     var viewState: SearchCountryDialCodeViewState { get }
 }
 
-final class SearchCountryDialCodeViewModel: ObservableObject, SearchCountryDialCodeViewModelType {
+final class SearchCountryDialCodeViewModel: ObservableObject {
 
-    private let searchCountryDialCodeUseCase: SearchCountryDialCodeUseCaseType
+    // MARK: - Dependencies
 
-    weak var delegate: SearchCountryDialCodeViewModelDelegate?
+    private let searchCountryDialCodeUseCase = SearchCountryDialCodeUseCase()
+
+    // MARK: - Variables
+
+    var completion: ((SearchCountryDialCodeResult) -> Void)?
+
+    // MARK: - View State
 
     @Published var viewState: SearchCountryDialCodeViewState = .empty
 
-    init(searchCountryDialCodeUseCase: SearchCountryDialCodeUseCaseType) {
-        self.searchCountryDialCodeUseCase = searchCountryDialCodeUseCase
+    // MARK: - Initialization
 
+    init() {
         self.viewState = .init(
             searchTextField: .init(
                 label: "",
@@ -43,6 +44,8 @@ final class SearchCountryDialCodeViewModel: ObservableObject, SearchCountryDialC
             searchState: searchState(for: "")
         )
     }
+
+    // MARK: - Private
 
     private func handleSearchTextChange(_ searchText: String) {
         viewState.searchState = searchState(for: searchText)
@@ -65,15 +68,11 @@ final class SearchCountryDialCodeViewModel: ObservableObject, SearchCountryDialC
     }
 
     private func cancelButtonPressed() {
-        delegate?.searchCancelled()
+        completion?(.cancelled)
     }
 
     private func selectionHandler(_ countryCode: String) {
-        delegate?.didSelectCountry(countryCode: countryCode)
-    }
-
-    func toViewModel() -> SearchCountryDialCodeViewModel {
-        return self
+        completion?(.country(countryCode: countryCode))
     }
 }
 

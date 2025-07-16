@@ -2,8 +2,11 @@ import SwiftUI
 
 struct SearchCountryDialCodeView: View {
 
-    @ObservedObject var viewModel: SearchCountryDialCodeViewModel
+    @ObservedObject var viewModel = SearchCountryDialCodeViewModel()
 
+    init(completion: ((SearchCountryDialCodeResult) -> Void)? = nil) {
+        viewModel.completion = completion
+    }
 
     var body: some View {
         contentView(viewState: viewModel.viewState)
@@ -36,17 +39,18 @@ struct SearchCountryDialCodeView: View {
                 Spacer()
             case .results(let resultViewState):
                 List(resultViewState.items) { item in
-                    HStack {
-                        Text(item.flag)
-                            .frame(width: 30)
-                        Text(item.text)
-                            .lineLimit(1, reservesSpace: false)
-                            .truncationMode(.tail)
+                    Button {
+                        resultViewState.selectionHandler.action(item.id)
+                    } label: {
+                        HStack {
+                            Text(item.flag)
+                                .frame(width: 30)
+                            Text(item.text)
+                                .lineLimit(1, reservesSpace: false)
+                                .truncationMode(.tail)
+                        }
                     }
                     .tag(item.id)
-                    .onTapGesture {
-                        resultViewState.selectionHandler.action(item.id)
-                    }
                 }
                 .listStyle(PlainListStyle())
             }

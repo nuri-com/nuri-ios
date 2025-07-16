@@ -12,30 +12,8 @@ func injectDependencies(into container: ContainerType) {
         )
     }
 
-    container.register { container -> PhoneNumberViewModelType in
-        PhoneNumberViewModel(
-            dialCodesRepository: container.resolve()
-        )
-    }
-
     container.register { container -> CountryDialCodesRepositoryType in
         CountryDialCodesRepository()
-    }
-
-    container.register { container -> SearchCountryDialCodeUseCaseType in
-        SearchCountryDialCodeUseCase(
-            countryDialCodesRepository: container.resolve()
-        )
-    }
-
-    container.register { container -> SearchCountryDialCodeViewModelType in
-        SearchCountryDialCodeViewModel(
-            searchCountryDialCodeUseCase: container.resolve()
-        )
-    }
-
-    container.register { container -> VerifyCallViewModelType in
-        VerifyCallViewModel()
     }
 
     container.register { container -> SetupCardExplanationViewModelType in

@@ -10,7 +10,6 @@ final class OnboardingWireframe: OnboardingWireframeType {
     private let container: ContainerType
 
     private var navigationController: UINavigationController?
-    private var phoneNumberViewModel: PhoneNumberViewModelType?
 
     init(container: ContainerType) {
         self.container = container
@@ -18,14 +17,6 @@ final class OnboardingWireframe: OnboardingWireframeType {
 
     func initialViewController() -> UIViewController {
         let viewController = viewController(for: .login)
-        let navigationController = UINavigationController(rootViewController: viewController)
-        navigationController.navigationBar.tintColor = UIColor(NuriAsset.textPrimary.swiftUIColor)
-        self.navigationController = navigationController
-        return navigationController
-    }
-
-    func phoneNumberVerificationFlow() -> UINavigationController {
-        let viewController = phoneNumberViewController()
         let navigationController = UINavigationController(rootViewController: viewController)
         navigationController.navigationBar.tintColor = UIColor(NuriAsset.textPrimary.swiftUIColor)
         self.navigationController = navigationController
@@ -86,18 +77,11 @@ final class OnboardingWireframe: OnboardingWireframeType {
     }
 
     private func phoneNumberViewController() -> UIViewController {
-        let viewModel: PhoneNumberViewModelType = container.resolve()
-        viewModel.delegate = self
-        phoneNumberViewModel = viewModel
-        let view = PhoneNumberView(viewModel: viewModel.toViewModel())
-        return hostingController(view: view)
+        return UIViewController()
     }
 
     private func verifyCallViewController() -> UIViewController {
-        let viewModel: VerifyCallViewModelType = container.resolve()
-        viewModel.delegate = self
-        let view = VerifyCallView(viewModel: viewModel.toViewModel())
-        return hostingController(view: view)
+        return UIViewController()
     }
 
     private func setupCardExplanationViewController() -> UIViewController {
@@ -120,11 +104,6 @@ final class OnboardingWireframe: OnboardingWireframeType {
     }
 
     private func presentCountrySearch() {
-        let viewModel: SearchCountryDialCodeViewModelType = container.resolve()
-        viewModel.delegate = self
-        let view = SearchCountryDialCodeView(viewModel: viewModel.toViewModel())
-        let viewController = UIHostingController(rootView: view)
-        navigationController?.present(viewController, animated: true)
     }
 
     private func hostingController<V: View>(view: V) -> UIViewController {
@@ -138,25 +117,6 @@ extension OnboardingWireframe: OnboardingScreenDelegate {
 
     func didFinish(screen: OnboardingScreen) {
         showNextScreen(after: screen)
-    }
-}
-
-extension OnboardingWireframe: PhoneNumberViewModelDelegate {
-
-    func phoneNumberViewModelDidSelectSearch() {
-        presentCountrySearch()
-    }
-}
-
-extension OnboardingWireframe: SearchCountryDialCodeViewModelDelegate {
-
-    func searchCancelled() {
-        navigationController?.presentedViewController?.dismiss(animated: true)
-    }
-
-    func didSelectCountry(countryCode: String) {
-        navigationController?.presentedViewController?.dismiss(animated: true)
-        phoneNumberViewModel?.updateSelectedCountry(countryCode: countryCode)
     }
 }
 

@@ -1,30 +1,19 @@
 import Combine
 
-protocol PhoneNumberViewModelDelegate: OnboardingScreenDelegate {
-    func phoneNumberViewModelDidSelectSearch()
-}
+final class PhoneNumberViewModel: ObservableObject {
 
-protocol PhoneNumberViewModelType: AnyObject {
-    var delegate: PhoneNumberViewModelDelegate? { get set }
-    func updateSelectedCountry(countryCode: String)
-    func toViewModel() -> PhoneNumberViewModel
-}
+    // MARK: - Dependencies
 
-protocol PhoneNumberViewStateProviding {
-    var viewState: PhoneNumberViewState { get }
-}
+    private let dialCodesRepository: CountryDialCodesRepositoryType = CountryDialCodesRepository()
 
-final class PhoneNumberViewModel: ObservableObject, PhoneNumberViewModelType, PhoneNumberViewStateProviding {
-
-    weak var delegate: (any PhoneNumberViewModelDelegate)?
+    // MARK: - Variables
 
     @Published var viewState: PhoneNumberViewState = .empty
+    var completion: (() -> Void)? = nil
 
-    private let dialCodesRepository: CountryDialCodesRepositoryType
+    // MARK: - Initialization
 
-    init(dialCodesRepository: CountryDialCodesRepositoryType) {
-        self.dialCodesRepository = dialCodesRepository
-
+    init() {
         viewState = .init(
             title: "Your Phone Number",
             subtitle: "Enter your phone number to get started.",
@@ -48,11 +37,23 @@ final class PhoneNumberViewModel: ObservableObject, PhoneNumberViewModelType, Ph
                     self?.confirmButtonPressed()
                 },
                 isDisabled: true
-            )
+            ),
+            showCountryPicker: false,
+            countryPickedAction: .init { [weak self] result in
+                switch result {
+                case .cancelled: break
+                case .country(countryCode: let countryCode):
+                    self?.updateSelectedCountry(countryCode: countryCode)
+                }
+                self?.updateViewState(action: .showCountryPicker(false))
+            },
+            showVerifyScreen: false
         )
 
         updateViewState(action: .selectCountry(0))
     }
+
+    // MARK: - Private
 
     private func updateViewState(action: PhoneNumberViewState.Action) {
         viewState = reduce(viewState, action: action)
@@ -78,12 +79,16 @@ final class PhoneNumberViewModel: ObservableObject, PhoneNumberViewModelType, Ph
         case .updatePhoneNumber(let phoneNumber):
             viewState.phoneNumber.text = phoneNumber
             viewState.confirmButton.isDisabled = phoneNumber.count < 5
+        case .showCountryPicker(let showCountryPicker):
+            viewState.showCountryPicker = showCountryPicker
+        case .showVerifyScreen:
+            viewState.showVerifyScreen = true
         }
         return viewState
     }
 
     private func confirmButtonPressed() {
-        delegate?.didFinish(screen: .phoneNumber)
+        updateViewState(action: .showVerifyScreen)
     }
 
     private func countryPickerSelectionChanged(_ selection: Int) {
@@ -91,7 +96,7 @@ final class PhoneNumberViewModel: ObservableObject, PhoneNumberViewModelType, Ph
     }
 
     private func countryPickerSelected() {
-        delegate?.phoneNumberViewModelDidSelectSearch()
+        updateViewState(action: .showCountryPicker(true))
     }
 
     private func phoneNumberChanged(_ text: String) {
@@ -128,9 +133,5 @@ final class PhoneNumberViewModel: ObservableObject, PhoneNumberViewModelType, Ph
         if let index = dialCodesRepository.dialCodes.firstIndex(where: { $0.countryCode == countryCode }) {
             updateViewState(action: .selectCountry(index))
         }
-    }
-
-    func toViewModel() -> PhoneNumberViewModel {
-        return self
     }
 }

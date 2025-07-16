@@ -1,14 +1,16 @@
-protocol SearchCountryDialCodeUseCaseType {
-    func search(text: String) -> [CountryDialCode]
-}
+final class SearchCountryDialCodeUseCase {
 
-final class SearchCountryDialCodeUseCase: SearchCountryDialCodeUseCaseType {
+    // MARK: - Dependencies
 
     private let countryDialCodesRepository: CountryDialCodesRepositoryType
 
-    init(countryDialCodesRepository: CountryDialCodesRepositoryType) {
+    // MARK: - Initialization
+
+    init(countryDialCodesRepository: CountryDialCodesRepositoryType = CountryDialCodesRepository()) {
         self.countryDialCodesRepository = countryDialCodesRepository
     }
+
+    // MARK: - Use Case
 
     func search(text: String) -> [CountryDialCode] {
         let searchText = text.trimmingCharacters(in: .whitespaces).lowercased()

@@ -8,6 +8,9 @@ struct PhoneNumberViewState: ViewModelViewState {
     var phoneNumber: TextFieldViewState
     var countryCodeHint: String?
     var confirmButton: TextButtonViewState
+    var showCountryPicker: Bool
+    let countryPickedAction: UserObjectAction<SearchCountryDialCodeResult>
+    var showVerifyScreen: Bool
 
     static var empty: PhoneNumberViewState {
         .init(
@@ -18,7 +21,10 @@ struct PhoneNumberViewState: ViewModelViewState {
             countryPickerSelected: .empty,
             countryCode: "",
             phoneNumber: .empty,
-            confirmButton: .empty
+            confirmButton: .empty,
+            showCountryPicker: false,
+            countryPickedAction: .empty,
+            showVerifyScreen: false
         )
     }
 }
@@ -28,5 +34,7 @@ extension PhoneNumberViewState {
     enum Action: Equatable {
         case selectCountry(Int)
         case updatePhoneNumber(String)
+        case showCountryPicker(Bool)
+        case showVerifyScreen
     }
 }
