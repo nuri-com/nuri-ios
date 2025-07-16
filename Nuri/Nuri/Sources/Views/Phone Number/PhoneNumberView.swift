@@ -2,7 +2,11 @@ import SwiftUI
 
 struct PhoneNumberView: View {
 
-    @ObservedObject var viewModel: PhoneNumberViewModel
+    @ObservedObject var viewModel = PhoneNumberViewModel()
+
+    init(completion: (() -> Void)? = nil) {
+        viewModel.completion = completion
+    }
 
     var body: some View {
         contentView(viewState: viewModel.viewState)
@@ -60,5 +64,10 @@ struct PhoneNumberView: View {
         .padding(32)
         .frame(maxHeight: .infinity)
         .background(NuriAsset.background.swiftUIColor)
+        .sheet(isPresented: $viewModel.viewState.showCountryPicker) {
+            SearchCountryDialCodeView() { result in
+                viewState.countryPickedAction.action(result)
+            }
+        }
     }
 }
