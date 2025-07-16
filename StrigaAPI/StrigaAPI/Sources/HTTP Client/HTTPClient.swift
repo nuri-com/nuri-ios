@@ -1,5 +1,9 @@
 import Foundation
 
+protocol HTTPClientDelegate: AnyObject {
+    func headers(for request: URLRequest, body: Data?) -> [String: String]
+}
+
 final class HTTPClient {
 
     // MARK: - Dependencies
@@ -11,18 +15,25 @@ final class HTTPClient {
     // MARK: - Variables
 
     var host: String = ""
-    var additionalHeaders: [String: String] = [:]
+    weak var delegate: HTTPClientDelegate?
 
     // MARK: - Public
 
     func get<O: Decodable>(url: URL) async throws -> O {
         var request = try urlRequest(for: url, method: "GET")
+        if let headers = delegate?.headers(for: request, body: nil) {
+            request.addHeaders(headers)
+        }
         return try await data(for: request)
     }
 
     func post<I: Encodable, O: Decodable>(url: URL, input: I) async throws -> O {
         var request = try urlRequest(for: url, method: "POST")
-        request.httpBody = try encoder.encode(input)
+        let body = try encoder.encode(input)
+        request.httpBody = body
+        if let headers = delegate?.headers(for: request, body: body) {
+            request.addHeaders(headers)
+        }
         return try await data(for: request)
     }
 
@@ -50,11 +61,15 @@ final class HTTPClient {
     private func urlRequest(for url: URL, method: String) throws -> URLRequest {
         var request = URLRequest(url: url)
         request.httpMethod = method
-        var headers = additionalHeaders
-        headers["Content-Type"] = "application/json"
-        headers.forEach { key, value in
-            request.addValue(value, forHTTPHeaderField: key)
-        }
         return request
+    }
+}
+
+private extension URLRequest {
+
+    mutating func addHeaders(_ headers: [String: String]) {
+        headers.forEach { key, value in
+            addValue(value, forHTTPHeaderField: key)
+        }
     }
 }

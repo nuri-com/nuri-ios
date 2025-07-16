@@ -1,5 +1,4 @@
 import Foundation
-import CryptoKit
 
 public final class StrigaService {
 
@@ -7,12 +6,15 @@ public final class StrigaService {
 
     private let httpClient = HTTPClient()
 
-    // MARK: - Variables
+    // MARK: - Public
 
-    public var configuration: StrigaConfiguration? {
-        didSet {
-            httpClient.additionalHeaders = [:] // Headers are now generated per request
-        }
+    public var configuration: StrigaConfiguration?
+    public static let shared = StrigaService()
+
+    // MARK: - Initialization
+
+    private init() {
+        httpClient.delegate = self
     }
 
     // MARK: - Endpoints
@@ -62,49 +64,35 @@ public final class StrigaService {
     // MARK: - Private
 
     private func url(for path: String) throws -> URL {
-        guard let configuration = configuration else {
+        guard let configuration else {
             throw NSError(domain: "Striga", code: 1001, userInfo: [NSLocalizedDescriptionKey: "Configuration not set."])
         }
         guard let url = URL(string: configuration.url),
               var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
-            throw NSError(domain: "Striga", code: 1001, userInfo: [NSLocalizedDescriptionKey: "URL not set."])
+            throw NSError(domain: "Striga", code: 1002, userInfo: [NSLocalizedDescriptionKey: "URL not set."])
         }
-        components.path = path
+        components.path += path
         guard let url = components.url else {
-            throw NSError(domain: "Striga", code: 1001, userInfo: [NSLocalizedDescriptionKey: "Could not construct URL."])
+            throw NSError(domain: "Striga", code: 1003, userInfo: [NSLocalizedDescriptionKey: "Could not construct URL. \(components)"])
         }
         return url
     }
+}
 
-    private func generateHeaders(for path: String, method: String, query: String = "", body: String? = nil) throws -> [String: String] {
-        guard let configuration = configuration else {
-            throw NSError(domain: "Striga", code: 1002, userInfo: [NSLocalizedDescriptionKey: "Configuration not set for authentication."])
+extension StrigaService: HTTPClientDelegate {
+
+    func headers<E: Encodable>(for request: URLRequest, body: E?) -> [String : String] {
+        do {
+            guard let configuration else {
+                throw NSError(domain: "Striga", code: 1004, userInfo: [NSLocalizedDescriptionKey: "Configuration not set."])
+            }
+            let signatureProvider = StrigaSignatureProvider(configuration: configuration)
+            let headers = try signatureProvider.headers(for: request, body: body)
+            print("[Striga] headers: \(headers)")
+            return headers
+        } catch {
+            print("[Striga] Signature: Error generating headers: \(error)")
+            return [:]
         }
-
-        let timestamp = String(Int(Date().timeIntervalSince1970))
-        var preSign = "\(timestamp)\(method.uppercased())\(path)"
-        if !query.isEmpty {
-            preSign += "?\(query)"
-        }
-        if let body = body {
-            preSign += body
-        }
-
-        let signature = hmacSHA256(data: preSign, key: configuration.secret)
-
-        return [
-            "X-API-Key": configuration.key,
-            "X-API-Timestamp": timestamp,
-            "X-API-Signature": signature,
-            "Content-Type": "application/json"
-        ]
-    }
-
-    private func hmacSHA256(data: String, key: String) -> String {
-        let keyData = Data(key.utf8)
-        let data = Data(data.utf8)
-        let key = SymmetricKey(data: keyData)
-        let signature = HMAC<SHA256>.authenticationCode(for: data, using: key)
-        return Data(signature).map { String(format: "%02hhx", $0) }.joined()
     }
 }
