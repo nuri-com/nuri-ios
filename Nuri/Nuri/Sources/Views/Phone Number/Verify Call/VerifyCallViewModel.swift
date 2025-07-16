@@ -1,24 +1,11 @@
 import Combine
 
-protocol VerifyCallViewModelType: AnyObject {
-    var delegate: OnboardingScreenDelegate? { get set }
-    func toViewModel() -> VerifyCallViewModel
-}
-
-protocol VerifyCallViewStateProviding {
-    var viewState: VerifyCallViewState { get }
-}
-
-final class VerifyCallViewModel: ObservableObject, VerifyCallViewModelType, VerifyCallViewStateProviding {
-
-    weak var delegate: (any OnboardingScreenDelegate)?
+final class VerifyCallViewModel: ObservableObject {
 
     @Published var viewState: VerifyCallViewState = .empty
 
-    func toViewModel() -> VerifyCallViewModel {
-        return self
-    }
-    
+    var completion: (() -> Void)?
+
     init() {
         viewState = .init(
             title: "Automatic Verification",
@@ -42,6 +29,6 @@ final class VerifyCallViewModel: ObservableObject, VerifyCallViewModelType, Veri
 
     @MainActor
     private func dismiss() {
-        delegate?.didFinish(screen: .verificationByCall)
+        completion?()
     }
 }

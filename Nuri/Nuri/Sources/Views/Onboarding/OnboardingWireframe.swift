@@ -81,10 +81,7 @@ final class OnboardingWireframe: OnboardingWireframeType {
     }
 
     private func verifyCallViewController() -> UIViewController {
-        let viewModel: VerifyCallViewModelType = container.resolve()
-        viewModel.delegate = self
-        let view = VerifyCallView(viewModel: viewModel.toViewModel())
-        return hostingController(view: view)
+        return UIViewController()
     }
 
     private func setupCardExplanationViewController() -> UIViewController {

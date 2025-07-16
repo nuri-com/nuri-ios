@@ -16,10 +16,6 @@ func injectDependencies(into container: ContainerType) {
         CountryDialCodesRepository()
     }
 
-    container.register { container -> VerifyCallViewModelType in
-        VerifyCallViewModel()
-    }
-
     container.register { container -> SetupCardExplanationViewModelType in
         SetupCardExplanationViewModel()
     }

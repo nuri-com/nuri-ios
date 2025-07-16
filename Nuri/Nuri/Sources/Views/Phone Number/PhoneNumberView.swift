@@ -69,5 +69,10 @@ struct PhoneNumberView: View {
                 viewState.countryPickedAction.action(result)
             }
         }
+        .navigationDestination(isPresented: $viewModel.viewState.showVerifyScreen) {
+            VerifyCallView() {
+                
+            }
+        }
     }
 }

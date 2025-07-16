@@ -46,7 +46,8 @@ final class PhoneNumberViewModel: ObservableObject {
                     self?.updateSelectedCountry(countryCode: countryCode)
                 }
                 self?.updateViewState(action: .showCountryPicker(false))
-            }
+            },
+            showVerifyScreen: false
         )
 
         updateViewState(action: .selectCountry(0))
@@ -80,12 +81,14 @@ final class PhoneNumberViewModel: ObservableObject {
             viewState.confirmButton.isDisabled = phoneNumber.count < 5
         case .showCountryPicker(let showCountryPicker):
             viewState.showCountryPicker = showCountryPicker
+        case .showVerifyScreen:
+            viewState.showVerifyScreen = true
         }
         return viewState
     }
 
     private func confirmButtonPressed() {
-        completion?()
+        updateViewState(action: .showVerifyScreen)
     }
 
     private func countryPickerSelectionChanged(_ selection: Int) {

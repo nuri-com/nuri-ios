@@ -2,7 +2,11 @@ import SwiftUI
 
 struct VerifyCallView: View {
 
-    @ObservedObject var viewModel: VerifyCallViewModel
+    @ObservedObject var viewModel = VerifyCallViewModel()
+
+    init(completion: @escaping () -> Void) {
+        viewModel.completion = completion
+    }
 
     var body: some View {
         contentView(viewState: viewModel.viewState)
