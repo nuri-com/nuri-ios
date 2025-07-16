@@ -56,6 +56,7 @@ let project = Project(
             ]),
             dependencies: [
                 .project(target: "Authentication", path: "../Authentication"),
+                .project(target: "StrigaAPI", path: "../StrigaAPI"),
                 .external(name: "IdensicMobileSDK"),
                 .external(name: "BitcoinDevKit"),
                 .external(name: "KeychainAccess"),
