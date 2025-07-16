@@ -118,6 +118,27 @@ final class BitcoinWalletService {
         return false
     }
     
+    /// Wait for wallet to be initialized (with timeout)
+    func waitForWalletInitialization(timeout: TimeInterval = 5.0) async -> Bool {
+        let startTime = Date()
+        
+        print("⏳ [BitcoinWalletService] Waiting for wallet initialization...")
+        
+        while wallet == nil {
+            // Check if timeout exceeded
+            if Date().timeIntervalSince(startTime) > timeout {
+                print("⏱️ [BitcoinWalletService] Wallet initialization timeout after \(timeout) seconds")
+                return false
+            }
+            
+            // Wait a bit before checking again
+            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+        }
+        
+        print("✅ [BitcoinWalletService] Wallet initialized successfully")
+        return true
+    }
+    
     /// Get the current wallet instance (for transaction operations)
     func getWallet() -> Wallet? {
         return wallet

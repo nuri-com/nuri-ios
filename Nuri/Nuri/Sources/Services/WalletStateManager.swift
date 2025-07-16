@@ -60,21 +60,11 @@ final class WalletStateManager: ObservableObject {
         // Load persisted data immediately
         loadPersistedData()
         
-        // Setup background sync and initial fetch
-        Task { @MainActor in
-            setupBackgroundSync()
-            
-            // Wait a bit for wallet to initialize
-            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
-            
-            // Try to fetch fresh balance if we have a wallet
-            if BitcoinWalletService.shared.hasWallet() {
-                print("💰 [WalletStateManager] Wallet exists, fetching fresh balance...")
-                await getBalance(forceRefresh: true)
-            } else {
-                print("⚠️ [WalletStateManager] No wallet found, using cached balance only")
-            }
-        }
+        // Setup background sync
+        setupBackgroundSync()
+        
+        // Don't fetch balance in init - let BitcoinView trigger it when ready
+        print("💰 [WalletStateManager] Initialization complete, waiting for wallet initialization...")
     }
     
     private func loadPersistedData() {
@@ -347,8 +337,12 @@ final class WalletStateManager: ObservableObject {
             self.isSyncing = true
         }
         
+        // Store current balance in case fetch fails
+        let previousBalance = balance
+        
         guard let detailedBalance = await walletService.getDetailedBalance() else {
             print("❌ [WalletStateManager] Failed to fetch balance from wallet service")
+            print("💾 [WalletStateManager] Keeping previous balance: \(previousBalance.confirmed) sats")
             DispatchQueue.main.async {
                 self.syncError = "Failed to fetch balance"
                 self.isSyncing = false

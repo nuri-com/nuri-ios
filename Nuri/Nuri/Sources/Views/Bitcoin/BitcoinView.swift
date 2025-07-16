@@ -139,10 +139,27 @@ struct BitcoinView: View {
             print("   📱 Has wallet: \(walletService.hasWallet())")
             print("   💰 Cached balance: \(walletState.balance.confirmed) sats")
             
-            // Initialize wallet if needed
-            if !walletService.hasWallet() {
-                print("🔄 [BitcoinView] No wallet found, initializing...")
-                walletService.initializeWalletOnAppStart()
+            // Always initialize wallet on app start (it will skip if already initialized)
+            walletService.initializeWalletOnAppStart()
+            
+            // Trigger balance refresh after wallet is ready
+            Task {
+                // Wait for wallet to be fully initialized
+                print("⏳ [BitcoinView] Waiting for wallet initialization...")
+                let walletReady = await walletService.waitForWalletInitialization()
+                
+                if walletReady {
+                    print("✅ [BitcoinView] Wallet is ready, refreshing balance...")
+                    await walletState.getBalance(forceRefresh: true)
+                    
+                    // Also refresh transactions
+                    print("🔄 [BitcoinView] Refreshing transactions...")
+                    await walletState.getTransactions(forceRefresh: true)
+                } else {
+                    print("❌ [BitcoinView] Wallet initialization failed or timed out")
+                    // Show cached balance if available
+                    print("💰 [BitcoinView] Using cached balance: \(walletState.balance.confirmed) sats")
+                }
             }
         }
     }
