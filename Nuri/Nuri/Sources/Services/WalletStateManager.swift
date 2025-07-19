@@ -332,6 +332,7 @@ final class WalletStateManager: ObservableObject {
     private func syncBalance() async {
         print("🔄 [WalletStateManager] Starting balance sync...")
         print("🔄 [WalletStateManager] Current balance: \(balance.confirmed) confirmed, \(balance.pending) pending")
+        print("🔄 [WalletStateManager] Pending transactions: \(pendingTransactions.count)")
         
         DispatchQueue.main.async {
             self.isSyncing = true
@@ -355,10 +356,21 @@ final class WalletStateManager: ObservableObject {
         print("📡 [WalletStateManager]   Pending: \(detailedBalance.pending) sats")
         print("📡 [WalletStateManager]   Total: \(detailedBalance.total) sats")
         
+        // Adjust for pending transactions that might not be reflected in network yet
+        var adjustedConfirmed = detailedBalance.confirmed
+        
+        // If we have pending transactions and the network balance is higher than our cached balance,
+        // it likely means the network hasn't seen our transaction yet
+        if !pendingTransactions.isEmpty && detailedBalance.confirmed > balance.confirmed {
+            print("⚠️ [WalletStateManager] Network balance higher than cached balance with pending transactions")
+            print("⚠️ [WalletStateManager] Keeping optimistic balance to prevent balance jump")
+            adjustedConfirmed = balance.confirmed
+        }
+        
         let newBalance = WalletBalance(
-            confirmed: detailedBalance.confirmed,
+            confirmed: adjustedConfirmed,
             pending: detailedBalance.pending,
-            total: detailedBalance.total,
+            total: adjustedConfirmed + detailedBalance.pending,
             lastUpdated: Date()
         )
         
@@ -470,6 +482,20 @@ final class WalletStateManager: ObservableObject {
         cachedTransactions.sort { $0.date > $1.date }
         
         print("📋 [WalletStateManager] ✅ Processed \(cachedTransactions.count) transactions")
+        
+        // Clean up pending transactions that are now confirmed
+        var confirmedTxIds = Set<String>()
+        for tx in cachedTransactions where tx.isConfirmed {
+            confirmedTxIds.insert(tx.txId)
+        }
+        
+        let previousPendingCount = pendingTransactions.count
+        pendingTransactions = pendingTransactions.subtracting(confirmedTxIds)
+        
+        if previousPendingCount != pendingTransactions.count {
+            print("🧹 [WalletStateManager] Cleaned up \(previousPendingCount - pendingTransactions.count) confirmed transactions from pending set")
+            persistPendingTransactions()
+        }
         
         DispatchQueue.main.async {
             self.transactions = cachedTransactions

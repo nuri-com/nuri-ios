@@ -1,0 +1,97 @@
+---
+title: Webhook Endpoints
+source_url: https://docs.striga.com/reference/webhook-endpoints
+scraped_at: 2025-07-18 17:55:36
+---
+
+# Webhook Endpoints
+
+## Ping
+
+A ping request made from the "Test" button on the Striga dashboard. The request body is what you put in. This must be JSON formatted and is sent to `/ping` appended to your Webhook URL configured on the Striga dashboard.
+
+## Transaction Status Updates
+
+Transaction status update webhooks are sent to the path `/tx` appended to your Webhook URL configured on the Striga dashboard. You will receive notifications for all transactions that occur on the platform conducted by your customer. The `type` field of the notification can be used to filter between Intra, Inter and Card Transactions.
+
+## Card Status Updates
+
+Card status update webhooks are sent to the path `/card/watch` appended to your Webhook URL configured on the Striga dashboard. These updates specifically include changes related to card status such as EXPIRED, CLOSED and DISPATCHED.
+
+JSON
+
+```
+'EXPIRED' = 'EXPIRED',
+'CLOSED' = 'CLOSED',
+'DISPATCHED' = 'DISPATCHED'
+```
+
+Mobile wallet provisioning incentive notifications are also sent to the same `/card/watch` webhook endpoint. Currently only Apple Pay Incentive notifications are sent with a type of `SUCCESSFUL_TRANSACTION` and `INCOMPLETE_PROVISIONING` in the payload, along with a `cardId` so that you can fulfill your requirements towards Apple.
+
+## Webhook Transaction Events
+
+Currently webhooks are sent for the following transaction types -
+
+JSON
+
+```
+'INTRA_LEDGER_SEND' = 'INTRA_LEDGER_SEND', // Moving funds between identities of the same type
+'INTRA_LEDGER_SEND_DENIED' = 'INTRA_LEDGER_SEND_DENIED',
+'INTER_LEDGER_SEND' = 'INTER_LEDGER_SEND', // Moving funds between identities of different types
+'INTER_LEDGER_SEND_DENIED' = 'INTER_LEDGER_SEND_DENIED',
+'SEPA_PAYIN_COMPLETED' = 'SEPA_PAYIN_COMPLETED',
+'SEPA_PAYIN_DENIED' = 'SEPA_PAYIN_DENIED',
+'SEPA_PAYOUT_COMPLETED' = 'SEPA_PAYOUT_COMPLETED',
+'SEPA_PAYIN_FAILED' = 'SEPA_PAYIN_FAILED',
+'SEPA_PAYOUT_FAILED' = 'SEPA_PAYOUT_FAILED',
+'SEPA_PAYOUT_DENIED' = 'SEPA_PAYOUT_DENIED',
+'SEPA_PAYIN_REVERTED' = 'SEPA_PAYIN_REVERTED',
+'SEPA_PAYOUT_REVERTED' = 'SEPA_PAYOUT_REVERTED',
+'SEPA_PAYOUT_INITIATED' = 'SEPA_PAYOUT_INITIATED',
+'LN_INCOMING_CONFIRMED' = 'LN_INCOMING_CONFIRMED',
+'LN_INCOMING_PENDING' = 'LN_INCOMING_PENDING', 
+'LN_INCOMING_EXPIRED' = 'LN_INCOMING_EXPIRED',
+'LN_INCOMING_DENIED' = 'LN_INCOMING_DENIED',
+'LN_OUTGOING_INITIATED' = 'LN_OUTGOING_INITIATED',
+'LN_OUTGOING_CONFIRMED' = 'LN_OUTGOING_CONFIRMED',
+'LN_OUTGOING_FAILED' = 'LN_OUTGOING_FAILED',
+'LN_OUTGOING_DENIED' = 'LN_OUTGOING_DENIED',
+'ON_CHAIN_DEPOSIT_PENDING' = 'ON_CHAIN_DEPOSIT_PENDING',
+'ON_CHAIN_DEPOSIT_CONFIRMED' = 'ON_CHAIN_DEPOSIT_CONFIRMED',
+'ON_CHAIN_DEPOSIT_DENIED' = 'ON_CHAIN_DEPOSIT_DENIED',
+'ON_CHAIN_WITHDRAWAL_INITIATED' = 'ON_CHAIN_WITHDRAWAL_INITIATED',
+'ON_CHAIN_WITHDRAWAL_DENIED' = 'ON_CHAIN_WITHDRAWAL_DENIED',
+'ON_CHAIN_WITHDRAWAL_PENDING' = 'ON_CHAIN_WITHDRAWAL_PENDING',
+'ON_CHAIN_WITHDRAWAL_CONFIRMED' = 'ON_CHAIN_WITHDRAWAL_CONFIRMED',
+'ON_CHAIN_WITHDRAWAL_FAILED' = 'ON_CHAIN_WITHDRAWAL_FAILED',
+'CONTRACT_CALL_NETWORK_FEE' = 'CONTRACT_CALL_NETWORK_FEE',
+'CONTRACT_CALL_INITIATED' = 'CONTRACT_CALL_INITIATED',
+'CONTRACT_CALL_PENDING' = 'CONTRACT_CALL_PENDING',
+'CONTRACT_CALL_CONFIRMED' = 'CONTRACT_CALL_CONFIRMED',
+'CONTRACT_CALL_FAILED' = 'CONTRACT_CALL_FAILED,
+'CURRENCY_EXCHANGE' = 'CURRENCY_EXCHANGE',
+'MANUAL_ADJUSTMENT' = 'MANUAL_ADJUSTMENT',
+```
+
+## Card Transaction Events
+
+Currently webhooks are sent for the following types -
+
+JSON
+
+```
+'CARD_AUTHORIZATION_ATM_BALANCE_INQUIRY' = 'CARD_AUTHORIZATION_ATM_BALANCE_INQUIRY',
+'CARD_AUTHORIZATION' = 'CARD_AUTHORIZATION',
+'CARD_AUTHORIZATION_PENDING_SETTLEMENT' = 'CARD_AUTHORIZATION_PENDING_SETTLEMENT',
+'CARD_AUTHORIZATION_SETTLEMENT_CONFIRMED' = 'CARD_AUTHORIZATION_SETTLEMENT_CONFIRMED',
+'CARD_AUTHORIZATION_ATM' = 'CARD_AUTHORIZATION_ATM',
+'CARD_AUTHORIZATION_DECLINED' = 'CARD_AUTHORIZATION_DECLINED',
+'CARD_AUTHORIZATION_REVERSAL' = 'CARD_AUTHORIZATION_REVERSAL',
+'CARD_TRANSACTION_REFUND_PROCESSING' = 'CARD_TRANSACTION_REFUND_PROCESSING',
+'CARD_TRANSACTION_REFUND_PROCESSED' = 'CARD_TRANSACTION_REFUND_PROCESSED',
+'CARD_TRANSACTION_REFUND_FAILED' = 'CARD_TRANSACTION_REFUND_FAILED',
+'CARD_TO_CARD_CREDIT' = 'CARD_TO_CARD_CREDIT',
+'CARD_AUTHORIZATION_RELEASE' = 'CARD_AUTHORIZATION_RELEASE',
+'FX_PADDING' = 'FX_PADDING',
+'OTHER' = 'OTHER',
+```
