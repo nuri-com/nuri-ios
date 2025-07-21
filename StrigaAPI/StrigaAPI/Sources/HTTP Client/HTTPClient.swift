@@ -40,6 +40,7 @@ final class HTTPClient {
     // MARK: - Private
 
     private func data<O: Decodable>(for request: URLRequest) async throws -> O {
+        print("[Striga] \(request.httpMethod!) \(request.url!)")
         let (data, response) = try await urlSession.data(for: request)
         return try parseResponse(for: data, response: response)
     }
@@ -51,7 +52,7 @@ final class HTTPClient {
         switch httpResponse.statusCode {
         case 200..<300:
             return try decoder.decode(O.self, from: data)
-        case 300...:
+        case 400...:
             throw URLError(.init(rawValue: httpResponse.statusCode))
         default:
             throw URLError(.unknown)
