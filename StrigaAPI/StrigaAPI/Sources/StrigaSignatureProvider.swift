@@ -24,7 +24,7 @@ class StrigaSignatureProvider {
         if let body = body {
             data = try JSONEncoder().encode(body)
         } else {
-            data = Data(String("{}").utf8)
+            data = try JSONEncoder().encode(EmptyRequest())
         }
         return try generateHeaders(for: path, method: method, body: data)
     }
@@ -32,23 +32,25 @@ class StrigaSignatureProvider {
     // MARK: - Private
 
     private func generateHeaders(for path: String, method: String, body: Data) throws -> [String: String] {
+        let validPath = makeValidPath(path)
         let timestamp = makeTimestamp()
         let md5Hex = makeMD5Hex(body: body)
-        let signature = makeSignature(timestamp: timestamp, method: method, path: path, md5Hex: md5Hex)
+        let stringToSign = [timestamp, method.uppercased(), validPath, md5Hex].joined()
+        let key = SymmetricKey(data: Data(configuration.secret.utf8))
+        let signature = HMAC<SHA256>.authenticationCode(for: Data(stringToSign.utf8), using: key)
         let hexSignature = signature.map { String(format: "%02hhx", $0) }.joined()
         let authorization = "HMAC \(timestamp):\(hexSignature)"
         return [
-            "authorization": authorization,
+            "Authorization": authorization,
             "api-key": configuration.key,
             "Content-Type": "application/json"
         ]
     }
 
     private func makeTimestamp() -> String {
-        let date = Date().timeIntervalSince1970
-        let seconds = Int(date * 1000)
-        let string = String(seconds)
-        return string
+        let timestamp = Date().timeIntervalSince1970
+        let seconds = Int(timestamp * 1000)
+        return String(seconds)
     }
 
     private func makeMD5Hex(body: Data) -> String {
@@ -57,14 +59,13 @@ class StrigaSignatureProvider {
         return md5Hex
     }
 
-    private func makeSignature(timestamp: String, method: String, path: String, md5Hex: String) -> HMAC<SHA256>.MAC {
-        let secret = Data(configuration.secret.utf8)
-        let key = SymmetricKey(data: secret)
-        var hmac = HMAC<SHA256>.init(key: key)
-        hmac.update(data: Data(timestamp.utf8))
-        hmac.update(data: Data(method.uppercased().utf8))
-        hmac.update(data: Data(path.utf8))
-        hmac.update(data: Data(md5Hex.utf8))
-        return hmac.finalize()
+    private func makeValidPath(_ path: String) -> String {
+        let pattern = #"^/api/v[0-9]+"#
+        if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
+            let range = NSRange(location: 0, length: path.utf16.count)
+            let modifiedPath = regex.stringByReplacingMatches(in: path, options: [], range: range, withTemplate: "")
+            return modifiedPath.isEmpty ? "/" : modifiedPath
+        }
+        return path
     }
 }

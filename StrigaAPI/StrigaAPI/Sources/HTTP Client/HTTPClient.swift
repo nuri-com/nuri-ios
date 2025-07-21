@@ -51,7 +51,7 @@ final class HTTPClient {
         switch httpResponse.statusCode {
         case 200..<300:
             return try decoder.decode(O.self, from: data)
-        case 300...:
+        case 400...:
             throw URLError(.init(rawValue: httpResponse.statusCode))
         default:
             throw URLError(.unknown)

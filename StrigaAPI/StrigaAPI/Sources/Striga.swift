@@ -26,6 +26,30 @@ public final class StrigaService {
     }
 
     @discardableResult
+    public func verifyMobile(_ input: VerifyMobile) async throws -> EmptyResponse {
+        let url = try url(for: "v1/user/verify-mobile")
+        return try await httpClient.post(url: url, input: input)
+    }
+
+    @discardableResult
+    public func verifyEmail(_ input: VerifyEmail) async throws -> EmptyResponse {
+        let url = try url(for: "v1/user/verify-email")
+        return try await httpClient.post(url: url, input: input)
+    }
+
+    @discardableResult
+    public func resendSMS(_ input: ResendSMS) async throws -> EmptyResponse {
+        let url = try url(for: "v1/user/resend-sms")
+        return try await httpClient.post(url: url, input: input)
+    }
+
+    @discardableResult
+    public func startKYC(_ input: StartKYC) async throws -> StartKYCResponse {
+        let url = try url(for: "v0/user/kyc/start")
+        return try await httpClient.post(url: url, input: input)
+    }
+
+    @discardableResult
     public func createCard(_ input: CreateCard) async throws -> CreateCardResponse {
         let url = try url(for: "v1/card/create")
         return try await httpClient.post(url: url, input: input)
@@ -35,6 +59,12 @@ public final class StrigaService {
     public func card(_ id: String) async throws -> CardResponse {
         let url = try url(for: "v1/card/\(id)")
         return try await httpClient.get(url: url)
+    }
+
+    @discardableResult
+    public func createWallet(_ input: CreateWallet) async throws -> CreateWalletResponse {
+        let url = try url(for: "v1/wallets/create")
+        return try await httpClient.post(url: url, input: input)
     }
 
     @discardableResult
