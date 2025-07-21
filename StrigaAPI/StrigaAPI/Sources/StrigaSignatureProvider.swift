@@ -33,7 +33,6 @@ class StrigaSignatureProvider {
 
     private func generateHeaders(for path: String, method: String, body: Data) throws -> [String: String] {
         let validPath = makeValidPath(path)
-        print("[Striga] \(validPath)")
         let timestamp = makeTimestamp()
         let md5Hex = makeMD5Hex(body: body)
         let stringToSign = [timestamp, method.uppercased(), validPath, md5Hex].joined()

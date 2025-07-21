@@ -40,7 +40,6 @@ final class HTTPClient {
     // MARK: - Private
 
     private func data<O: Decodable>(for request: URLRequest) async throws -> O {
-        print("[Striga] \(request.httpMethod!) \(request.url!)")
         let (data, response) = try await urlSession.data(for: request)
         return try parseResponse(for: data, response: response)
     }
