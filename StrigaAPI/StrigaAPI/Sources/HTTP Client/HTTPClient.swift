@@ -58,9 +58,9 @@ final class HTTPClient {
                 throw error
             } else {
                 if let string = String(data: data, encoding: .utf8) {
-                    print("[Striga] \(string)")
+                    print("[Lukas] \(string)")
                 } else {
-                    print("[Striga] Unknown error")
+                    print("[Lukas] Unknown error")
                 }
                 throw URLError(.init(rawValue: httpResponse.statusCode))
             }

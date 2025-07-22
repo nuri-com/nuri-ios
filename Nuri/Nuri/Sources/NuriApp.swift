@@ -21,15 +21,6 @@ struct NuriApp: App {
             key: "_TbS1cXGStMmYBJtcoYSA7we2lQUky_6TMo-aGLvWJM=",
             secret: "43jBa65VEoLC5O4O48pDruayz5Q43IlhgyGbkYPcMHE="
         )
-        Task {
-            print("[Striga] Get card")
-            do {
-                let response = try await StrigaService.shared.card("ABC")
-                print("[Striga] Response: \(response)")
-            } catch {
-                print("[Striga] Error: \(error)")
-            }
-        }
     }
 
     var body: some Scene {

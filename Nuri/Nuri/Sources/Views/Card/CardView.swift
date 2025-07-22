@@ -40,9 +40,7 @@ struct CardView: View {
                     NuriButton(icon: "card_contactless", title: "Get Card", style: .primary)
                 }
                 .sheet(isPresented: $showPhoneNumberVerification) {
-                    NavigationStack {
-                        PhoneNumberView()
-                    }
+                    CreateCardView()
                 }
             }
             .padding(.top, 30)

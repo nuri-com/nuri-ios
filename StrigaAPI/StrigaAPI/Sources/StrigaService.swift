@@ -112,10 +112,10 @@ extension StrigaService: HTTPClientDelegate {
             }
             let signatureProvider = SignatureProvider(configuration: configuration)
             let headers = try signatureProvider.headers(for: request, body: body)
-            print("[Striga] headers: \(headers)")
+            print("[Lukas] headers: \(headers)")
             return headers
         } catch {
-            print("[Striga] Signature: Error generating headers: \(error)")
+            print("[Lukas] Signature: Error generating headers: \(error)")
             return [:]
         }
     }

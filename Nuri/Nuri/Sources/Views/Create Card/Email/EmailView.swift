@@ -2,11 +2,7 @@ import SwiftUI
 
 struct EmailView: View {
 
-    @ObservedObject var viewModel = EmailViewModel()
-
-    init(completion: (() -> Void)? = nil) {
-        viewModel.completion = completion
-    }
+    @ObservedObject var viewModel: EmailViewModel
 
     var body: some View {
         contentView(viewState: viewModel.viewState)
@@ -22,7 +18,6 @@ struct EmailView: View {
                 .font(.brandBody)
                 .foregroundStyle(Color.secondary)
             HStack(spacing: 8) {
-                Text(viewState.emailTextField.placeholder)
                 TextField(viewState.emailTextField.placeholder, text: $viewModel.viewState.emailTextField.text)
                     .keyboardType(.emailAddress)
                     .textContentType(.emailAddress)
@@ -42,10 +37,8 @@ struct EmailView: View {
         .padding(32)
         .frame(maxHeight: .infinity)
         .background(NuriAsset.background.swiftUIColor)
-//        .navigationDestination(isPresented: $viewModel.viewState.showVerifyScreen) {
-//            VerifyCallView() {
-//
-//            }
-//        }
+        .onAppear {
+
+        }
     }
 }
