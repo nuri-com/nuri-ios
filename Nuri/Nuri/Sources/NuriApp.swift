@@ -1,4 +1,5 @@
 import SwiftUI
+import StrigaAPI
 
 @main
 struct NuriApp: App {
@@ -11,13 +12,24 @@ struct NuriApp: App {
         print("🔑 [NuriApp] App started")
         // BitcoinWalletService will be initialized when Bitcoin tab is accessed
         
-        // Force logout for testing - uncomment this line to reset login state
-        // UserDefaults.standard.set(false, forKey: "isUserLoggedIn")
-        // print("🔓 [NuriApp] Login state reset to: \(UserDefaults.standard.bool(forKey: "isUserLoggedIn"))")
-        
-        // Don't clear cache on app start - let the wallet service handle it
-        // This prevents losing cached balance data
-        print("💾 [NuriApp] Preserving cached wallet data on app start")
+        // Simple check - don't trust stored tokens, always start with welcome screen
+        // Let Privy and the welcome screen handle authentication state properly
+        print("🔑 [NuriApp] App started - user will authenticate via welcome screen")
+        isUserLoggedIn = true
+        StrigaService.shared.configuration = .init(
+            url: "https://www.sandbox.striga.com/api/",
+            key: "_TbS1cXGStMmYBJtcoYSA7we2lQUky_6TMo-aGLvWJM=",
+            secret: "43jBa65VEoLC5O4O48pDruayz5Q43IlhgyGbkYPcMHE="
+        )
+        Task {
+            print("[Striga] Get card")
+            do {
+                let response = try await StrigaService.shared.card("ABC")
+                print("[Striga] Response: \(response)")
+            } catch {
+                print("[Striga] Error: \(error)")
+            }
+        }
     }
 
     var body: some Scene {
