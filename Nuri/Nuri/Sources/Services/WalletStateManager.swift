@@ -292,20 +292,26 @@ final class WalletStateManager: ObservableObject {
         // Immediately update balance (optimistic update)
         let totalDeducted = amount + fee
         let previousConfirmed = balance.confirmed
-        balance.confirmed = balance.confirmed >= totalDeducted ? balance.confirmed - totalDeducted : 0
-        balance.total = balance.confirmed + balance.pending
-        balance.lastUpdated = Date()
+        
+        // Only do optimistic update if we have sufficient funds
+        if balance.confirmed >= totalDeducted {
+            balance.confirmed = balance.confirmed - totalDeducted
+            balance.total = balance.confirmed + balance.pending
+            balance.lastUpdated = Date()
+            
+            print("💰 [WalletStateManager] Balance updated optimistically:")
+            print("💰 [WalletStateManager]   Previous confirmed: \(previousConfirmed) sats")
+            print("💰 [WalletStateManager]   New confirmed: \(balance.confirmed) sats")
+            print("💰 [WalletStateManager]   Amount deducted: \(totalDeducted) sats")
+            
+            // Persist the optimistic update
+            persistBalance(balance)
+        } else {
+            print("⚠️ [WalletStateManager] Insufficient funds for optimistic update")
+        }
         
         // Add to pending transactions
         pendingTransactions.insert(txId)
-        
-        print("💰 [WalletStateManager] Balance updated optimistically:")
-        print("💰 [WalletStateManager]   Previous confirmed: \(previousConfirmed) sats")
-        print("💰 [WalletStateManager]   New confirmed: \(balance.confirmed) sats")
-        print("💰 [WalletStateManager]   Amount deducted: \(totalDeducted) sats")
-        
-        // Persist the optimistic update
-        persistBalance(balance)
         persistPendingTransactions()
         
         // Schedule a sync to get actual network state
@@ -332,6 +338,7 @@ final class WalletStateManager: ObservableObject {
     private func syncBalance() async {
         print("🔄 [WalletStateManager] Starting balance sync...")
         print("🔄 [WalletStateManager] Current balance: \(balance.confirmed) confirmed, \(balance.pending) pending")
+        print("🔄 [WalletStateManager] Pending transactions: \(pendingTransactions.count)")
         
         DispatchQueue.main.async {
             self.isSyncing = true
@@ -355,10 +362,31 @@ final class WalletStateManager: ObservableObject {
         print("📡 [WalletStateManager]   Pending: \(detailedBalance.pending) sats")
         print("📡 [WalletStateManager]   Total: \(detailedBalance.total) sats")
         
+        // Adjust for pending transactions that might not be reflected in network yet
+        var adjustedConfirmed = detailedBalance.confirmed
+        
+        // If we have pending transactions and the network balance is significantly different from our cached balance,
+        // it might mean the network hasn't seen our transaction yet or there was an error in our optimistic update
+        if !pendingTransactions.isEmpty && abs(Int64(detailedBalance.confirmed) - Int64(balance.confirmed)) > 1000000 {
+            print("⚠️ [WalletStateManager] Large balance difference detected with pending transactions")
+            print("⚠️ [WalletStateManager] Network: \(detailedBalance.confirmed), Cached: \(balance.confirmed)")
+            
+            // If network balance is much higher, it likely hasn't seen our transaction yet
+            if detailedBalance.confirmed > balance.confirmed && detailedBalance.confirmed > 1000000 {
+                print("⚠️ [WalletStateManager] Network balance higher - keeping optimistic balance temporarily")
+                adjustedConfirmed = balance.confirmed
+            }
+            // If network balance is much lower, there might be an issue with our optimistic update
+            else if detailedBalance.confirmed < balance.confirmed && detailedBalance.confirmed == 0 {
+                print("⚠️ [WalletStateManager] Network balance is zero - this might be a sync issue, keeping cached balance")
+                adjustedConfirmed = balance.confirmed
+            }
+        }
+        
         let newBalance = WalletBalance(
-            confirmed: detailedBalance.confirmed,
+            confirmed: adjustedConfirmed,
             pending: detailedBalance.pending,
-            total: detailedBalance.total,
+            total: adjustedConfirmed + detailedBalance.pending,
             lastUpdated: Date()
         )
         
@@ -470,6 +498,27 @@ final class WalletStateManager: ObservableObject {
         cachedTransactions.sort { $0.date > $1.date }
         
         print("📋 [WalletStateManager] ✅ Processed \(cachedTransactions.count) transactions")
+        
+        // Clean up pending transactions that are now confirmed
+        var confirmedTxIds = Set<String>()
+        for tx in cachedTransactions where tx.isConfirmed {
+            confirmedTxIds.insert(tx.txId)
+        }
+        
+        let previousPendingCount = pendingTransactions.count
+        pendingTransactions = pendingTransactions.subtracting(confirmedTxIds)
+        
+        if previousPendingCount != pendingTransactions.count {
+            print("🧹 [WalletStateManager] Cleaned up \(previousPendingCount - pendingTransactions.count) confirmed transactions from pending set")
+            persistPendingTransactions()
+            
+            // When pending transactions are confirmed, we should refresh the balance from the network
+            // to ensure we have the correct confirmed balance
+            Task {
+                print("🔄 [WalletStateManager] Refreshing balance after pending transactions confirmed...")
+                await syncBalance()
+            }
+        }
         
         DispatchQueue.main.async {
             self.transactions = cachedTransactions
