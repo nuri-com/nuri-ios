@@ -38,6 +38,15 @@ let project = Project(
                         "CFBundleTypeRole": "Viewer",
                         "CFBundleURLSchemes": .array(["nuriwallet"])
                     ])
+                ]),
+                "NSAppTransportSecurity": .dictionary([
+                    "NSAllowsArbitraryLoads": .boolean(false),
+                    "NSAllowsLocalNetworking": .boolean(true),
+                    "NSExceptionDomains": .dictionary([
+                        "localhost": .dictionary([
+                            "NSExceptionAllowsInsecureHTTPLoads": .boolean(true)
+                        ])
+                    ])
                 ])
             ]),
             sources: ["Nuri/Sources/**"],
@@ -47,7 +56,8 @@ let project = Project(
                     "TAG"
                 ]),
                 "com.apple.developer.associated-domains": .array([
-                    "webcredentials:nuri.com"
+                    "webcredentials:nuri.com",
+                    "webcredentials:localhost"
                 ]),
                 "application-identifier": "MH2SRQ3N27.com.nuri.mobile-ios",
                 "keychain-access-groups": .array([
