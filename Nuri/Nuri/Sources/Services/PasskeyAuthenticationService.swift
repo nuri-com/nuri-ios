@@ -94,6 +94,7 @@ final class PasskeyAuthenticationService: NSObject {
         let verified: Bool
         let username: String?
         let isAnonymous: Bool
+        let encryptionKey: String? // Base-64 encoded 32-byte AES key
     }
     
     struct RegistrationOptionsResponse: Codable {
@@ -147,6 +148,7 @@ final class PasskeyAuthenticationService: NSObject {
         let verified: Bool
         let username: String?
         let isAnonymous: Bool
+        let encryptionKey: String? // Base-64 encoded 32-byte AES key (only on first registration)
     }
     
     // MARK: - Main Authentication Flow
@@ -382,6 +384,16 @@ final class PasskeyAuthenticationService: NSObject {
         
         do {
             let verificationResponse = try JSONDecoder().decode(AuthenticationVerificationResponse.self, from: data)
+
+            // Configure encryption service if server supplied a key
+            if let keyBase64 = verificationResponse.encryptionKey {
+                do {
+                    try SimpleEncryptionService.shared.configure(withBase64Key: keyBase64)
+                } catch {
+                    Log.passkey.error("Failed to configure encryption key", error: error)
+                }
+            }
+
             Log.passkey.success("Verification successful", metadata: [
                 "verified": verificationResponse.verified,
                 "username": verificationResponse.username ?? "anonymous",
@@ -456,6 +468,13 @@ final class PasskeyAuthenticationService: NSObject {
         }
         
         let verificationResponse = try JSONDecoder().decode(RegistrationVerificationResponse.self, from: data)
+        if let keyBase64 = verificationResponse.encryptionKey {
+            do {
+                try SimpleEncryptionService.shared.configure(withBase64Key: keyBase64)
+            } catch {
+                Log.passkey.error("Failed to configure encryption key", error: error)
+            }
+        }
         return (verificationResponse.verified, verificationResponse.username)
     }
     
