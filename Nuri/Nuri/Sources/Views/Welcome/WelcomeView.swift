@@ -76,10 +76,12 @@ struct WelcomeView: View {
         
         do {
             guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                  let window = windowScene.windows.first else {
+                  let window = windowScene.windows.first(where: { $0.isKeyWindow }) else {
+                print("❌ [WelcomeView] Could not find key window")
                 throw PasskeyError.invalidURL
             }
             
+            print("🪟 [WelcomeView] Found window for passkey presentation")
             let result = try await PasskeyAuthenticationService.shared.authenticateWithPasskey(presentationAnchor: window)
             
             if result.verified {
@@ -129,7 +131,8 @@ struct WelcomeView: View {
         
         do {
             guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                  let window = windowScene.windows.first else {
+                  let window = windowScene.windows.first(where: { $0.isKeyWindow }) else {
+                print("❌ [WelcomeView] Could not find key window for passkey creation")
                 throw PasskeyError.invalidURL
             }
             

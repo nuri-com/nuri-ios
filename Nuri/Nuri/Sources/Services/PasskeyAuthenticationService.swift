@@ -131,6 +131,10 @@ final class PasskeyAuthenticationService: NSObject {
     func authenticateWithPasskey(presentationAnchor: ASPresentationAnchor) async throws -> (verified: Bool, username: String?, isAnonymous: Bool) {
         print("\n🔐 [PasskeyAuthenticationService] Starting passkey authentication flow...")
         
+        // Store the presentation anchor
+        self.currentPresentationAnchor = presentationAnchor
+        defer { self.currentPresentationAnchor = nil }
+        
         // Step 1: Get authentication options
         print("📡 [PasskeyAuthenticationService] Step 1: Fetching authentication options...")
         let authOptions = try await fetchAuthenticationOptions()
@@ -187,6 +191,10 @@ final class PasskeyAuthenticationService: NSObject {
     }
     
     func createPasskey(username: String? = nil, presentationAnchor: ASPresentationAnchor) async throws -> (verified: Bool, username: String?) {
+        // Store the presentation anchor
+        self.currentPresentationAnchor = presentationAnchor
+        defer { self.currentPresentationAnchor = nil }
+        
         // Step 1: Get registration options
         let regOptions = try await fetchRegistrationOptions(username: username)
         
@@ -371,6 +379,7 @@ final class PasskeyAuthenticationService: NSObject {
     }
     
     private var authorizationContinuation: CheckedContinuation<ASAuthorization, Error>?
+    private var currentPresentationAnchor: ASPresentationAnchor?
 }
 
 // MARK: - ASAuthorizationControllerDelegate
@@ -400,17 +409,29 @@ extension PasskeyAuthenticationService: ASAuthorizationControllerDelegate {
 // MARK: - ASAuthorizationControllerPresentationContextProviding
 
 extension PasskeyAuthenticationService: ASAuthorizationControllerPresentationContextProviding {
-    private var currentPresentationAnchor: ASPresentationAnchor? {
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-            return windowScene.windows.first { $0.isKeyWindow }
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        // Use the stored presentation anchor if available
+        if let anchor = currentPresentationAnchor {
+            print("✅ [PasskeyAuthenticationService] Using provided presentation anchor")
+            return anchor
         }
-        return nil
-    }
-    
-    nonisolated func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
-        return DispatchQueue.main.sync {
-            currentPresentationAnchor ?? ASPresentationAnchor()
+        
+        // Fallback to finding the key window
+        print("⚠️ [PasskeyAuthenticationService] No presentation anchor provided, finding key window")
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first(where: { $0.isKeyWindow }) else {
+            print("❌ [PasskeyAuthenticationService] No key window found!")
+            // Return first available window as fallback
+            if let anyWindow = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .flatMap({ $0.windows })
+                .first {
+                return anyWindow
+            }
+            fatalError("No window available for passkey presentation")
         }
+        print("✅ [PasskeyAuthenticationService] Using key window for passkey presentation")
+        return window
     }
 }
 
