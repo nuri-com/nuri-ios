@@ -80,14 +80,6 @@ struct WelcomeView: View {
                 throw PasskeyError.invalidURL
             }
             
-            // TEMPORARY: Mock authentication for testing
-            // TODO: Remove this and use real passkey auth with ngrok
-            if ProcessInfo.processInfo.environment["MOCK_PASSKEY"] == "1" {
-                print("⚠️ [WelcomeView] MOCK MODE: Simulating successful authentication")
-                self.isUserLoggedIn = true
-                return
-            }
-            
             let result = try await PasskeyAuthenticationService.shared.authenticateWithPasskey(presentationAnchor: window)
             
             if result.verified {

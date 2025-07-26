@@ -11,10 +11,9 @@ struct NuriApp: App {
         print("🔑 [NuriApp] App started")
         // BitcoinWalletService will be initialized when Bitcoin tab is accessed
         
-        // Force logout for testing - ALWAYS RESET LOGIN STATE FOR PASSKEY TESTING
-        UserDefaults.standard.set(false, forKey: "isUserLoggedIn")
-        print("🔓 [NuriApp] Login state reset to: \(UserDefaults.standard.bool(forKey: "isUserLoggedIn"))")
-        print("📱 [NuriApp] Forcing welcome screen for passkey testing")
+        // Uncomment to force logout for testing
+        // UserDefaults.standard.set(false, forKey: "isUserLoggedIn")
+        // print("🔓 [NuriApp] Login state reset to: \(UserDefaults.standard.bool(forKey: "isUserLoggedIn"))")
         
         // Don't clear cache on app start - let the wallet service handle it
         // This prevents losing cached balance data

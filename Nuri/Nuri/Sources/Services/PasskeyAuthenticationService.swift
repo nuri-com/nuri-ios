@@ -34,10 +34,10 @@ final class PasskeyAuthenticationService: NSObject {
         return "http://localhost:3000"
         #else
         // Production passkey server
-        return "https://YOUR-DOMAIN.duckdns.org" // TODO: Replace with your actual domain
+        return "https://passkey.nuri.com"
         #endif
     }
-    private let relyingPartyIdentifier = "localhost"
+    private let relyingPartyIdentifier = "nuri.com" // Using parent domain for passkeys
     
     private override init() {
         super.init()
@@ -284,9 +284,6 @@ final class PasskeyAuthenticationService: NSObject {
         request.httpBody = try JSONEncoder().encode(verificationRequest)
         
         print("📤 [PasskeyAuthenticationService] Sending verification request...")
-        if let jsonString = String(data: request.httpBody!, encoding: .utf8) {
-            print("📝 [PasskeyAuthenticationService] Request body: \(jsonString)")
-        }
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
@@ -350,9 +347,6 @@ final class PasskeyAuthenticationService: NSObject {
         request.httpBody = try JSONEncoder().encode(verificationRequest)
         
         print("📤 [PasskeyAuthenticationService] Sending verification request...")
-        if let jsonString = String(data: request.httpBody!, encoding: .utf8) {
-            print("📝 [PasskeyAuthenticationService] Request body: \(jsonString)")
-        }
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
