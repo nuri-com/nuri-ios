@@ -41,9 +41,10 @@ final class PasskeyAuthenticationService: NSObject {
     
     private override init() {
         super.init()
-        print("🔐 [PasskeyAuthenticationService] Service initialized")
-        print("🌐 [PasskeyAuthenticationService] Base URL: \(baseURL)")
-        print("🆔 [PasskeyAuthenticationService] Relying Party ID: \(relyingPartyIdentifier)")
+        Log.passkey.info("Service initialized", metadata: [
+            "baseURL": baseURL,
+            "relyingPartyId": relyingPartyIdentifier
+        ])
     }
     
     // MARK: - Authentication Models
@@ -55,11 +56,33 @@ final class PasskeyAuthenticationService: NSObject {
         let userVerification: String
     }
     
+    // Structure that matches SimpleWebAuthn expectations
     struct AuthenticationVerificationRequest: Codable {
         let cred: CredentialData
         
         struct CredentialData: Codable {
-            let credentialId: String
+            let id: String
+            let rawId: String
+            let type: String = "public-key"
+            let response: ResponseData // SimpleWebAuthn expects auth data nested under 'response'
+            
+            struct ResponseData: Codable {
+                let authenticatorData: String
+                let clientDataJSON: String
+                let signature: String
+                let userHandle: String?
+            }
+        }
+    }
+    
+    // Alternative: Standard SimpleWebAuthn structure (no cred wrapper)
+    struct SimpleWebAuthnVerificationRequest: Codable {
+        let id: String
+        let rawId: String
+        let type: String
+        let response: ResponseData
+        
+        struct ResponseData: Codable {
             let authenticatorData: String
             let clientDataJSON: String
             let signature: String
@@ -129,32 +152,37 @@ final class PasskeyAuthenticationService: NSObject {
     // MARK: - Main Authentication Flow
     
     func authenticateWithPasskey(presentationAnchor: ASPresentationAnchor) async throws -> (verified: Bool, username: String?, isAnonymous: Bool) {
-        print("\n🔐 [PasskeyAuthenticationService] Starting passkey authentication flow...")
+        Log.passkey.info("Starting passkey authentication flow")
         
         // Store the presentation anchor
         self.currentPresentationAnchor = presentationAnchor
         defer { self.currentPresentationAnchor = nil }
         
         // Step 1: Get authentication options
-        print("📡 [PasskeyAuthenticationService] Step 1: Fetching authentication options...")
+        Log.passkey.info("Step 1: Fetching authentication options")
         let authOptions = try await fetchAuthenticationOptions()
-        print("✅ [PasskeyAuthenticationService] Received auth options: challenge length = \(authOptions.challenge.count)")
+        Log.passkey.success("Received auth options", metadata: [
+            "challengeLength": authOptions.challenge.count,
+            "rpId": authOptions.rpId
+        ])
         
         // Step 2: Create credential assertion request
-        print("🔨 [PasskeyAuthenticationService] Step 2: Creating credential assertion request...")
+        Log.passkey.info("Step 2: Creating credential assertion request")
         let challenge = Data(base64URLEncoded: authOptions.challenge) ?? Data()
-        print("📏 [PasskeyAuthenticationService] Challenge data size: \(challenge.count) bytes")
         
         // Use the rpId from the server response
         let rpId = authOptions.rpId
-        print("🔐 [PasskeyAuthenticationService] Using server's rpId: \(rpId)")
         
         let platformProvider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: rpId)
         let assertionRequest = platformProvider.createCredentialAssertionRequest(challenge: challenge)
-        print("✅ [PasskeyAuthenticationService] Assertion request created")
+        
+        Log.passkey.success("Assertion request created", metadata: [
+            "challengeSize": challenge.count,
+            "rpId": rpId
+        ])
         
         // Step 3: Perform authorization
-        print("🎯 [PasskeyAuthenticationService] Step 3: Presenting passkey UI...")
+        Log.passkey.info("Step 3: Presenting passkey UI")
         let authController = ASAuthorizationController(authorizationRequests: [assertionRequest])
         authController.delegate = self
         authController.presentationContextProvider = self
@@ -162,30 +190,35 @@ final class PasskeyAuthenticationService: NSObject {
         do {
             let authorization = try await performAuthorization(controller: authController)
             
-            print("🎉 [PasskeyAuthenticationService] User selected a credential")
             if let credential = authorization.credential as? ASAuthorizationPlatformPublicKeyCredentialAssertion {
-                print("📝 [PasskeyAuthenticationService] Credential ID: \(credential.credentialID.base64URLEncodedString())")
-                print("👤 [PasskeyAuthenticationService] User handle: \(credential.userID.base64URLEncodedString())")
-                print("🔑 [PasskeyAuthenticationService] Raw authenticator data size: \(credential.rawAuthenticatorData.count)")
-                print("📄 [PasskeyAuthenticationService] Raw client data JSON size: \(credential.rawClientDataJSON.count)")
-                print("✍️ [PasskeyAuthenticationService] Signature size: \(credential.signature.count)")
+                Log.passkey.success("User selected credential", metadata: [
+                    "credentialId": credential.credentialID.base64URLEncodedString(),
+                    "userHandle": credential.userID.base64URLEncodedString(),
+                    "authenticatorDataSize": credential.rawAuthenticatorData.count,
+                    "clientDataJSONSize": credential.rawClientDataJSON.count,
+                    "signatureSize": credential.signature.count
+                ])
                 
                 // Step 4: Verify with server
-                print("📡 [PasskeyAuthenticationService] Step 4: Verifying with server...")
+                Log.passkey.info("Step 4: Verifying with server")
                 return try await verifyAuthentication(credential: credential)
             } else {
-                print("❌ [PasskeyAuthenticationService] Invalid credential type received")
+                Log.passkey.error("Invalid credential type received")
                 throw PasskeyError.invalidCredentialType
             }
         } catch {
-            print("❌ [PasskeyAuthenticationService] Authorization failed: \(error)")
+            Log.passkey.error("Authorization failed", error: error)
+            
             // Check if error is "no credentials found"
             if let authError = error as? ASAuthorizationError {
-                print("🔍 [PasskeyAuthenticationService] ASAuthorizationError code: \(authError.code.rawValue)")
+                Log.passkey.debug("ASAuthorizationError", metadata: [
+                    "code": authError.code.rawValue
+                ])
+                
                 if authError.code == .canceled {
-                    print("🚫 [PasskeyAuthenticationService] User canceled the operation")
+                    Log.passkey.info("User canceled the operation")
                 } else if authError.code == .unknown {
-                    print("❓ [PasskeyAuthenticationService] Unknown error - likely no passkeys")
+                    Log.passkey.warning("Unknown error - likely no passkeys")
                     throw PasskeyError.noPasskeysFound
                 }
             }
@@ -207,7 +240,7 @@ final class PasskeyAuthenticationService: NSObject {
         
         // Use the rpId from the server response
         let rpId = regOptions.rp.id
-        print("🔐 [PasskeyAuthenticationService] Using server's rpId for registration: \(rpId)")
+        Log.passkey.info("Using server's rpId for registration", metadata: ["rpId": rpId])
         
         let platformProvider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: rpId)
         let registrationRequest = platformProvider.createCredentialRegistrationRequest(
@@ -235,10 +268,9 @@ final class PasskeyAuthenticationService: NSObject {
     
     private func fetchAuthenticationOptions() async throws -> AuthenticationOptionsResponse {
         let endpoint = "\(baseURL)/generate-authentication-options"
-        print("📡 [PasskeyAuthenticationService] Calling: GET \(endpoint)")
         
         guard let url = URL(string: endpoint) else {
-            print("❌ [PasskeyAuthenticationService] Invalid URL: \(endpoint)")
+            Log.network.error("Invalid URL", metadata: ["endpoint": endpoint])
             throw PasskeyError.invalidURL
         }
         
@@ -246,82 +278,121 @@ final class PasskeyAuthenticationService: NSObject {
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        print("🚀 [PasskeyAuthenticationService] Sending request...")
+        Log.network.info("Sending auth options request", metadata: ["url": endpoint])
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
-            print("❌ [PasskeyAuthenticationService] Invalid response type")
+            Log.network.error("Invalid response type")
             throw PasskeyError.serverError
         }
         
-        print("📦 [PasskeyAuthenticationService] Response status: \(httpResponse.statusCode)")
+        Log.network.info("Response received", metadata: [
+            "status": httpResponse.statusCode,
+            "contentLength": data.count
+        ])
         
         if !(200...299).contains(httpResponse.statusCode) {
-            print("❌ [PasskeyAuthenticationService] Server error: \(httpResponse.statusCode)")
-            if let errorString = String(data: data, encoding: .utf8) {
-                print("📄 [PasskeyAuthenticationService] Error body: \(errorString)")
-            }
+            let errorString = String(data: data, encoding: .utf8) ?? "Unknown error"
+            Log.network.error("Server error", metadata: [
+                "status": httpResponse.statusCode,
+                "body": errorString
+            ])
             throw PasskeyError.serverError
         }
         
-        print("✅ [PasskeyAuthenticationService] Successfully received auth options")
         let authOptions = try JSONDecoder().decode(AuthenticationOptionsResponse.self, from: data)
-        print("📋 [PasskeyAuthenticationService] Server rpId: \(authOptions.rpId)")
+        Log.network.success("Auth options received", metadata: [
+            "rpId": authOptions.rpId,
+            "userVerification": authOptions.userVerification
+        ])
         return authOptions
     }
     
     private func verifyAuthentication(credential: ASAuthorizationPlatformPublicKeyCredentialAssertion) async throws -> (verified: Bool, username: String?, isAnonymous: Bool) {
         let endpoint = "\(baseURL)/verify-authentication"
-        print("📡 [PasskeyAuthenticationService] Calling: POST \(endpoint)")
         
         guard let url = URL(string: endpoint) else {
-            print("❌ [PasskeyAuthenticationService] Invalid URL: \(endpoint)")
+            Log.network.error("Invalid URL", metadata: ["endpoint": endpoint])
             throw PasskeyError.invalidURL
         }
         
+        let credentialIdBase64 = credential.credentialID.base64URLEncodedString()
+        
         let verificationRequest = AuthenticationVerificationRequest(
             cred: AuthenticationVerificationRequest.CredentialData(
-                credentialId: credential.credentialID.base64URLEncodedString(),
-                authenticatorData: credential.rawAuthenticatorData.base64URLEncodedString(),
-                clientDataJSON: credential.rawClientDataJSON.base64URLEncodedString(),
-                signature: credential.signature.base64URLEncodedString(),
-                userHandle: credential.userID.base64URLEncodedString() // Always send userHandle, even if empty
+                id: credentialIdBase64,
+                rawId: credentialIdBase64,
+                response: AuthenticationVerificationRequest.CredentialData.ResponseData(
+                    authenticatorData: credential.rawAuthenticatorData.base64URLEncodedString(),
+                    clientDataJSON: credential.rawClientDataJSON.base64URLEncodedString(),
+                    signature: credential.signature.base64URLEncodedString(),
+                    userHandle: credential.userID.base64URLEncodedString()
+                )
             )
         )
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(verificationRequest)
         
-        print("📤 [PasskeyAuthenticationService] Sending verification request...")
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .prettyPrinted
+        request.httpBody = try encoder.encode(verificationRequest)
         
+        // Debug logging
+        Log.passkey.debug("Verification request", metadata: [
+            "credentialId": credentialIdBase64,
+            "credentialIdLength": credential.credentialID.count,
+            "userHandle": credential.userID.base64URLEncodedString(),
+            "authenticatorDataSize": credential.rawAuthenticatorData.count,
+            "signatureSize": credential.signature.count
+        ])
+        
+        #if DEBUG
+        if let jsonString = String(data: request.httpBody!, encoding: .utf8) {
+            Log.passkey.debug("Request JSON", metadata: ["body": jsonString])
+        }
+        #endif
+        
+        // Debug: Decode clientDataJSON
+        if let clientDataJSON = try? JSONSerialization.jsonObject(with: credential.rawClientDataJSON, options: []) as? [String: Any] {
+            Log.passkey.debug("Client data JSON decoded", metadata: clientDataJSON)
+        }
+        
+        Log.network.info("Sending verification request")
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
-            print("❌ [PasskeyAuthenticationService] Invalid response type")
+            Log.network.error("Invalid response type")
             throw PasskeyError.serverError
         }
         
-        print("📦 [PasskeyAuthenticationService] Verification response status: \(httpResponse.statusCode)")
+        Log.network.info("Verification response", metadata: [
+            "status": httpResponse.statusCode
+        ])
         
         if !(200...299).contains(httpResponse.statusCode) {
-            print("❌ [PasskeyAuthenticationService] Server error: \(httpResponse.statusCode)")
-            if let errorString = String(data: data, encoding: .utf8) {
-                print("📄 [PasskeyAuthenticationService] Error response: \(errorString)")
-            }
+            let errorString = String(data: data, encoding: .utf8) ?? "Unknown error"
+            Log.network.error("Server verification error", metadata: [
+                "status": httpResponse.statusCode,
+                "response": errorString
+            ])
             throw PasskeyError.serverError
         }
         
         do {
             let verificationResponse = try JSONDecoder().decode(AuthenticationVerificationResponse.self, from: data)
-            print("✅ [PasskeyAuthenticationService] Verification result: verified=\(verificationResponse.verified), username=\(verificationResponse.username ?? "none"), isAnonymous=\(verificationResponse.isAnonymous)")
+            Log.passkey.success("Verification successful", metadata: [
+                "verified": verificationResponse.verified,
+                "username": verificationResponse.username ?? "anonymous",
+                "isAnonymous": verificationResponse.isAnonymous
+            ])
             return (verificationResponse.verified, verificationResponse.username, verificationResponse.isAnonymous)
         } catch {
-            print("❌ [PasskeyAuthenticationService] Failed to decode response")
-            if let responseString = String(data: data, encoding: .utf8) {
-                print("📄 [PasskeyAuthenticationService] Raw response: \(responseString)")
-            }
+            let responseString = String(data: data, encoding: .utf8) ?? "Unable to decode"
+            Log.network.error("Failed to decode verification response", error: error, metadata: [
+                "rawResponse": responseString
+            ])
             throw error
         }
     }
@@ -393,9 +464,9 @@ final class PasskeyAuthenticationService: NSObject {
     private func performAuthorization(controller: ASAuthorizationController) async throws -> ASAuthorization {
         return try await withCheckedThrowingContinuation { continuation in
             self.authorizationContinuation = continuation
-            print("🚀 [PasskeyAuthenticationService] Calling performRequests()...")
+            Log.passkey.debug("Calling performRequests()")
             controller.performRequests()
-            print("📱 [PasskeyAuthenticationService] Passkey UI should be presenting now...")
+            Log.passkey.debug("Passkey UI should be presenting")
         }
     }
     
@@ -408,7 +479,7 @@ final class PasskeyAuthenticationService: NSObject {
 extension PasskeyAuthenticationService: ASAuthorizationControllerDelegate {
     nonisolated func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
         Task { @MainActor in
-            print("✅ [PasskeyAuthenticationService] Authorization succeeded")
+            Log.passkey.success("Authorization completed")
             authorizationContinuation?.resume(returning: authorization)
             authorizationContinuation = nil
         }
@@ -416,10 +487,12 @@ extension PasskeyAuthenticationService: ASAuthorizationControllerDelegate {
     
     nonisolated func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
         Task { @MainActor in
-            print("❌ [PasskeyAuthenticationService] Authorization failed with error: \(error)")
+            Log.passkey.error("Authorization failed", error: error)
             if let authError = error as? ASAuthorizationError {
-                print("🔍 [PasskeyAuthenticationService] Error code: \(authError.code.rawValue)")
-                print("📝 [PasskeyAuthenticationService] Error description: \(authError.localizedDescription)")
+                Log.passkey.debug("Authorization error details", metadata: [
+                    "code": authError.code.rawValue,
+                    "description": authError.localizedDescription
+                ])
             }
             authorizationContinuation?.resume(throwing: error)
             authorizationContinuation = nil
@@ -433,15 +506,15 @@ extension PasskeyAuthenticationService: ASAuthorizationControllerPresentationCon
     func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
         // Use the stored presentation anchor if available
         if let anchor = currentPresentationAnchor {
-            print("✅ [PasskeyAuthenticationService] Using provided presentation anchor")
+            Log.passkey.debug("Using provided presentation anchor")
             return anchor
         }
         
         // Fallback to finding the key window
-        print("⚠️ [PasskeyAuthenticationService] No presentation anchor provided, finding key window")
+        Log.passkey.warning("No presentation anchor provided, finding key window")
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let window = windowScene.windows.first(where: { $0.isKeyWindow }) else {
-            print("❌ [PasskeyAuthenticationService] No key window found!")
+            Log.passkey.error("No key window found!")
             // Return first available window as fallback
             if let anyWindow = UIApplication.shared.connectedScenes
                 .compactMap({ $0 as? UIWindowScene })
@@ -451,7 +524,7 @@ extension PasskeyAuthenticationService: ASAuthorizationControllerPresentationCon
             }
             fatalError("No window available for passkey presentation")
         }
-        print("✅ [PasskeyAuthenticationService] Using key window for passkey presentation")
+        Log.passkey.debug("Using key window for presentation")
         return window
     }
 }

@@ -50,10 +50,11 @@ struct WelcomeView: View {
             }
             .background(NuriAsset.brandOrange.swiftUIColor)
             .onAppear {
-                print("\n👋 ===== WELCOME VIEW APPEARED =====")
-                print("📊 [WelcomeView] isUserLoggedIn: \(isUserLoggedIn)")
-                print("📊 [WelcomeView] isAuthenticating: \(isAuthenticating)")
-                print("🔐 [WelcomeView] Ready to authenticate with passkeys")
+                Log.ui.info("===== WELCOME VIEW APPEARED =====", metadata: [
+                    "isUserLoggedIn": isUserLoggedIn,
+                    "isAuthenticating": isAuthenticating
+                ])
+                Log.ui.info("Ready to authenticate with passkeys")
             }
         }
         .alert("Authentication Error", isPresented: $showError) {
