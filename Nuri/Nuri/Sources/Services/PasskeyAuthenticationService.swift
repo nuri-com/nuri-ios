@@ -166,6 +166,9 @@ final class PasskeyAuthenticationService: NSObject {
             if let credential = authorization.credential as? ASAuthorizationPlatformPublicKeyCredentialAssertion {
                 print("📝 [PasskeyAuthenticationService] Credential ID: \(credential.credentialID.base64URLEncodedString())")
                 print("👤 [PasskeyAuthenticationService] User handle: \(credential.userID.base64URLEncodedString())")
+                print("🔑 [PasskeyAuthenticationService] Raw authenticator data size: \(credential.rawAuthenticatorData.count)")
+                print("📄 [PasskeyAuthenticationService] Raw client data JSON size: \(credential.rawClientDataJSON.count)")
+                print("✍️ [PasskeyAuthenticationService] Signature size: \(credential.signature.count)")
                 
                 // Step 4: Verify with server
                 print("📡 [PasskeyAuthenticationService] Step 4: Verifying with server...")
@@ -282,7 +285,7 @@ final class PasskeyAuthenticationService: NSObject {
                 authenticatorData: credential.rawAuthenticatorData.base64URLEncodedString(),
                 clientDataJSON: credential.rawClientDataJSON.base64URLEncodedString(),
                 signature: credential.signature.base64URLEncodedString(),
-                userHandle: credential.userID.isEmpty ? nil : credential.userID.base64URLEncodedString()
+                userHandle: credential.userID.base64URLEncodedString() // Always send userHandle, even if empty
             )
         )
         
@@ -295,14 +298,32 @@ final class PasskeyAuthenticationService: NSObject {
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
+        guard let httpResponse = response as? HTTPURLResponse else {
+            print("❌ [PasskeyAuthenticationService] Invalid response type")
             throw PasskeyError.serverError
         }
         
-        let verificationResponse = try JSONDecoder().decode(AuthenticationVerificationResponse.self, from: data)
-        print("✅ [PasskeyAuthenticationService] Verification result: verified=\(verificationResponse.verified), username=\(verificationResponse.username ?? "none"), isAnonymous=\(verificationResponse.isAnonymous)")
-        return (verificationResponse.verified, verificationResponse.username, verificationResponse.isAnonymous)
+        print("📦 [PasskeyAuthenticationService] Verification response status: \(httpResponse.statusCode)")
+        
+        if !(200...299).contains(httpResponse.statusCode) {
+            print("❌ [PasskeyAuthenticationService] Server error: \(httpResponse.statusCode)")
+            if let errorString = String(data: data, encoding: .utf8) {
+                print("📄 [PasskeyAuthenticationService] Error response: \(errorString)")
+            }
+            throw PasskeyError.serverError
+        }
+        
+        do {
+            let verificationResponse = try JSONDecoder().decode(AuthenticationVerificationResponse.self, from: data)
+            print("✅ [PasskeyAuthenticationService] Verification result: verified=\(verificationResponse.verified), username=\(verificationResponse.username ?? "none"), isAnonymous=\(verificationResponse.isAnonymous)")
+            return (verificationResponse.verified, verificationResponse.username, verificationResponse.isAnonymous)
+        } catch {
+            print("❌ [PasskeyAuthenticationService] Failed to decode response")
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("📄 [PasskeyAuthenticationService] Raw response: \(responseString)")
+            }
+            throw error
+        }
     }
     
     private func fetchRegistrationOptions(username: String?) async throws -> RegistrationOptionsResponse {

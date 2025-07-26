@@ -7,7 +7,7 @@ let project = Project(
             name: "Nuri",
             destinations: .iOS,
             product: .app,
-            bundleId: "com.nuri.mobile-ios",
+            bundleId: "com.nuri.passkeytest", // Temporary: Using cached bundle ID until Apple CDN updates
             deploymentTargets: .iOS("18.0"),
             infoPlist: .extendingDefault(with: [
                 "UIUserInterfaceStyle": "Light",
@@ -56,12 +56,11 @@ let project = Project(
                     "TAG"
                 ]),
                 "com.apple.developer.associated-domains": .array([
-                    "webcredentials:nuri.com",
-                    "webcredentials:localhost"
+                    "webcredentials:nuri.com"
                 ]),
-                "application-identifier": "MH2SRQ3N27.com.nuri.mobile-ios",
+                "application-identifier": "MH2SRQ3N27.com.nuri.passkeytest",
                 "keychain-access-groups": .array([
-                    "$(AppIdentifierPrefix)com.nuri.mobile-ios"
+                    "$(AppIdentifierPrefix)com.nuri.passkeytest"
                 ])
             ]),
             dependencies: [
