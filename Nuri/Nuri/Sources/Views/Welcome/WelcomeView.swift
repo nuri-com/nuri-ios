@@ -8,6 +8,7 @@ struct WelcomeView: View {
     @AppStorage("isUserLoggedIn") var isUserLoggedIn: Bool = false
     @State private var showError = false
     @State private var errorMessage = ""
+    @State private var isAuthenticating = false
 
     var body: some View {
         GeometryReader { proxy in
@@ -27,14 +28,34 @@ struct WelcomeView: View {
                 VStack {
                     Spacer()
                     
-                    Button("Login with Passkey") {
-                        mockPasskeyLogin()
+                    Button(action: {
+                        print("\n🆕 ===== PASSKEY AUTHENTICATION STARTED =====")
+                        print("👆 [WelcomeView] User tapped 'Login with Passkey' button")
+                        Task {
+                            await authenticateWithPasskey()
+                        }
+                    }) {
+                        if isAuthenticating {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .scaleEffect(0.8)
+                        } else {
+                            Text("Login with Passkey")
+                        }
                     }
                     .buttonStyle(ProminentButtonStyle())
+                    .disabled(isAuthenticating)
                 }
                 .padding(32)
             }
             .background(NuriAsset.brandOrange.swiftUIColor)
+            .onAppear {
+                Log.ui.info("===== WELCOME VIEW APPEARED =====", metadata: [
+                    "isUserLoggedIn": isUserLoggedIn,
+                    "isAuthenticating": isAuthenticating
+                ])
+                Log.ui.info("Ready to authenticate with passkeys")
+            }
         }
         .alert("Authentication Error", isPresented: $showError) {
             Button("OK", role: .cancel) { }
@@ -45,13 +66,94 @@ struct WelcomeView: View {
 
     // MARK: - Actions
     
-    private func mockPasskeyLogin() {
-        print("🔐 [WelcomeView] Mock passkey login initiated")
-        print("⚡ [WelcomeView] Skipping authentication and going directly to app")
+    @MainActor
+    private func authenticateWithPasskey() async {
+        guard !isAuthenticating else { return }
         
-        // Mock login - directly set user as logged in without any authentication
-        self.isUserLoggedIn = true
-        // No need to dismiss - NuriApp will automatically switch views
+        isAuthenticating = true
+        defer { isAuthenticating = false }
+        
+        print("🔐 [WelcomeView] Starting passkey authentication...")
+        
+        do {
+            guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                  let window = windowScene.windows.first(where: { $0.isKeyWindow }) else {
+                print("❌ [WelcomeView] Could not find key window")
+                throw PasskeyError.invalidURL
+            }
+            
+            print("🪟 [WelcomeView] Found window for passkey presentation")
+            let result = try await PasskeyAuthenticationService.shared.authenticateWithPasskey(presentationAnchor: window)
+            
+            if result.verified {
+                print("✅ [WelcomeView] Passkey authentication successful")
+                print("👤 [WelcomeView] Username: \(result.username ?? "anonymous")")
+                print("🎭 [WelcomeView] Is Anonymous: \(result.isAnonymous)")
+                
+                // Successfully authenticated
+                self.isUserLoggedIn = true
+            } else {
+                throw PasskeyError.serverError
+            }
+        } catch PasskeyError.noPasskeysFound {
+            // No passkeys found, offer to create one
+            print("⚠️ [WelcomeView] No passkeys found")
+            
+            let alert = UIAlertController(
+                title: "No Passkey Found",
+                message: "Would you like to create a new passkey for this device?",
+                preferredStyle: .alert
+            )
+            
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            alert.addAction(UIAlertAction(title: "Create Passkey", style: .default) { _ in
+                Task {
+                    await createNewPasskey()
+                }
+            })
+            
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let rootViewController = windowScene.windows.first?.rootViewController {
+                rootViewController.present(alert, animated: true)
+            }
+        } catch {
+            print("❌ [WelcomeView] Passkey authentication failed: \(error.localizedDescription)")
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
+    
+    @MainActor
+    private func createNewPasskey() async {
+        isAuthenticating = true
+        defer { isAuthenticating = false }
+        
+        print("🔑 [WelcomeView] Creating new passkey...")
+        
+        do {
+            guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                  let window = windowScene.windows.first(where: { $0.isKeyWindow }) else {
+                print("❌ [WelcomeView] Could not find key window for passkey creation")
+                throw PasskeyError.invalidURL
+            }
+            
+            // Create anonymous passkey
+            let result = try await PasskeyAuthenticationService.shared.createPasskey(presentationAnchor: window)
+            
+            if result.verified {
+                print("✅ [WelcomeView] Passkey created successfully")
+                print("👤 [WelcomeView] Username: \(result.username ?? "anonymous")")
+                
+                // Successfully created and authenticated
+                self.isUserLoggedIn = true
+            } else {
+                throw PasskeyError.serverError
+            }
+        } catch {
+            print("❌ [WelcomeView] Passkey creation failed: \(error.localizedDescription)")
+            errorMessage = error.localizedDescription
+            showError = true
+        }
     }
     
     // MARK: - View Helpers

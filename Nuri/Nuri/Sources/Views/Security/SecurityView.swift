@@ -9,6 +9,8 @@ struct SecurityView: View {
     @State private var editingPassword = false
     @State private var importSeedPhrase = ""
     @State private var showingImportConfirmation = false
+    @State private var showingLogoutConfirmation = false
+    @AppStorage("isUserLoggedIn") var isUserLoggedIn: Bool = false
     private let bitcoinWalletService = BitcoinWalletService.shared
     
 
@@ -23,6 +25,18 @@ struct SecurityView: View {
             )
         } content: {
             Form {
+                Section(header: Text("Session Management")) {
+                    Button(action: { showingLogoutConfirmation = true }) {
+                        HStack {
+                            Image(systemName: "arrow.right.square")
+                                .foregroundColor(.red)
+                            Text("Log Out")
+                                .foregroundColor(.red)
+                            Spacer()
+                        }
+                    }
+                }
+                
                 Section(header: Text("Password Configuration")) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Current Password:")
@@ -158,6 +172,14 @@ struct SecurityView: View {
         } message: {
             Text("This will permanently overwrite your current wallet with the imported seed phrase. This action cannot be undone!\n\nCurrent wallet data will be lost forever.")
         }
+        .alert("Log Out", isPresented: $showingLogoutConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Log Out", role: .destructive) {
+                performLogout()
+            }
+        } message: {
+            Text("Are you sure you want to log out? You'll need to authenticate with your passkey to log back in.")
+        }
     }
     
     private func testSimpleEncryption() {
@@ -289,6 +311,15 @@ struct SecurityView: View {
                 self.isLoading = false
             }
         }
+    }
+    
+    private func performLogout() {
+        Log.ui.info("User logging out")
+        
+        // Clear the login state
+        isUserLoggedIn = false
+        
+        Log.ui.success("Logout completed - user will see welcome screen")
     }
     
 }
