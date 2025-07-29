@@ -4,13 +4,22 @@ public struct CreateUser: Encodable {
     public let email: String
     public let mobile: Mobile
     public let address: Address?
+    public let dateOfBirth: Date?
 
-    public init(firstName: String, lastName: String, email: String, mobile: CreateUser.Mobile, address: CreateUser.Address?) {
+    public init(
+        firstName: String,
+        lastName: String,
+        email: String,
+        mobile: CreateUser.Mobile,
+        address: CreateUser.Address?,
+        dateOfBirth: Date?
+    ) {
         self.firstName = firstName
         self.lastName = lastName
         self.email = email
         self.mobile = mobile
         self.address = address
+        self.dateOfBirth = dateOfBirth
     }
 
     public struct Mobile: Encodable {
@@ -34,6 +43,18 @@ public struct CreateUser: Encodable {
             self.city = city
             self.country = country
             self.postalCode = postalCode
+        }
+    }
+
+    public struct Date: Encodable {
+        public let year: Int32
+        public let month: Int32
+        public let day: Int32
+
+        public init(year: Int32, month: Int32, day: Int32) {
+            self.year = year
+            self.month = month
+            self.day = day
         }
     }
 }

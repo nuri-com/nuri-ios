@@ -36,7 +36,9 @@ final class EmailViewModel: ObservableObject {
                     self?.continueButtonPressed()
                 },
                 isDisabled: false
-            )
+            ),
+            isLoading: false,
+            showSMSView: false
         )
     }
 
@@ -51,6 +53,10 @@ final class EmailViewModel: ObservableObject {
         switch action {
         case .updateTextFieldValue(let value):
             viewState.nextButton.isDisabled = value.isEmail
+        case .showSMSView:
+            viewState.showSMSView = true
+        case .showLoading:
+            viewState.isLoading = true
         }
         return viewState
     }
@@ -60,18 +66,33 @@ final class EmailViewModel: ObservableObject {
         Task {
             do {
                 let timestamp = Int(Date().timeIntervalSince1970)
+                let firstName = "first\(timestamp)"
+                let lastName = "last\(timestamp)"
+                let name = "\(firstName) \(lastName)"
+                let address = CreateUser.Address(
+                    addressLine1: "Sonnenallee 1",
+                    city: "Berlin",
+                    country: "DE",
+                    postalCode: "12047"
+                )
                 let input = CreateUser(
-                    firstName: "first\(timestamp)",
-                    lastName: "last\(timestamp)",
+                    firstName: firstName,
+                    lastName: lastName,
                     email: viewState.emailTextField.text,
                     mobile: .init(
                         countryCode: countryCode,
                         number: phoneNumber
                     ),
-                    address: nil
+                    address: address,
+                    dateOfBirth: .init(year: 2005, month: 1, day: 1)
                 )
+                updateViewState(action: .showLoading)
                 let userResponse = try await strigaService.createUser(input)
+                StrigaSession.shared.userId = userResponse.userId
+                StrigaSession.shared.name = name
+                StrigaSession.shared.address = address
                 print("[Lukas] success \(userResponse)")
+                updateViewState(action: .showSMSView)
             } catch {
                 print("[Lukas] error \(error)")
             }

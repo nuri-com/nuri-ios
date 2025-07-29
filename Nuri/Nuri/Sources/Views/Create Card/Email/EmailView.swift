@@ -31,14 +31,19 @@ struct EmailView: View {
             .background(NuriAsset.inputBackground.swiftUIColor)
             .clipShape(RoundedRectangle(cornerRadius: 3))
             Spacer()
-            TextButton(viewState: viewState.nextButton)
-                .buttonStyle(ProminentButtonStyle())
+            if viewState.isLoading {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle())
+            } else {
+                TextButton(viewState: viewState.nextButton)
+                    .buttonStyle(ProminentButtonStyle())
+            }
         }
         .padding(32)
         .frame(maxHeight: .infinity)
         .background(NuriAsset.background.swiftUIColor)
-        .onAppear {
-
+        .navigationDestination(isPresented: $viewModel.viewState.showSMSView) {
+            EnterSMSCodeView()
         }
     }
 }

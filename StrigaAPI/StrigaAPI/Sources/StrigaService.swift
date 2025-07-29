@@ -20,12 +20,6 @@ public final class StrigaService {
     // MARK: - Endpoints
 
     @discardableResult
-    public func verifyMobile(_ input: VerifyMobile) async throws -> EmptyResponse {
-        let url = try url(for: "v1/user/verify-mobile")
-        return try await httpClient.post(url: url, input: input)
-    }
-
-    @discardableResult
     public func verifyEmail(_ input: VerifyEmail) async throws -> EmptyResponse {
         let url = try url(for: "v1/user/verify-email")
         return try await httpClient.post(url: url, input: input)

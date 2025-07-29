@@ -4,9 +4,7 @@ struct EnterSMSCodeView: View {
 
     @ObservedObject var viewModel = EnterSMSCodeViewModel()
 
-    init(completion: @escaping () -> Void) {
-        viewModel.completion = completion
-    }
+    @EnvironmentObject var navigation: CreateCardNavigation
 
     var body: some View {
         contentView(viewState: viewModel.viewState)
@@ -24,23 +22,31 @@ struct EnterSMSCodeView: View {
             Spacer()
             Image(viewState.illustrationName)
             Spacer()
-            HStack(spacing: 8) {
-                Text(viewState.codeTextField.placeholder)
-                TextField(viewState.codeTextField.placeholder, text: $viewModel.viewState.codeTextField.text)
-                    .keyboardType(.numberPad)
-                    .textContentType(.oneTimeCode)
-                    .onChange(of: viewState.codeTextField.text) { _, newValue in
-                        viewState.codeTextField.textChangeHandler?.action(newValue)
-                    }
+            if viewState.isLoadingAnimationActive {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle())
+            } else {
+                HStack(spacing: 8) {
+                    Text(viewState.codeTextField.placeholder)
+                    TextField(viewState.codeTextField.placeholder, text: $viewModel.viewState.codeTextField.text)
+                        .keyboardType(.numberPad)
+                        .textContentType(.oneTimeCode)
+                        .onChange(of: viewState.codeTextField.text) { _, newValue in
+                            viewState.codeTextField.textChangeHandler?.action(newValue)
+                        }
+                }
+                .font(.brandCaption)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 16)
+                .background(NuriAsset.inputBackground.swiftUIColor)
+                .clipShape(RoundedRectangle(cornerRadius: 3))
             }
-            .font(.brandCaption)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 16)
-            .background(NuriAsset.inputBackground.swiftUIColor)
-            .clipShape(RoundedRectangle(cornerRadius: 3))
         }
         .padding(32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(NuriAsset.background.swiftUIColor)
+        .navigationDestination(isPresented: $viewModel.viewState.isCreatingCard) {
+            CreatingCardView()
+        }
     }
 }

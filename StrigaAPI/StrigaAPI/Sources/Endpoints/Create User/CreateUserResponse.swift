@@ -7,7 +7,7 @@ public struct CreateUserResponse: Decodable {
     public let KYC: KYCInfo
     public let emailVerification: Verification
     public let mobileVerification: Verification
-    public let missingFields: [String]
+    public let missingFields: [String]?
 
     public struct Mobile: Codable {
         public let countryCode: String
