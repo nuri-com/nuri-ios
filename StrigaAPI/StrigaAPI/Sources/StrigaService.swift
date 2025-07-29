@@ -4,7 +4,7 @@ public final class StrigaService {
 
     // MARK: - Dependencies
 
-    private let httpClient = HTTPClient()
+    internal let httpClient = HTTPClient()
 
     // MARK: - Public
 
@@ -18,18 +18,6 @@ public final class StrigaService {
     }
 
     // MARK: - Endpoints
-
-    @discardableResult
-    public func createUser(_ input: CreateUser) async throws -> CreateUserResponse {
-        let url = try url(for: "v1/user/create")
-        return try await httpClient.post(url: url, input: input)
-    }
-
-    @discardableResult
-    public func verifyMobile(_ input: VerifyMobile) async throws -> EmptyResponse {
-        let url = try url(for: "v1/user/verify-mobile")
-        return try await httpClient.post(url: url, input: input)
-    }
 
     @discardableResult
     public func verifyEmail(_ input: VerifyEmail) async throws -> EmptyResponse {
@@ -93,7 +81,7 @@ public final class StrigaService {
 
     // MARK: - Private
 
-    private func url(for path: String) throws -> URL {
+    internal func url(for path: String) throws -> URL {
         guard let configuration else {
             throw NSError(domain: "Striga", code: 1001, userInfo: [NSLocalizedDescriptionKey: "Configuration not set."])
         }
@@ -111,17 +99,17 @@ public final class StrigaService {
 
 extension StrigaService: HTTPClientDelegate {
 
-    func headers<E: Encodable>(for request: URLRequest, body: E?) -> [String : String] {
+    func headers(for request: URLRequest, body: Data?) -> [String : String] {
         do {
             guard let configuration else {
-                throw NSError(domain: "Striga", code: 1004, userInfo: [NSLocalizedDescriptionKey: "Configuration not set."])
+                throw NSError(domain: "Striga", code: 1001, userInfo: [NSLocalizedDescriptionKey: "Configuration not set."])
             }
-            let signatureProvider = StrigaSignatureProvider(configuration: configuration)
+            let signatureProvider = SignatureProvider(configuration: configuration)
             let headers = try signatureProvider.headers(for: request, body: body)
-            print("[Striga] headers: \(headers)")
+            print("[Lukas] headers: \(headers)")
             return headers
         } catch {
-            print("[Striga] Signature: Error generating headers: \(error)")
+            print("[Lukas] Signature: Error generating headers: \(error)")
             return [:]
         }
     }

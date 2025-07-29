@@ -9,7 +9,6 @@ final class PhoneNumberViewModel: ObservableObject {
     // MARK: - Variables
 
     @Published var viewState: PhoneNumberViewState = .empty
-    var completion: (() -> Void)? = nil
 
     // MARK: - Initialization
 
@@ -25,7 +24,7 @@ final class PhoneNumberViewModel: ObservableObject {
             countryCode: "+",
             phoneNumber: .init(
                 label: "",
-                text: "",
+                text: "15123456789",
                 placeholder: "Your phone number",
                 textChangeHandler: .init { [weak self] text in
                     self?.phoneNumberChanged(text)
@@ -47,10 +46,10 @@ final class PhoneNumberViewModel: ObservableObject {
                 }
                 self?.updateViewState(action: .showCountryPicker(false))
             },
-            showVerifyScreen: false
+            showEmailScreen: false
         )
 
-        updateViewState(action: .selectCountry(0))
+        updateViewState(action: .selectCountry(78))
     }
 
     // MARK: - Private
@@ -65,6 +64,7 @@ final class PhoneNumberViewModel: ObservableObject {
         case .selectCountry(let index):
             var countries = dialCodesRepository.dialCodes
             let country = countries[index]
+            print("index \(index)")
             let dialCode = country.dialCode
             viewState.countryCode = dialCode
             viewState.countryPickerValue = country.dialCode + " " + country.country
@@ -76,19 +76,20 @@ final class PhoneNumberViewModel: ObservableObject {
             } else {
                 viewState.countryCodeHint = nil
             }
+            viewState.confirmButton.isDisabled = viewState.phoneNumber.text.count < 5
         case .updatePhoneNumber(let phoneNumber):
             viewState.phoneNumber.text = phoneNumber
             viewState.confirmButton.isDisabled = phoneNumber.count < 5
         case .showCountryPicker(let showCountryPicker):
             viewState.showCountryPicker = showCountryPicker
-        case .showVerifyScreen:
-            viewState.showVerifyScreen = true
+        case .showEmailScreen:
+            viewState.showEmailScreen = true
         }
         return viewState
     }
 
     private func confirmButtonPressed() {
-        updateViewState(action: .showVerifyScreen)
+        updateViewState(action: .showEmailScreen)
     }
 
     private func countryPickerSelectionChanged(_ selection: Int) {
