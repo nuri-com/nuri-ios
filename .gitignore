@@ -73,3 +73,44 @@ Tuist/.build
 !.github/
 .aider*
 builds/
+
+### Provisioning Profiles ###
+# These should be managed by each developer or through CI/CD
+*.mobileprovision
+# If you use fastlane match, comment out the line above
+
+### Fastlane ###
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+### Environment files ###
+.env
+.env.local
+.env.*.local
+
+### IDE specific files ###
+.vscode/
+.idea/
+*.swp
+*~
+
+### Temporary files ###
+*.tmp
+*.temp
+*.log
+
+### Generated documentation ###
+docs/generated/
+
+### Backup files ###
+*.backup
+*.bak
+
+### OS generated files ###
+Thumbs.db
+
+# Keep CLAUDE.md for AI assistance
+!CLAUDE.md
+

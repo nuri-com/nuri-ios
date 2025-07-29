@@ -38,6 +38,15 @@ let project = Project(
                         "CFBundleTypeRole": "Viewer",
                         "CFBundleURLSchemes": .array(["nuriwallet"])
                     ])
+                ]),
+                "NSAppTransportSecurity": .dictionary([
+                    "NSAllowsArbitraryLoads": .boolean(false),
+                    "NSAllowsLocalNetworking": .boolean(true),
+                    "NSExceptionDomains": .dictionary([
+                        "localhost": .dictionary([
+                            "NSExceptionAllowsInsecureHTTPLoads": .boolean(true)
+                        ])
+                    ])
                 ])
             ]),
             sources: ["Nuri/Sources/**"],
@@ -64,7 +73,9 @@ let project = Project(
             settings: .settings(
                 base: [
                     "CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION": "YES",
-                    "DEVELOPMENT_TEAM": "MH2SRQ3N27"
+                    "DEVELOPMENT_TEAM": "MH2SRQ3N27",
+                    "MARKETING_VERSION": "1.0.0",
+                    "CURRENT_PROJECT_VERSION": "1"
                 ],
                 defaultSettings: .recommended
             )
