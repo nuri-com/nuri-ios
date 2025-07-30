@@ -56,7 +56,8 @@ let project = Project(
                     "TAG"
                 ]),
                 "com.apple.developer.associated-domains": .array([
-                    "webcredentials:nuri.com"
+                    "webcredentials:nuri.com",
+                    "webcredentials:passkey.nuri.com"
                 ]),
                 "application-identifier": "MH2SRQ3N27.com.nuri.mobile-ios",
                 "keychain-access-groups": .array([
@@ -78,7 +79,7 @@ let project = Project(
                     "CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION": "YES",
                     "DEVELOPMENT_TEAM": "MH2SRQ3N27",
                     "MARKETING_VERSION": "1.0.0",
-                    "CURRENT_PROJECT_VERSION": "1"
+                    "CURRENT_PROJECT_VERSION": "2"
                 ],
                 defaultSettings: .recommended
             )
