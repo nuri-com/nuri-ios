@@ -30,12 +30,8 @@ final class PasskeyAuthenticationService: NSObject {
     
     // Configuration
     private var baseURL: String {
-        #if targetEnvironment(simulator)
-        return "http://localhost:3000"
-        #else
-        // Production passkey server
+        // Always use production passkey server
         return "https://passkey.nuri.com"
-        #endif
     }
     private let relyingPartyIdentifier = "nuri.com" // Using parent domain for passkeys
     
@@ -96,7 +92,7 @@ final class PasskeyAuthenticationService: NSObject {
         let isAnonymous: Bool
     }
     
-    struct RegistrationOptionsResponse: Codable {
+    struct RegistrationOptionsResponse: Decodable {
         let challenge: String
         let rp: RelyingParty
         let user: User
@@ -123,23 +119,28 @@ final class PasskeyAuthenticationService: NSObject {
         }
         
         struct AuthenticatorSelection: Codable {
-            let authenticatorAttachment: String
+            let residentKey: String?
             let requireResidentKey: Bool
             let userVerification: String
+            let authenticatorAttachment: String?
         }
     }
     
     struct RegistrationVerificationRequest: Codable {
-        let username: String?
         let cred: CredentialData
         let challengeKey: String
+        let username: String?
         
         struct CredentialData: Codable {
-            let credentialId: String
-            let publicKey: String
-            let authenticatorData: String
-            let clientDataJSON: String
-            let attestationObject: String
+            let id: String
+            let rawId: String
+            let type: String
+            let response: ResponseData
+            
+            struct ResponseData: Codable {
+                let clientDataJSON: String
+                let attestationObject: String
+            }
         }
     }
     
@@ -147,6 +148,38 @@ final class PasskeyAuthenticationService: NSObject {
         let verified: Bool
         let username: String?
         let isAnonymous: Bool
+    }
+    
+    // MARK: - User Data Storage
+    
+    struct UserDataRequest: Codable {
+        let email: String?
+        let encryptedData: EncryptedData
+        let authProof: String
+        let credentialId: String?
+        
+        struct EncryptedData: Codable {
+            let encryptionKey: String
+            let keyFormat: String
+            let createdAt: String
+            let deviceName: String
+        }
+    }
+    
+    struct UserDataResponse: Codable {
+        let success: Bool
+        let username: String
+        let email: String?
+        let hasEncryptedData: Bool
+        let updatedAt: String
+    }
+    
+    struct UserDataGetResponse: Codable {
+        let username: String
+        let email: String?
+        let encryptedData: UserDataRequest.EncryptedData?
+        let createdAt: String
+        let updatedAt: String
     }
     
     // MARK: - Main Authentication Flow
@@ -201,7 +234,36 @@ final class PasskeyAuthenticationService: NSObject {
                 
                 // Step 4: Verify with server
                 Log.passkey.info("Step 4: Verifying with server")
-                return try await verifyAuthentication(credential: credential)
+                let result = try await verifyAuthentication(credential: credential)
+                
+                // Step 5: Check if there's a stored encryption key (for informational purposes)
+                if result.verified, let username = result.username {
+                    // Store user info for later use
+                    UserDefaults.standard.set(username, forKey: "passkeyUsername")
+                    UserDefaults.standard.set(credential.credentialID.base64URLEncodedString(), forKey: "passkeyCredentialId")
+                    UserDefaults.standard.set(result.isAnonymous, forKey: "passkeyIsAnonymous")
+                    
+                    Log.passkey.info("Step 5: Checking for backed up encryption key", metadata: [
+                        "username": username,
+                        "isAnonymous": result.isAnonymous
+                    ])
+                    
+                    if let storedKey = try? await retrieveEncryptionKey(
+                        for: username,
+                        credentialId: credential.credentialID.base64URLEncodedString(),
+                        isAnonymous: result.isAnonymous
+                    ) {
+                        Log.passkey.success("Found backed up encryption key on server", metadata: [
+                            "keyPrefix": String(storedKey.prefix(10)) + "..."
+                        ])
+                        // The key is available if the user needs to recover their wallet
+                        // It's NOT automatically imported - that's a manual process
+                    } else {
+                        Log.passkey.info("No backed up encryption key found on server")
+                    }
+                }
+                
+                return result
             } else {
                 Log.passkey.error("Invalid credential type received")
                 throw PasskeyError.invalidCredentialType
@@ -258,7 +320,40 @@ final class PasskeyAuthenticationService: NSObject {
         
         if let credential = authorization.credential as? ASAuthorizationPlatformPublicKeyCredentialRegistration {
             // Step 4: Verify with server
-            return try await verifyRegistration(credential: credential, username: username, challengeKey: regOptions.challengeKey)
+            let result = try await verifyRegistration(credential: credential, username: username, challengeKey: regOptions.challengeKey)
+            
+            // Step 5: Store encryption key if registration successful
+            if result.verified, let username = result.username {
+                Log.passkey.info("Step 5: Storing encryption key with passkey", metadata: [
+                    "username": username,
+                    "credentialId": credential.credentialID.base64URLEncodedString().prefix(10) + "...",
+                    "isAnonymous": username.starts(with: "anon_") || username == "Anonymous"
+                ])
+                
+                // Store user info for later use
+                UserDefaults.standard.set(username, forKey: "passkeyUsername")
+                UserDefaults.standard.set(credential.credentialID.base64URLEncodedString(), forKey: "passkeyCredentialId")
+                UserDefaults.standard.set(username.starts(with: "anon_") || username == "Anonymous", forKey: "passkeyIsAnonymous")
+                
+                do {
+                    try await storeEncryptionKey(
+                        for: username,
+                        credentialId: credential.credentialID.base64URLEncodedString(),
+                        isAnonymous: username.starts(with: "anon_") || username == "Anonymous"
+                    )
+                    Log.passkey.success("Encryption key stored successfully with passkey")
+                } catch {
+                    Log.passkey.error("Failed to store encryption key", error: error)
+                    // Don't fail the registration if key storage fails
+                }
+            } else {
+                Log.passkey.error("Cannot store encryption key - registration not verified or no username", metadata: [
+                    "verified": result.verified,
+                    "hasUsername": result.username != nil
+                ])
+            }
+            
+            return result
         } else {
             throw PasskeyError.invalidCredentialType
         }
@@ -429,34 +524,175 @@ final class PasskeyAuthenticationService: NSObject {
             throw PasskeyError.invalidURL
         }
         
+        let credentialIdBase64 = credential.credentialID.base64URLEncodedString()
+        
         let verificationRequest = RegistrationVerificationRequest(
-            username: username,
             cred: RegistrationVerificationRequest.CredentialData(
-                credentialId: credential.credentialID.base64URLEncodedString(),
-                publicKey: "", // Not directly available in iOS, included in attestationObject
-                authenticatorData: "", // Not directly available in iOS, included in attestationObject
-                clientDataJSON: credential.rawClientDataJSON.base64URLEncodedString(),
-                attestationObject: credential.rawAttestationObject?.base64URLEncodedString() ?? ""
+                id: credentialIdBase64,
+                rawId: credentialIdBase64,
+                type: "public-key",
+                response: RegistrationVerificationRequest.CredentialData.ResponseData(
+                    clientDataJSON: credential.rawClientDataJSON.base64URLEncodedString(),
+                    attestationObject: credential.rawAttestationObject?.base64URLEncodedString() ?? ""
+                )
             ),
-            challengeKey: challengeKey
+            challengeKey: challengeKey,
+            username: username ?? "Anonymous" // Ensure anonymous users have a username
         )
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(verificationRequest)
         
-        print("📤 [PasskeyAuthenticationService] Sending verification request...")
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .prettyPrinted
+        request.httpBody = try encoder.encode(verificationRequest)
+        
+        // Debug logging
+        Log.passkey.debug("Registration verification request", metadata: [
+            "credentialId": credential.credentialID.base64URLEncodedString(),
+            "attestationObjectSize": credential.rawAttestationObject?.count ?? 0,
+            "clientDataJSONSize": credential.rawClientDataJSON.count,
+            "challengeKey": challengeKey
+        ])
+        
+        #if DEBUG
+        if let jsonString = String(data: request.httpBody!, encoding: .utf8) {
+            Log.passkey.debug("Registration request JSON", metadata: ["body": jsonString])
+        }
+        #endif
+        
+        Log.network.info("Sending registration verification request")
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
+        guard let httpResponse = response as? HTTPURLResponse else {
+            Log.network.error("Invalid response type")
+            throw PasskeyError.serverError
+        }
+        
+        Log.network.info("Registration verification response", metadata: [
+            "status": httpResponse.statusCode
+        ])
+        
+        if !(200...299).contains(httpResponse.statusCode) {
+            let errorString = String(data: data, encoding: .utf8) ?? "Unknown error"
+            Log.network.error("Server verification error", metadata: [
+                "status": httpResponse.statusCode,
+                "response": errorString
+            ])
             throw PasskeyError.serverError
         }
         
         let verificationResponse = try JSONDecoder().decode(RegistrationVerificationResponse.self, from: data)
         return (verificationResponse.verified, verificationResponse.username)
+    }
+    
+    // MARK: - User Data Storage Methods
+    
+    /// Retrieves the backed-up encryption key for the current user
+    func getBackedUpEncryptionKey() async throws -> String? {
+        // This would need to know the current user's username and credential
+        // For now, this is a placeholder - you'd call retrieveEncryptionKey with the right params
+        return nil
+    }
+    
+    func storeEncryptionKey(for username: String, credentialId: String? = nil, isAnonymous: Bool) async throws {
+        // Get the device encryption key
+        guard let encryptionKey = try? DeviceEncryptionService.shared.exportDeviceKey() else {
+            Log.passkey.error("Failed to export device encryption key")
+            throw PasskeyError.serverError
+        }
+        
+        let identifier = username
+        guard let url = URL(string: "\(baseURL)/api/users/\(identifier)/data") else {
+            throw PasskeyError.invalidURL
+        }
+        
+        let dateFormatter = ISO8601DateFormatter()
+        let userData = UserDataRequest(
+            email: nil, // Anonymous users don't have email
+            encryptedData: UserDataRequest.EncryptedData(
+                encryptionKey: encryptionKey,
+                keyFormat: "base64",
+                createdAt: dateFormatter.string(from: Date()),
+                deviceName: UIDevice.current.name
+            ),
+            authProof: "ios_app_\(UUID().uuidString)", // Placeholder since server doesn't validate yet
+            credentialId: isAnonymous ? credentialId : nil
+        )
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(userData)
+        
+        Log.passkey.info("Storing encryption key for user", metadata: [
+            "username": username,
+            "isAnonymous": isAnonymous,
+            "hasCredentialId": credentialId != nil
+        ])
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            let errorString = String(data: data, encoding: .utf8) ?? "Unknown error"
+            Log.passkey.error("Failed to store encryption key", metadata: [
+                "status": (response as? HTTPURLResponse)?.statusCode ?? -1,
+                "error": errorString
+            ])
+            throw PasskeyError.serverError
+        }
+        
+        let storeResponse = try JSONDecoder().decode(UserDataResponse.self, from: data)
+        Log.passkey.success("Encryption key stored successfully", metadata: [
+            "success": storeResponse.success,
+            "hasEncryptedData": storeResponse.hasEncryptedData
+        ])
+    }
+    
+    func retrieveEncryptionKey(for username: String, credentialId: String? = nil, isAnonymous: Bool) async throws -> String? {
+        let identifier = username
+        var urlString = "\(baseURL)/api/users/\(identifier)/data"
+        
+        if isAnonymous, let credentialId = credentialId {
+            urlString += "?credentialId=\(credentialId)"
+        }
+        
+        guard let url = URL(string: urlString) else {
+            throw PasskeyError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        Log.passkey.info("Retrieving encryption key for user", metadata: [
+            "username": username,
+            "isAnonymous": isAnonymous
+        ])
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            Log.passkey.error("Failed to retrieve encryption key", metadata: [
+                "status": (response as? HTTPURLResponse)?.statusCode ?? -1
+            ])
+            return nil
+        }
+        
+        let userData = try JSONDecoder().decode(UserDataGetResponse.self, from: data)
+        
+        if let encryptionKey = userData.encryptedData?.encryptionKey {
+            Log.passkey.success("Encryption key retrieved successfully", metadata: [
+                "deviceName": userData.encryptedData?.deviceName ?? "Unknown"
+            ])
+            return encryptionKey
+        }
+        
+        return nil
     }
     
     // MARK: - Helper Methods

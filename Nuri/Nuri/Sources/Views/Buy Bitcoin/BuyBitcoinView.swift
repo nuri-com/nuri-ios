@@ -14,9 +14,93 @@ struct ApplePayButton: UIViewRepresentable {
     }
 }
 
+// Apple Pay Coordinator to handle delegate callbacks
+class ApplePayCoordinator: NSObject, PKPaymentAuthorizationViewControllerDelegate {
+    let onSuccess: () -> Void
+    
+    init(onSuccess: @escaping () -> Void) {
+        self.onSuccess = onSuccess
+    }
+    
+    func paymentAuthorizationViewControllerDidFinish(_ controller: PKPaymentAuthorizationViewController) {
+        print("🔵 Apple Pay dialog finished/cancelled")
+        controller.dismiss(animated: true)
+    }
+    
+    func paymentAuthorizationViewController(_ controller: PKPaymentAuthorizationViewController,
+                                          didAuthorizePayment payment: PKPayment,
+                                          handler completion: @escaping (PKPaymentAuthorizationResult) -> Void) {
+        
+        print("💳 Payment authorized!")
+        
+        // Log payment method details
+        let paymentMethod = payment.token.paymentMethod
+        if let network = paymentMethod.network {
+            print("💳 Payment network: \(network)")
+        }
+        print("💳 Card type: \(paymentMethod.type.rawValue)")
+        if let displayName = paymentMethod.displayName {
+            print("💳 Card display name: \(displayName)")
+        }
+        
+        // Store user information for later use
+        if let billingContact = payment.billingContact {
+            print("📧 Billing contact received")
+            // TODO: Store this data in your user model/database
+            // For now, we'll just process it without displaying
+            
+            var userData: [String: Any] = [:]
+            
+            if let name = billingContact.name {
+                userData["name"] = PersonNameComponentsFormatter.localizedString(from: name, style: .default)
+            }
+            
+            if let email = billingContact.emailAddress {
+                userData["email"] = email
+            }
+            
+            if let phone = billingContact.phoneNumber?.stringValue {
+                userData["phone"] = phone
+            }
+            
+            if let address = billingContact.postalAddress {
+                userData["address"] = [
+                    "street": address.street,
+                    "city": address.city,
+                    "state": address.state,
+                    "postalCode": address.postalCode,
+                    "country": address.country
+                ]
+            }
+            
+            // Store payment token
+            userData["paymentToken"] = payment.token
+            
+            // TODO: Send userData to your backend or store locally
+        }
+        
+        // Complete the payment
+        // For testing: always return success without processing
+        completion(PKPaymentAuthorizationResult(status: .success, errors: nil))
+        
+        // Navigate to success screen
+        DispatchQueue.main.async {
+            self.onSuccess()
+        }
+    }
+}
+
 struct BuyBitcoinView: View {
 
     @Binding var isPresented: Bool
+    @State private var applePayCoordinator: ApplePayCoordinator?
+    
+    // Debug mode to test without Apple Pay
+    #if DEBUG
+    @State private var debugMode = false // Changed to false to test real Apple Pay
+    #else
+    @State private var debugMode = false
+    #endif
 
     var formatter: NumberFormatter {
         let formatter = NumberFormatter()
@@ -54,6 +138,7 @@ struct BuyBitcoinView: View {
                         .keyboardType(.decimalPad)
                         .tint(Color("PrimaryNuriLilac"))
                         .onChange(of: amountText) { newValue in
+                            print("💰 Amount changed: '\(newValue)' -> value: \(amountValue)")
                             var sanitized = newValue.replacingOccurrences(of: ",", with: ".")
                             // keep digits and dot
                             sanitized = sanitized.filter { "0123456789.".contains($0) }
@@ -95,16 +180,27 @@ struct BuyBitcoinView: View {
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(Color(hex: "#6D6D86"))
                 }
+                // Show Apple Pay button only when payments can be made
                 if PKPaymentAuthorizationViewController.canMakePayments() {
                     // Using Apple's official PKPaymentButton
                     Button(action: {
-                        shouldNavigateToSuccess = true
+                        print("🔵 Apple Pay button tapped")
+                        print("🔵 Amount value: \(amountValue)")
+                        print("🔵 Exchange rate: \(exchangeRate)")
+                        print("🔵 Is primary BTC: \(isPrimaryBTC)")
+                        if amountValue > 0 {
+                            startApplePayment()
+                        } else {
+                            print("❌ Cannot start payment: amount is 0")
+                        }
                     }) {
                         ApplePayButton()
                             .frame(height: 56)
                             .cornerRadius(28)
                     }
                     .buttonStyle(.plain)
+                    .disabled(amountValue == 0)
+                    .opacity(amountValue == 0 ? 0.5 : 1.0)
                 } else {
                     NavigationLink(destination: SuccessView(illustration: "hand-plant", title: "Bitcoin purchased!", subtitle: "You've purchased ₿ 91,230,000!") {
                         isPresented = false
@@ -122,6 +218,9 @@ struct BuyBitcoinView: View {
             }
         }
         .onAppear {
+            print("🟢 BuyBitcoinView appeared")
+            print("🟢 Can make payments: \(PKPaymentAuthorizationViewController.canMakePayments())")
+            print("🟢 Can make payments with cards: \(PKPaymentAuthorizationViewController.canMakePayments(usingNetworks: [.visa, .masterCard, .amex, .discover]))")
             isFieldFocused = true
             Task {
                 await fetchPrice()
@@ -174,17 +273,24 @@ struct BuyBitcoinView: View {
     // MARK: - Networking
 
     private func fetchPrice() async {
-        guard let url = URL(string: "https://mempool.space/api/v1/prices") else { return }
+        print("🟡 Fetching Bitcoin price...")
+        guard let url = URL(string: "https://mempool.space/api/v1/prices") else { 
+            print("❌ Invalid URL for price fetch")
+            return 
+        }
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
             if let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                let eur = dict["EUR"] as? Double {
                 DispatchQueue.main.async {
-                    exchangeRate = eur
+                    self.exchangeRate = eur
+                    print("✅ Exchange rate loaded: €\(eur) per BTC")
                 }
+            } else {
+                print("❌ Failed to parse price data")
             }
         } catch {
-            print("Price fetch failed", error)
+            print("❌ Price fetch failed: \(error)")
         }
     }
     
@@ -195,6 +301,93 @@ struct BuyBitcoinView: View {
         formatter.usesGroupingSeparator = true
         formatter.groupingSeparator = ","
         return formatter.string(from: NSNumber(value: amount)) ?? ""
+    }
+    
+    private func startApplePayment() {
+        // Debug mode: skip Apple Pay and go directly to success
+        if debugMode {
+            print("DEBUG: Simulating Apple Pay purchase")
+            print("Amount: \(isPrimaryBTC ? amountValue : amountValue / exchangeRate) BTC")
+            print("EUR: \(isPrimaryBTC ? amountValue * exchangeRate : amountValue)")
+            shouldNavigateToSuccess = true
+            return
+        }
+        
+        // Validate amount
+        guard amountValue > 0 else {
+            print("Error: Amount must be greater than 0")
+            return
+        }
+        
+        guard exchangeRate > 0 else {
+            print("Error: Exchange rate not loaded")
+            return
+        }
+        
+        let paymentAmount = isPrimaryBTC ? amountValue * exchangeRate : amountValue
+        
+        print("Starting Apple Pay payment")
+        print("Payment amount: €\(paymentAmount)")
+        print("Bitcoin amount: \(isPrimaryBTC ? amountValue : amountValue / exchangeRate) BTC")
+        
+        let request = PKPaymentRequest()
+        request.merchantIdentifier = "merchant.com.nuri.ios"
+        request.supportedNetworks = [.visa, .masterCard, .amex, .discover]
+        request.merchantCapabilities = .capability3DS
+        request.countryCode = "DE" // Germany
+        request.currencyCode = "EUR"
+        
+        // Request user contact information
+        request.requiredBillingContactFields = [.name, .emailAddress, .phoneNumber, .postalAddress]
+        
+        let bitcoinAmount = isPrimaryBTC ? amountValue : amountValue / exchangeRate
+        let bitcoinItem = PKPaymentSummaryItem(
+            label: "Bitcoin (\(String(format: "%.8f", bitcoinAmount)) BTC)",
+            amount: NSDecimalNumber(value: paymentAmount)
+        )
+        request.paymentSummaryItems = [bitcoinItem]
+        
+        // Create coordinator
+        applePayCoordinator = ApplePayCoordinator(onSuccess: {
+            self.shouldNavigateToSuccess = true
+        })
+        
+        if let paymentVC = PKPaymentAuthorizationViewController(paymentRequest: request) {
+            print("✅ PKPaymentAuthorizationViewController created successfully")
+            paymentVC.delegate = applePayCoordinator
+            
+            // Find the topmost view controller to present from
+            print("🔍 Looking for window scene...")
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+                print("✅ Found window scene")
+                if let window = windowScene.windows.first(where: { $0.isKeyWindow }) {
+                    print("✅ Found key window")
+                    if let rootVC = window.rootViewController {
+                        print("✅ Found root view controller: \(type(of: rootVC))")
+                        
+                        var topVC = rootVC
+                        while let presented = topVC.presentedViewController {
+                            print("🔍 Found presented controller: \(type(of: presented))")
+                            topVC = presented
+                        }
+                        
+                        print("🚀 Presenting Apple Pay from: \(type(of: topVC))")
+                        topVC.present(paymentVC, animated: true)
+                    } else {
+                        print("❌ No root view controller found")
+                    }
+                } else {
+                    print("❌ No key window found")
+                }
+            } else {
+                print("❌ No window scene found")
+            }
+        } else {
+            print("❌ Failed to create PKPaymentAuthorizationViewController")
+            print("❌ Merchant ID: \(request.merchantIdentifier)")
+            print("❌ Amount: \(paymentAmount)")
+            print("❌ Payment items: \(request.paymentSummaryItems.map { "\($0.label): \($0.amount)" })")
+        }
     }
 }
 

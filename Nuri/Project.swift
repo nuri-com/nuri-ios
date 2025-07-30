@@ -61,6 +61,9 @@ let project = Project(
                 "application-identifier": "MH2SRQ3N27.com.nuri.mobile-ios",
                 "keychain-access-groups": .array([
                     "$(AppIdentifierPrefix)com.nuri.mobile-ios"
+                ]),
+                "com.apple.developer.in-app-payments": .array([
+                    "merchant.com.nuri.ios"
                 ])
             ]),
             dependencies: [

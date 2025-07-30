@@ -1,0 +1,47 @@
+# Add this lane to your Fastfile for easy tester management
+
+desc "Add testers to TestFlight"
+lane :add_testers do |options|
+  emails = options[:emails] # comma-separated emails
+  
+  if emails
+    # Split emails and add each one
+    email_list = emails.split(',').map(&:strip)
+    
+    email_list.each do |email|
+      begin
+        sh("fastlane pilot add --email #{email}")
+        UI.success("Added #{email}")
+      rescue => e
+        UI.error("Failed to add #{email}: #{e.message}")
+      end
+    end
+  else
+    UI.error("Please provide emails: fastlane add_testers emails:'email1@example.com,email2@example.com'")
+  end
+end
+
+# Quick command to add testers
+desc "Quick add beta testers"
+lane :quick_add_testers do |options|
+  emails = options[:emails] || prompt(text: "Enter comma-separated emails")
+  
+  testflight_beta_app_feedback_email = "feedback@nuri.com"
+  testflight_beta_app_description = "Nuri Bitcoin Wallet - Test the latest features"
+  
+  # Add to external testers group
+  pilot(
+    username: "proud@me.com",
+    team_id: "638945",
+    beta_app_feedback_email: testflight_beta_app_feedback_email,
+    beta_app_description: testflight_beta_app_description,
+    distribute_external: true,
+    groups: ["External Testers"],
+    changelog: "New build with passkey authentication"
+  )
+  
+  # Add testers
+  emails.split(',').each do |email|
+    sh("fastlane pilot add --email #{email.strip} --group 'External Testers'")
+  end
+end

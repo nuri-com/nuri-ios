@@ -314,8 +314,8 @@ final class BitcoinWalletService {
             print("   ✅ Found encrypted backup in iCloud keychain")
             print("   🔓 Attempting to decrypt backup (may require Face ID)...")
             
-            // Decrypt the backup using simple encryption
-            let decryptedSeed = try SimpleEncryptionService.shared.decrypt(encryptedBase64: encryptedBackup)
+            // Decrypt the backup using device encryption
+            let decryptedSeed = try DeviceEncryptionService.shared.decrypt(encryptedBase64: encryptedBackup)
             
             print("   ✅ Successfully decrypted iCloud backup")
             return decryptedSeed
@@ -937,11 +937,11 @@ final class BitcoinWalletService {
             try keychain.set(mnemonic.description, key: Keys.mnemonic)
             print("   ✅ NEW mnemonic stored successfully to LOCAL keychain.")
 
-            // Create encrypted backup immediately using simple encryption
+            // Create encrypted backup immediately using device encryption
             print("📋 [BitcoinWalletService] Creating encrypted backup immediately...")
             do {
-                let encryptedBackup = try SimpleEncryptionService.shared.encrypt(data: mnemonic.description)
-                print("   ✅ Seed encrypted successfully with simple encryption")
+                let encryptedBackup = try DeviceEncryptionService.shared.encrypt(data: mnemonic.description)
+                print("   ✅ Seed encrypted successfully with device-specific key")
                 
                 // Store in iCloud backup keychain
                 guard let backupKeychain = backupKeychain else {
@@ -1418,8 +1418,8 @@ final class BitcoinWalletService {
             
             print("   ✅ Found encrypted backup data in iCloud Keychain.")
             
-            // Decrypt using simple encryption (no biometrics needed)
-            let decryptedSeed = try SimpleEncryptionService.shared.decrypt(encryptedBase64: encryptedBackup)
+            // Decrypt using device encryption (no biometrics needed)
+            let decryptedSeed = try DeviceEncryptionService.shared.decrypt(encryptedBase64: encryptedBackup)
             
             let message = "✅ SUCCESS!\n\n\(decryptedSeed)"
             print("   \(message)")
@@ -1481,13 +1481,14 @@ final class BitcoinWalletService {
             debugInfo.append("   📝 Seed preview: \(seedPhrase.prefix(20))...")
             print("✅ Found seed phrase: \(seedPhrase.count) chars")
             
-            // 4. Test simple encryption
-            let currentPassword = SimpleEncryptionService.shared.getCurrentPassword()
+            // 4. Test device encryption
+            let keyInfo = DeviceEncryptionService.shared.getDeviceKeyInfo()
             debugInfo.append("\n🔐 ENCRYPTION TEST:")
-            debugInfo.append("   Password: \(currentPassword)")
-            print("🔐 Using password: \(currentPassword)")
+            debugInfo.append("   Using device-specific encryption key")
+            debugInfo.append(keyInfo.components(separatedBy: "\n").map { "   \($0)" }.joined(separator: "\n"))
+            print("🔐 Using device-specific encryption")
             
-            let encryptedBackup = try SimpleEncryptionService.shared.encrypt(data: seedPhrase)
+            let encryptedBackup = try DeviceEncryptionService.shared.encrypt(data: seedPhrase)
             debugInfo.append("   ✅ Encryption successful")
             debugInfo.append("   📝 Encrypted length: \(encryptedBackup.count) characters")
             debugInfo.append("   📝 Encrypted preview: \(encryptedBackup.prefix(50))...")
@@ -1547,7 +1548,7 @@ final class BitcoinWalletService {
             // 7. Test decryption to verify password works
             debugInfo.append("\n🔓 DECRYPTION TEST:")
             do {
-                let decrypted = try SimpleEncryptionService.shared.decrypt(encryptedBase64: encryptedBackup)
+                let decrypted = try DeviceEncryptionService.shared.decrypt(encryptedBase64: encryptedBackup)
                 let matches = decrypted == seedPhrase
                 debugInfo.append("   ✅ Decryption successful")
                 debugInfo.append("   🎯 Decrypted matches original: \(matches)")
@@ -1581,10 +1582,10 @@ final class BitcoinWalletService {
             return
         }
         do {
-            // Use simple encryption with hardcoded password
-            print("   🔐 Using simple encryption to encrypt seed...")
-            let encryptedSeed = try SimpleEncryptionService.shared.encrypt(data: seedPhrase)
-            print("   ✅ Seed successfully encrypted with simple encryption.")
+            // Use device encryption with unique device key
+            print("   🔐 Using device-specific encryption to encrypt seed...")
+            let encryptedSeed = try DeviceEncryptionService.shared.encrypt(data: seedPhrase)
+            print("   ✅ Seed successfully encrypted with device-specific key.")
             print("   📝 Encrypted data length: \(encryptedSeed.count) characters")
             
             // Store the resulting encrypted string in our separate, iCloud backup keychain.
@@ -1731,7 +1732,7 @@ final class BitcoinWalletService {
             print("✅ [BitcoinWalletService] New seed stored in local keychain")
             
             // Create encrypted backup immediately
-            let encryptedBackup = try SimpleEncryptionService.shared.encrypt(data: newSeedPhrase)
+            let encryptedBackup = try DeviceEncryptionService.shared.encrypt(data: newSeedPhrase)
             
             if let backupKeychain = backupKeychain {
                 try backupKeychain.set(encryptedBackup, key: Keys.encryptedMnemonicBackup)

@@ -29,8 +29,8 @@ struct NuriApp: App {
         
         // Configure Striga service
         StrigaService.shared.configuration = .init(
-            key: "_TbS1cXGStMmYBJtcoYSA7we2lQUky_6TMo-aGLvWJM=",
             url: "https://www.sandbox.striga.com/api/",
+            key: "_TbS1cXGStMmYBJtcoYSA7we2lQUky_6TMo-aGLvWJM=",
             secret: "43jBa65VEoLC5O4O48pDruayz5Q43IlhgyGbkYPcMHE="
         )
     }
