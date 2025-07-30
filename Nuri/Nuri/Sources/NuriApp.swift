@@ -1,4 +1,5 @@
 import SwiftUI
+import StrigaAPI
 
 @main
 struct NuriApp: App {
@@ -25,6 +26,13 @@ struct NuriApp: App {
         #else
         print("📱 [NuriApp] Running on Physical Device")
         #endif
+        
+        // Configure Striga service
+        StrigaService.shared.configuration = .init(
+            key: "_TbS1cXGStMmYBJtcoYSA7we2lQUky_6TMo-aGLvWJM=",
+            url: "https://www.sandbox.striga.com/api/",
+            secret: "43jBa65VEoLC5O4O48pDruayz5Q43IlhgyGbkYPcMHE="
+        )
     }
 
     var body: some Scene {

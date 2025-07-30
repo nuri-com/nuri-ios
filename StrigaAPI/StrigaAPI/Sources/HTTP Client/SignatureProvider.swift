@@ -1,11 +1,12 @@
 import Foundation
 import CryptoKit
 
-class StrigaSignatureProvider {
+class SignatureProvider {
 
     // MARK: - Dependencies
 
     private let configuration: StrigaConfiguration
+    private let jsonEncoder = JSONEncoder()
 
     // MARK: - Initialization
 
@@ -15,18 +16,14 @@ class StrigaSignatureProvider {
 
     // MARK: - Public
 
-    func headers<E: Encodable>(for request: URLRequest, body: E?) throws -> [String : String] {
+    func headers(for request: URLRequest, body: Data?) throws -> [String : String] {
         guard let path = request.url?.path,
               let method = request.httpMethod else {
             throw URLError(.badURL)
         }
-        let data: Data
-        if let body = body {
-            data = try JSONEncoder().encode(body)
-        } else {
-            data = try JSONEncoder().encode(EmptyRequest())
-        }
-        return try generateHeaders(for: path, method: method, body: data)
+        let bodyData = try body ?? jsonEncoder.encode(EmptyRequest())
+        let dataString = String(data: bodyData, encoding: .utf8)!
+        return try generateHeaders(for: path, method: method, body: bodyData)
     }
 
     // MARK: - Private

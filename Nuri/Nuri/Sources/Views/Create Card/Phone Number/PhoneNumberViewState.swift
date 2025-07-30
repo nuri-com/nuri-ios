@@ -10,7 +10,7 @@ struct PhoneNumberViewState: ViewModelViewState {
     var confirmButton: TextButtonViewState
     var showCountryPicker: Bool
     let countryPickedAction: UserObjectAction<SearchCountryDialCodeResult>
-    var showVerifyScreen: Bool
+    var showEmailScreen: Bool
 
     static var empty: PhoneNumberViewState {
         .init(
@@ -24,7 +24,7 @@ struct PhoneNumberViewState: ViewModelViewState {
             confirmButton: .empty,
             showCountryPicker: false,
             countryPickedAction: .empty,
-            showVerifyScreen: false
+            showEmailScreen: false
         )
     }
 }
@@ -35,6 +35,6 @@ extension PhoneNumberViewState {
         case selectCountry(Int)
         case updatePhoneNumber(String)
         case showCountryPicker(Bool)
-        case showVerifyScreen
+        case showEmailScreen
     }
 }

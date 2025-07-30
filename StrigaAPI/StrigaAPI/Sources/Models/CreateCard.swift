@@ -1,11 +1,11 @@
 public struct CreateCard: Encodable {
     public let nameOnCard: String
     public let userId: String
-    public let address: Address
+    public let address: Address?
     public let type: String
     public let threeDSecurePassword: String
 
-    public init(nameOnCard: String, userId: String, address: CreateCard.Address, type: String, threeDSecurePassword: String) {
+    public init(nameOnCard: String, userId: String, address: CreateCard.Address? = nil, type: String, threeDSecurePassword: String) {
         self.nameOnCard = nameOnCard
         self.userId = userId
         self.address = address

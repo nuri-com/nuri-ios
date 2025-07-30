@@ -4,10 +4,6 @@ struct PhoneNumberView: View {
 
     @ObservedObject var viewModel = PhoneNumberViewModel()
 
-    init(completion: (() -> Void)? = nil) {
-        viewModel.completion = completion
-    }
-
     var body: some View {
         contentView(viewState: viewModel.viewState)
     }
@@ -69,10 +65,11 @@ struct PhoneNumberView: View {
                 viewState.countryPickedAction.action(result)
             }
         }
-        .navigationDestination(isPresented: $viewModel.viewState.showVerifyScreen) {
-            VerifyCallView() {
-                
-            }
+        .navigationDestination(isPresented: $viewModel.viewState.showEmailScreen) {
+            EmailView(viewModel: .init(
+                countryCode: viewState.countryCode,
+                phoneNumber: viewState.phoneNumber.text
+            ))
         }
     }
 }
