@@ -705,10 +705,18 @@ final class PasskeyAuthenticationService: NSObject {
         
         Log.passkey.debug("Security key verification request", metadata: [
             "credentialId": credentialIdBase64,
-            "authenticatorType": "securityKey"
+            "authenticatorType": "securityKey",
+            "userHandle": credential.userID.base64URLEncodedString(),
+            "endpoint": endpoint
         ])
         
-        Log.network.info("Sending security key verification request")
+        #if DEBUG
+        if let jsonString = String(data: request.httpBody!, encoding: .utf8) {
+            Log.passkey.debug("Security key auth request JSON", metadata: ["body": jsonString])
+        }
+        #endif
+        
+        Log.network.info("Sending security key verification request to: \(endpoint)")
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
