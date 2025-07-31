@@ -424,17 +424,25 @@ final class PasskeyAuthenticationService: NSObject {
         
         // Determine the actual preferences for logging
         let residentKeyString: String
-        switch securityKeyRequest.residentKeyPreference {
-        case .discouraged: residentKeyString = "discouraged"
-        case .preferred: residentKeyString = "preferred"
-        case .required: residentKeyString = "required"
+        if securityKeyRequest.residentKeyPreference == .discouraged {
+            residentKeyString = "discouraged"
+        } else if securityKeyRequest.residentKeyPreference == .preferred {
+            residentKeyString = "preferred"
+        } else if securityKeyRequest.residentKeyPreference == .required {
+            residentKeyString = "required"
+        } else {
+            residentKeyString = "unknown"
         }
         
         let userVerificationString: String
-        switch securityKeyRequest.userVerificationPreference {
-        case .discouraged: userVerificationString = "discouraged"
-        case .preferred: userVerificationString = "preferred"
-        case .required: userVerificationString = "required"
+        if securityKeyRequest.userVerificationPreference == .discouraged {
+            userVerificationString = "discouraged"
+        } else if securityKeyRequest.userVerificationPreference == .preferred {
+            userVerificationString = "preferred"
+        } else if securityKeyRequest.userVerificationPreference == .required {
+            userVerificationString = "required"
+        } else {
+            userVerificationString = "unknown"
         }
         
         Log.passkey.info("Step 3: Presenting security key registration UI", metadata: [
