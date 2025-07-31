@@ -354,6 +354,15 @@ final class PasskeyAuthenticationService: NSObject {
         // Step 1: Get registration options
         Log.passkey.info("Step 1: Fetching registration options from server")
         let regOptions = try await fetchRegistrationOptions(username: username)
+        
+        // Debug: Log exact server requirements
+        Log.passkey.info("🔍 DEBUG: Server authenticator selection", metadata: [
+            "requireResidentKey": regOptions.authenticatorSelection.requireResidentKey,
+            "residentKey": regOptions.authenticatorSelection.residentKey ?? "none",
+            "userVerification": regOptions.authenticatorSelection.userVerification,
+            "authenticatorAttachment": regOptions.authenticatorSelection.authenticatorAttachment ?? "none"
+        ])
+        
         Log.passkey.success("Registration options received", metadata: [
             "challenge": regOptions.challenge.prefix(20) + "...",
             "rpId": regOptions.rp.id,
@@ -425,10 +434,30 @@ final class PasskeyAuthenticationService: NSObject {
             securityKeyRequest.userVerificationPreference = .preferred
         }
         
-        Log.passkey.info("Using server requirements for security key (PIN will be required)", metadata: [
+        // Determine what we're actually setting for logging
+        let actualResidentKey: String
+        if securityKeyRequest.residentKeyPreference == .discouraged {
+            actualResidentKey = "discouraged"
+        } else if securityKeyRequest.residentKeyPreference == .preferred {
+            actualResidentKey = "preferred"
+        } else {
+            actualResidentKey = "required"
+        }
+        
+        let actualUserVerification: String
+        if securityKeyRequest.userVerificationPreference == .discouraged {
+            actualUserVerification = "discouraged"
+        } else if securityKeyRequest.userVerificationPreference == .preferred {
+            actualUserVerification = "preferred"
+        } else {
+            actualUserVerification = "required"
+        }
+        
+        Log.passkey.info("Using server requirements for security key", metadata: [
             "serverResidentKey": regOptions.authenticatorSelection.residentKey ?? "none",
             "serverUserVerification": regOptions.authenticatorSelection.userVerification,
-            "note": "Server needs update to accept discouraged for security keys"
+            "actualResidentKey": actualResidentKey,
+            "actualUserVerification": actualUserVerification
         ])
         
         // Step 3: Perform authorization with ONLY security key
