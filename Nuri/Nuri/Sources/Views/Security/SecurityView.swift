@@ -306,6 +306,20 @@ struct SecurityView: View {
                     }
                     .disabled(isLoading || !isUserLoggedIn)
                     
+                    // Add Hardware Security Key button
+                    Button(action: addHardwareSecurityKey) {
+                        if isLoading {
+                            HStack {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                Text("Adding security key...")
+                            }
+                        } else {
+                            Label("Add Hardware Security Key", systemImage: "key.horizontal.fill")
+                        }
+                    }
+                    .disabled(isLoading || !isUserLoggedIn)
+                    
                     if !resultText.isEmpty && resultText != "Press the button to test the encrypted iCloud backup." {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Result:")
@@ -1262,6 +1276,100 @@ struct SecurityView: View {
                 Log.ui.error("Failed to add additional passkey", error: error)
                 await MainActor.run {
                     resultText = "❌ Error: \(error.localizedDescription)"
+                    isLoading = false
+                }
+            }
+        }
+    }
+    
+    // MARK: - Add Hardware Security Key
+    
+    private func addHardwareSecurityKey() {
+        Log.ui.info("===== ADD HARDWARE SECURITY KEY =====")
+        Log.ui.info("User initiated adding hardware security key")
+        
+        isLoading = true
+        resultText = "Adding hardware security key...\n\nPlease connect your security key (e.g., YubiKey) and follow the prompts."
+        
+        Task {
+            do {
+                // Get current user info
+                guard let username = UserDefaults.standard.string(forKey: "passkeyUsername") else {
+                    Log.ui.error("No username found - user must be logged in first")
+                    await MainActor.run {
+                        resultText = "❌ Error: You must be logged in to add a security key"
+                        isLoading = false
+                    }
+                    return
+                }
+                
+                let isAnonymous = UserDefaults.standard.bool(forKey: "passkeyIsAnonymous")
+                
+                Log.ui.info("Adding security key for existing user", metadata: [
+                    "username": username,
+                    "isAnonymous": isAnonymous
+                ])
+                
+                // Get the window for passkey presentation
+                guard let windowScene = await UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                      let window = await windowScene.windows.first(where: { $0.isKeyWindow }) else {
+                    Log.ui.error("Could not find window for security key presentation")
+                    await MainActor.run {
+                        resultText = "❌ Error: Could not present security key dialog"
+                        isLoading = false
+                    }
+                    return
+                }
+                
+                // Add security key ONLY (no platform passkey)
+                let result = try await PasskeyAuthenticationService.shared.addSecurityKey(
+                    username: isAnonymous ? nil : username,
+                    presentationAnchor: window
+                )
+                
+                if result.verified {
+                    Log.ui.success("Hardware security key added successfully", metadata: [
+                        "username": result.username ?? "unknown"
+                    ])
+                    
+                    await MainActor.run {
+                        resultText = """
+                        ✅ SUCCESS: Hardware security key added!
+                        
+                        Username: \(result.username ?? username)
+                        
+                        Your hardware security key (e.g., YubiKey) is now registered.
+                        
+                        You can now use this security key to:
+                        - Authenticate to your wallet
+                        - Access your encryption key backup
+                        - Make transactions
+                        
+                        Security keys provide an extra layer of protection and work across all your devices.
+                        """
+                        isLoading = false
+                        // Refresh the passkeys list
+                        loadUserPasskeys()
+                    }
+                } else {
+                    Log.ui.error("Failed to verify hardware security key")
+                    await MainActor.run {
+                        resultText = "❌ Error: Failed to add hardware security key"
+                        isLoading = false
+                    }
+                }
+                
+            } catch {
+                Log.ui.error("Failed to add hardware security key", error: error)
+                await MainActor.run {
+                    resultText = """
+                    ❌ Error: \(error.localizedDescription)
+                    
+                    Make sure:
+                    - Your security key is connected
+                    - You're using a FIDO2/WebAuthn compatible key
+                    - The key is not already registered
+                    """
                     isLoading = false
                 }
             }

@@ -335,6 +335,151 @@ final class PasskeyAuthenticationService: NSObject {
         }
     }
     
+    // Add hardware security key only (no platform passkey)
+    func addSecurityKey(username: String? = nil, presentationAnchor: ASPresentationAnchor) async throws -> (verified: Bool, username: String?) {
+        Log.passkey.info("===== ADD SECURITY KEY STARTED =====")
+        Log.passkey.info("Starting security key registration", metadata: [
+            "username": username ?? "anonymous",
+            "hasUsername": username != nil
+        ])
+        
+        // Store the presentation anchor
+        self.currentPresentationAnchor = presentationAnchor
+        defer { 
+            Log.passkey.info("Cleaning up presentation anchor")
+            self.currentPresentationAnchor = nil 
+        }
+        
+        // Step 1: Get registration options
+        Log.passkey.info("Step 1: Fetching registration options from server")
+        let regOptions = try await fetchRegistrationOptions(username: username)
+        Log.passkey.success("Registration options received", metadata: [
+            "challenge": regOptions.challenge.prefix(20) + "...",
+            "rpId": regOptions.rp.id,
+            "userName": regOptions.user.name,
+            "userDisplayName": regOptions.user.displayName
+        ])
+        
+        // Step 2: Create credential registration request
+        Log.passkey.info("Step 2: Creating security key registration request")
+        let challenge = Data(base64URLEncoded: regOptions.challenge) ?? Data()
+        let userID = Data(regOptions.user.id.utf8)
+        
+        Log.passkey.debug("Challenge and user data", metadata: [
+            "challengeSize": challenge.count,
+            "userIDSize": userID.count,
+            "userIDString": regOptions.user.id
+        ])
+        
+        // Use the rpId from the server response
+        let rpId = regOptions.rp.id
+        Log.passkey.info("Using server's rpId for security key registration", metadata: ["rpId": rpId])
+        
+        // ONLY create security key request - no platform request
+        let securityKeyProvider = ASAuthorizationSecurityKeyPublicKeyCredentialProvider(relyingPartyIdentifier: rpId)
+        let securityKeyRequest = securityKeyProvider.createCredentialRegistrationRequest(
+            challenge: challenge,
+            displayName: regOptions.user.displayName,
+            name: regOptions.user.name,
+            userID: userID
+        )
+        
+        // IMPORTANT: Security keys require specifying supported algorithms
+        // Set the supported credential algorithms (required for security keys)
+        // ES256 is the most widely supported algorithm for security keys
+        securityKeyRequest.credentialParameters = [
+            ASAuthorizationPublicKeyCredentialParameters(
+                algorithm: ASCOSEAlgorithmIdentifier.ES256 // ECDSA with SHA-256
+            )
+        ]
+        
+        // Set resident key preference to discouraged (for YubiKey compatibility)
+        securityKeyRequest.residentKeyPreference = .discouraged
+        
+        // Set user verification to discouraged for NFC keys
+        securityKeyRequest.userVerificationPreference = .discouraged
+        
+        // Step 3: Perform authorization with ONLY security key
+        let authController = ASAuthorizationController(authorizationRequests: [securityKeyRequest])
+        authController.delegate = self
+        authController.presentationContextProvider = self
+        
+        Log.passkey.info("Step 3: Presenting security key registration UI", metadata: [
+            "algorithm": "ES256",
+            "residentKey": "discouraged",
+            "userVerification": "discouraged",
+            "transports": "NFC, USB"
+        ])
+        
+        Log.passkey.info("About to call performAuthorization - UI should appear now")
+        
+        let authorization: ASAuthorization
+        do {
+            Log.passkey.info("Calling performAuthorization...")
+            authorization = try await performAuthorization(controller: authController)
+            Log.passkey.success("performAuthorization completed successfully")
+        } catch {
+            Log.passkey.error("performAuthorization failed", error: error)
+            throw error
+        }
+        
+        Log.passkey.info("Checking credential type", metadata: [
+            "credentialType": String(describing: type(of: authorization.credential))
+        ])
+        
+        if let credential = authorization.credential as? ASAuthorizationSecurityKeyPublicKeyCredentialRegistration {
+            Log.passkey.success("User registered with security key", metadata: [
+                "credentialId": credential.credentialID.base64URLEncodedString(),
+                "attestationObjectSize": credential.rawAttestationObject?.count ?? 0,
+                "clientDataJSONSize": credential.rawClientDataJSON.count
+            ])
+            
+            // Step 4: Verify with server
+            Log.passkey.info("Step 4: Starting server verification", metadata: [
+                "username": username ?? "Anonymous",
+                "challengeKey": regOptions.challengeKey
+            ])
+            
+            let result = try await verifySecurityKeyRegistration(credential: credential, username: username, challengeKey: regOptions.challengeKey)
+            
+            Log.passkey.success("Server verification completed", metadata: [
+                "verified": result.verified,
+                "returnedUsername": result.username ?? "none"
+            ])
+            
+            // Step 5: Store encryption key if registration successful
+            if result.verified, let username = result.username {
+                Log.passkey.info("Step 5: Storing encryption key with security key", metadata: [
+                    "username": username,
+                    "credentialId": credential.credentialID.base64URLEncodedString().prefix(10) + "...",
+                    "isAnonymous": username.starts(with: "anon_") || username == "Anonymous"
+                ])
+                
+                // Store user info for later use
+                UserDefaults.standard.set(username, forKey: "passkeyUsername")
+                UserDefaults.standard.set(credential.credentialID.base64URLEncodedString(), forKey: "passkeyCredentialId")
+                UserDefaults.standard.set(username.starts(with: "anon_") || username == "Anonymous", forKey: "passkeyIsAnonymous")
+                
+                do {
+                    try await storeEncryptionKey(
+                        for: username,
+                        credentialId: credential.credentialID.base64URLEncodedString(),
+                        isAnonymous: username.starts(with: "anon_") || username == "Anonymous"
+                    )
+                    Log.passkey.success("Encryption key stored successfully with security key")
+                } catch {
+                    Log.passkey.error("Failed to store encryption key", error: error)
+                    // Don't fail the registration if key storage fails
+                }
+            }
+            
+            return result
+        } else {
+            Log.passkey.error("Expected security key credential but got something else")
+            throw PasskeyError.invalidCredentialType
+        }
+    }
+    
     func createPasskey(username: String? = nil, presentationAnchor: ASPresentationAnchor) async throws -> (verified: Bool, username: String?) {
         // Store the presentation anchor
         self.currentPresentationAnchor = presentationAnchor
@@ -653,6 +798,7 @@ final class PasskeyAuthenticationService: NSObject {
         
         let credentialIdBase64 = credential.credentialID.base64URLEncodedString()
         
+        // For anonymous users, match the working platform passkey implementation
         let verificationRequest = RegistrationVerificationRequest(
             cred: RegistrationVerificationRequest.CredentialData(
                 id: credentialIdBase64,
@@ -664,7 +810,7 @@ final class PasskeyAuthenticationService: NSObject {
                 )
             ),
             challengeKey: challengeKey,
-            username: username ?? "Anonymous" // Ensure anonymous users have a username
+            username: username ?? "Anonymous" // Match platform passkey behavior - send "Anonymous" for anonymous users
         )
         
         var request = URLRequest(url: url)
@@ -678,12 +824,27 @@ final class PasskeyAuthenticationService: NSObject {
         Log.passkey.debug("Security key registration verification request", metadata: [
             "credentialId": credential.credentialID.base64URLEncodedString(),
             "attestationObjectSize": credential.rawAttestationObject?.count ?? 0,
-            "authenticatorType": "securityKey"
+            "authenticatorType": "securityKey",
+            "challengeKey": challengeKey,
+            "username": username ?? "Anonymous",
+            "actualUsername": verificationRequest.username ?? "nil"
         ])
         
-        Log.network.info("Sending security key registration verification request")
+        #if DEBUG
+        if let jsonString = String(data: request.httpBody!, encoding: .utf8) {
+            Log.passkey.debug("Request JSON for security key", metadata: ["body": jsonString])
+        }
+        #endif
         
-        let (data, response) = try await URLSession.shared.data(for: request)
+        Log.network.info("Sending security key registration verification request to: \(url.absoluteString)")
+        
+        // Add timeout to prevent hanging
+        var urlRequest = request
+        urlRequest.timeoutInterval = 30.0 // 30 second timeout
+        
+        Log.network.debug("Request timeout set to 30 seconds")
+        
+        let (data, response) = try await URLSession.shared.data(for: urlRequest)
         
         guard let httpResponse = response as? HTTPURLResponse else {
             throw PasskeyError.serverError
@@ -933,11 +1094,13 @@ final class PasskeyAuthenticationService: NSObject {
     // MARK: - Helper Methods
     
     private func performAuthorization(controller: ASAuthorizationController) async throws -> ASAuthorization {
+        Log.passkey.info("performAuthorization started")
         return try await withCheckedThrowingContinuation { continuation in
+            Log.passkey.info("Setting up continuation")
             self.authorizationContinuation = continuation
-            Log.passkey.debug("Calling performRequests()")
+            Log.passkey.debug("Calling performRequests() - this will trigger the UI")
             controller.performRequests()
-            Log.passkey.debug("Passkey UI should be presenting")
+            Log.passkey.debug("performRequests() called - waiting for user interaction")
         }
     }
     
@@ -949,24 +1112,61 @@ final class PasskeyAuthenticationService: NSObject {
 
 extension PasskeyAuthenticationService: ASAuthorizationControllerDelegate {
     nonisolated func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        print("🟢 [DELEGATE] Authorization completed successfully")
         Task { @MainActor in
-            Log.passkey.success("Authorization completed")
-            authorizationContinuation?.resume(returning: authorization)
-            authorizationContinuation = nil
+            Log.passkey.success("===== AUTHORIZATION DELEGATE: SUCCESS =====")
+            Log.passkey.info("Authorization completed", metadata: [
+                "credentialType": String(describing: type(of: authorization.credential))
+            ])
+            
+            if let continuation = authorizationContinuation {
+                Log.passkey.info("Resuming continuation with success")
+                continuation.resume(returning: authorization)
+                authorizationContinuation = nil
+            } else {
+                Log.passkey.error("WARNING: No continuation found to resume!")
+            }
         }
     }
     
     nonisolated func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        print("🔴 [DELEGATE] Authorization failed with error: \(error)")
         Task { @MainActor in
+            Log.passkey.error("===== AUTHORIZATION DELEGATE: ERROR =====")
             Log.passkey.error("Authorization failed", error: error)
+            
             if let authError = error as? ASAuthorizationError {
                 Log.passkey.debug("Authorization error details", metadata: [
                     "code": authError.code.rawValue,
                     "description": authError.localizedDescription
                 ])
+                
+                // Log specific error types
+                switch authError.code {
+                case .canceled:
+                    Log.passkey.info("User canceled the operation")
+                case .failed:
+                    Log.passkey.error("Operation failed")
+                case .invalidResponse:
+                    Log.passkey.error("Invalid response from authenticator")
+                case .notHandled:
+                    Log.passkey.error("Request not handled")
+                case .notInteractive:
+                    Log.passkey.error("Request requires user interaction")
+                case .unknown:
+                    Log.passkey.error("Unknown error - possibly no credentials")
+                @unknown default:
+                    Log.passkey.error("Unexpected error code")
+                }
             }
-            authorizationContinuation?.resume(throwing: error)
-            authorizationContinuation = nil
+            
+            if let continuation = authorizationContinuation {
+                Log.passkey.info("Resuming continuation with error")
+                continuation.resume(throwing: error)
+                authorizationContinuation = nil
+            } else {
+                Log.passkey.error("WARNING: No continuation found to resume with error!")
+            }
         }
     }
 }
@@ -975,9 +1175,15 @@ extension PasskeyAuthenticationService: ASAuthorizationControllerDelegate {
 
 extension PasskeyAuthenticationService: ASAuthorizationControllerPresentationContextProviding {
     func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        print("🪟 [PRESENTATION] presentationAnchor called")
+        Log.passkey.info("===== PRESENTATION ANCHOR REQUESTED =====")
+        
         // Use the stored presentation anchor if available
         if let anchor = currentPresentationAnchor {
-            Log.passkey.debug("Using provided presentation anchor")
+            Log.passkey.success("Using provided presentation anchor", metadata: [
+                "hasAnchor": "true",
+                "anchorType": String(describing: type(of: anchor))
+            ])
             return anchor
         }
         
@@ -991,6 +1197,7 @@ extension PasskeyAuthenticationService: ASAuthorizationControllerPresentationCon
                 .compactMap({ $0 as? UIWindowScene })
                 .flatMap({ $0.windows })
                 .first {
+                Log.passkey.warning("Using fallback window")
                 return anyWindow
             }
             fatalError("No window available for passkey presentation")
