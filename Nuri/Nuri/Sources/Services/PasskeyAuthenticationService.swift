@@ -130,6 +130,7 @@ final class PasskeyAuthenticationService: NSObject {
         let cred: CredentialData
         let challengeKey: String
         let username: String?
+        let authenticatorType: String? // Add this to indicate security key
         
         struct CredentialData: Codable {
             let id: String
@@ -396,63 +397,33 @@ final class PasskeyAuthenticationService: NSObject {
             )
         ]
         
-        // Use server's requirements for resident key and user verification
-        if regOptions.authenticatorSelection.requireResidentKey || regOptions.authenticatorSelection.residentKey == "required" {
-            securityKeyRequest.residentKeyPreference = .required
-        } else if regOptions.authenticatorSelection.residentKey == "preferred" {
-            securityKeyRequest.residentKeyPreference = .preferred
-        } else {
-            securityKeyRequest.residentKeyPreference = .discouraged
-        }
+        // For security keys, we want to avoid PIN requirements
+        // Override server's userVerification to discouraged for NFC YubiKey compatibility
+        // This allows using the key without setting up a PIN
+        securityKeyRequest.residentKeyPreference = .discouraged
+        securityKeyRequest.userVerificationPreference = .discouraged
         
-        // Map server's user verification requirement
-        switch regOptions.authenticatorSelection.userVerification {
-        case "required":
-            securityKeyRequest.userVerificationPreference = .required
-        case "preferred":
-            securityKeyRequest.userVerificationPreference = .preferred
-        case "discouraged":
-            securityKeyRequest.userVerificationPreference = .discouraged
-        default:
-            securityKeyRequest.userVerificationPreference = .preferred
-        }
+        // Note: We're intentionally ignoring server's requirements here
+        // to match the behavior you expect (no PIN setup)
+        Log.passkey.info("Overriding server requirements for security key", metadata: [
+            "serverResidentKey": regOptions.authenticatorSelection.residentKey ?? "none",
+            "serverUserVerification": regOptions.authenticatorSelection.userVerification,
+            "actualResidentKey": "discouraged",
+            "actualUserVerification": "discouraged",
+            "reason": "Avoid PIN requirement for NFC YubiKey"
+        ])
         
         // Step 3: Perform authorization with ONLY security key
         let authController = ASAuthorizationController(authorizationRequests: [securityKeyRequest])
         authController.delegate = self
         authController.presentationContextProvider = self
         
-        // Determine the actual preferences for logging
-        let residentKeyString: String
-        if securityKeyRequest.residentKeyPreference == .discouraged {
-            residentKeyString = "discouraged"
-        } else if securityKeyRequest.residentKeyPreference == .preferred {
-            residentKeyString = "preferred"
-        } else if securityKeyRequest.residentKeyPreference == .required {
-            residentKeyString = "required"
-        } else {
-            residentKeyString = "unknown"
-        }
-        
-        let userVerificationString: String
-        if securityKeyRequest.userVerificationPreference == .discouraged {
-            userVerificationString = "discouraged"
-        } else if securityKeyRequest.userVerificationPreference == .preferred {
-            userVerificationString = "preferred"
-        } else if securityKeyRequest.userVerificationPreference == .required {
-            userVerificationString = "required"
-        } else {
-            userVerificationString = "unknown"
-        }
-        
         Log.passkey.info("Step 3: Presenting security key registration UI", metadata: [
             "algorithm": "ES256",
-            "residentKey": residentKeyString,
-            "userVerification": userVerificationString,
+            "residentKey": "discouraged",
+            "userVerification": "discouraged",
             "transports": "NFC, USB",
-            "serverRequiredResident": regOptions.authenticatorSelection.requireResidentKey,
-            "serverResidentKey": regOptions.authenticatorSelection.residentKey ?? "none",
-            "serverUserVerification": regOptions.authenticatorSelection.userVerification
+            "note": "Using discouraged to avoid PIN setup on YubiKey"
         ])
         
         Log.passkey.info("About to call performAuthorization - UI should appear now")
@@ -854,7 +825,8 @@ final class PasskeyAuthenticationService: NSObject {
                 )
             ),
             challengeKey: challengeKey,
-            username: username ?? "Anonymous" // Match platform passkey behavior - send "Anonymous" for anonymous users
+            username: username ?? "Anonymous", // Match platform passkey behavior - send "Anonymous" for anonymous users
+            authenticatorType: "cross-platform" // Indicate this is a security key, not platform authenticator
         )
         
         var request = URLRequest(url: url)
@@ -929,7 +901,8 @@ final class PasskeyAuthenticationService: NSObject {
                 )
             ),
             challengeKey: challengeKey,
-            username: username ?? "Anonymous" // Ensure anonymous users have a username
+            username: username ?? "Anonymous", // Ensure anonymous users have a username
+            authenticatorType: "platform" // Indicate this is a platform authenticator (Face ID/Touch ID)
         )
         
         var request = URLRequest(url: url)
