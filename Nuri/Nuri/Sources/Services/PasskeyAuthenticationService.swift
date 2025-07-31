@@ -357,7 +357,10 @@ final class PasskeyAuthenticationService: NSObject {
             "challenge": regOptions.challenge.prefix(20) + "...",
             "rpId": regOptions.rp.id,
             "userName": regOptions.user.name,
-            "userDisplayName": regOptions.user.displayName
+            "userDisplayName": regOptions.user.displayName,
+            "requireResidentKey": regOptions.authenticatorSelection.requireResidentKey,
+            "residentKey": regOptions.authenticatorSelection.residentKey ?? "none",
+            "userVerification": regOptions.authenticatorSelection.userVerification
         ])
         
         // Step 2: Create credential registration request
@@ -393,22 +396,55 @@ final class PasskeyAuthenticationService: NSObject {
             )
         ]
         
-        // Set resident key preference to discouraged (for YubiKey compatibility)
-        securityKeyRequest.residentKeyPreference = .discouraged
+        // Use server's requirements for resident key and user verification
+        if regOptions.authenticatorSelection.requireResidentKey || regOptions.authenticatorSelection.residentKey == "required" {
+            securityKeyRequest.residentKeyPreference = .required
+        } else if regOptions.authenticatorSelection.residentKey == "preferred" {
+            securityKeyRequest.residentKeyPreference = .preferred
+        } else {
+            securityKeyRequest.residentKeyPreference = .discouraged
+        }
         
-        // Set user verification to discouraged for NFC keys
-        securityKeyRequest.userVerificationPreference = .discouraged
+        // Map server's user verification requirement
+        switch regOptions.authenticatorSelection.userVerification {
+        case "required":
+            securityKeyRequest.userVerificationPreference = .required
+        case "preferred":
+            securityKeyRequest.userVerificationPreference = .preferred
+        case "discouraged":
+            securityKeyRequest.userVerificationPreference = .discouraged
+        default:
+            securityKeyRequest.userVerificationPreference = .preferred
+        }
         
         // Step 3: Perform authorization with ONLY security key
         let authController = ASAuthorizationController(authorizationRequests: [securityKeyRequest])
         authController.delegate = self
         authController.presentationContextProvider = self
         
+        // Determine the actual preferences for logging
+        let residentKeyString: String
+        switch securityKeyRequest.residentKeyPreference {
+        case .discouraged: residentKeyString = "discouraged"
+        case .preferred: residentKeyString = "preferred"
+        case .required: residentKeyString = "required"
+        }
+        
+        let userVerificationString: String
+        switch securityKeyRequest.userVerificationPreference {
+        case .discouraged: userVerificationString = "discouraged"
+        case .preferred: userVerificationString = "preferred"
+        case .required: userVerificationString = "required"
+        }
+        
         Log.passkey.info("Step 3: Presenting security key registration UI", metadata: [
             "algorithm": "ES256",
-            "residentKey": "discouraged",
-            "userVerification": "discouraged",
-            "transports": "NFC, USB"
+            "residentKey": residentKeyString,
+            "userVerification": userVerificationString,
+            "transports": "NFC, USB",
+            "serverRequiredResident": regOptions.authenticatorSelection.requireResidentKey,
+            "serverResidentKey": regOptions.authenticatorSelection.residentKey ?? "none",
+            "serverUserVerification": regOptions.authenticatorSelection.userVerification
         ])
         
         Log.passkey.info("About to call performAuthorization - UI should appear now")
