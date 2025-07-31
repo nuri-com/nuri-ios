@@ -397,20 +397,38 @@ final class PasskeyAuthenticationService: NSObject {
             )
         ]
         
-        // For security keys, we want to avoid PIN requirements
-        // Override server's userVerification to discouraged for NFC YubiKey compatibility
-        // This allows using the key without setting up a PIN
-        securityKeyRequest.residentKeyPreference = .discouraged
-        securityKeyRequest.userVerificationPreference = .discouraged
+        // TODO: Server currently enforces userVerification=required for all authenticators
+        // Once server is updated to accept userVerification=discouraged for security keys,
+        // uncomment the lines below to avoid PIN setup on YubiKey:
+        //
+        // securityKeyRequest.residentKeyPreference = .discouraged
+        // securityKeyRequest.userVerificationPreference = .discouraged
+        //
+        // For now, we must use the server's requirements which will require PIN setup:
+        if regOptions.authenticatorSelection.requireResidentKey || regOptions.authenticatorSelection.residentKey == "required" {
+            securityKeyRequest.residentKeyPreference = .required
+        } else if regOptions.authenticatorSelection.residentKey == "preferred" {
+            securityKeyRequest.residentKeyPreference = .preferred
+        } else {
+            securityKeyRequest.residentKeyPreference = .discouraged
+        }
         
-        // Note: We're intentionally ignoring server's requirements here
-        // to match the behavior you expect (no PIN setup)
-        Log.passkey.info("Overriding server requirements for security key", metadata: [
+        // Map server's user verification requirement
+        switch regOptions.authenticatorSelection.userVerification {
+        case "required":
+            securityKeyRequest.userVerificationPreference = .required
+        case "preferred":
+            securityKeyRequest.userVerificationPreference = .preferred
+        case "discouraged":
+            securityKeyRequest.userVerificationPreference = .discouraged
+        default:
+            securityKeyRequest.userVerificationPreference = .preferred
+        }
+        
+        Log.passkey.info("Using server requirements for security key (PIN will be required)", metadata: [
             "serverResidentKey": regOptions.authenticatorSelection.residentKey ?? "none",
             "serverUserVerification": regOptions.authenticatorSelection.userVerification,
-            "actualResidentKey": "discouraged",
-            "actualUserVerification": "discouraged",
-            "reason": "Avoid PIN requirement for NFC YubiKey"
+            "note": "Server needs update to accept discouraged for security keys"
         ])
         
         // Step 3: Perform authorization with ONLY security key
@@ -418,12 +436,35 @@ final class PasskeyAuthenticationService: NSObject {
         authController.delegate = self
         authController.presentationContextProvider = self
         
+        // Determine the actual preferences for logging
+        let residentKeyString: String
+        if securityKeyRequest.residentKeyPreference == .discouraged {
+            residentKeyString = "discouraged"
+        } else if securityKeyRequest.residentKeyPreference == .preferred {
+            residentKeyString = "preferred"
+        } else if securityKeyRequest.residentKeyPreference == .required {
+            residentKeyString = "required"
+        } else {
+            residentKeyString = "unknown"
+        }
+        
+        let userVerificationString: String
+        if securityKeyRequest.userVerificationPreference == .discouraged {
+            userVerificationString = "discouraged"
+        } else if securityKeyRequest.userVerificationPreference == .preferred {
+            userVerificationString = "preferred"
+        } else if securityKeyRequest.userVerificationPreference == .required {
+            userVerificationString = "required"
+        } else {
+            userVerificationString = "unknown"
+        }
+        
         Log.passkey.info("Step 3: Presenting security key registration UI", metadata: [
             "algorithm": "ES256",
-            "residentKey": "discouraged",
-            "userVerification": "discouraged",
+            "residentKey": residentKeyString,
+            "userVerification": userVerificationString,
             "transports": "NFC, USB",
-            "note": "Using discouraged to avoid PIN setup on YubiKey"
+            "note": "PIN setup will be required until server accepts discouraged"
         ])
         
         Log.passkey.info("About to call performAuthorization - UI should appear now")
