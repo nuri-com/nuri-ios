@@ -406,58 +406,21 @@ final class PasskeyAuthenticationService: NSObject {
             )
         ]
         
-        // TODO: Server currently enforces userVerification=required for all authenticators
-        // Once server is updated to accept userVerification=discouraged for security keys,
-        // uncomment the lines below to avoid PIN setup on YubiKey:
-        //
-        // securityKeyRequest.residentKeyPreference = .discouraged
-        // securityKeyRequest.userVerificationPreference = .discouraged
-        //
-        // For now, we must use the server's requirements which will require PIN setup:
-        if regOptions.authenticatorSelection.requireResidentKey || regOptions.authenticatorSelection.residentKey == "required" {
-            securityKeyRequest.residentKeyPreference = .required
-        } else if regOptions.authenticatorSelection.residentKey == "preferred" {
-            securityKeyRequest.residentKeyPreference = .preferred
-        } else {
-            securityKeyRequest.residentKeyPreference = .discouraged
-        }
+        // IMPORTANT: For security keys (YubiKey), we override to discouraged to avoid PIN setup
+        // Even when server sends "preferred", iOS will prompt for PIN setup on YubiKey
+        // By using "discouraged", the YubiKey works with just a touch (no PIN required)
+        securityKeyRequest.residentKeyPreference = .discouraged
+        securityKeyRequest.userVerificationPreference = .discouraged
         
-        // Map server's user verification requirement
-        switch regOptions.authenticatorSelection.userVerification {
-        case "required":
-            securityKeyRequest.userVerificationPreference = .required
-        case "preferred":
-            securityKeyRequest.userVerificationPreference = .preferred
-        case "discouraged":
-            securityKeyRequest.userVerificationPreference = .discouraged
-        default:
-            securityKeyRequest.userVerificationPreference = .preferred
-        }
+        // Note: Platform authenticators (Face ID) still use server's requirements
+        // This override only affects security keys to match expected UX
         
-        // Determine what we're actually setting for logging
-        let actualResidentKey: String
-        if securityKeyRequest.residentKeyPreference == .discouraged {
-            actualResidentKey = "discouraged"
-        } else if securityKeyRequest.residentKeyPreference == .preferred {
-            actualResidentKey = "preferred"
-        } else {
-            actualResidentKey = "required"
-        }
-        
-        let actualUserVerification: String
-        if securityKeyRequest.userVerificationPreference == .discouraged {
-            actualUserVerification = "discouraged"
-        } else if securityKeyRequest.userVerificationPreference == .preferred {
-            actualUserVerification = "preferred"
-        } else {
-            actualUserVerification = "required"
-        }
-        
-        Log.passkey.info("Using server requirements for security key", metadata: [
+        Log.passkey.info("Overriding server requirements for security key", metadata: [
             "serverResidentKey": regOptions.authenticatorSelection.residentKey ?? "none",
             "serverUserVerification": regOptions.authenticatorSelection.userVerification,
-            "actualResidentKey": actualResidentKey,
-            "actualUserVerification": actualUserVerification
+            "actualResidentKey": "discouraged",
+            "actualUserVerification": "discouraged",
+            "reason": "Avoid PIN prompt on YubiKey"
         ])
         
         // Step 3: Perform authorization with ONLY security key
