@@ -28,11 +28,12 @@ struct WelcomeView: View {
                 VStack {
                     Spacer()
                     
+                    // Primary button - Create Wallet
                     Button(action: {
-                        print("\n🆕 ===== PASSKEY AUTHENTICATION STARTED =====")
-                        print("👆 [WelcomeView] User tapped 'Login with Passkey' button")
+                        print("\n🆕 ===== CREATE WALLET STARTED =====")
+                        print("👆 [WelcomeView] User tapped 'Create Wallet' button")
                         Task {
-                            await authenticateWithPasskey()
+                            await createNewPasskey()
                         }
                     }) {
                         if isAuthenticating {
@@ -40,11 +41,26 @@ struct WelcomeView: View {
                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                 .scaleEffect(0.8)
                         } else {
-                            Text("Login with Passkey")
+                            Text("Create Wallet")
                         }
                     }
                     .buttonStyle(ProminentButtonStyle())
                     .disabled(isAuthenticating)
+                    
+                    // Secondary button - Recover Wallet
+                    Button(action: {
+                        print("\n🔐 ===== RECOVER WALLET STARTED =====")
+                        print("👆 [WelcomeView] User tapped 'Recover Wallet' button")
+                        Task {
+                            await authenticateWithPasskey()
+                        }
+                    }) {
+                        Text("Recover Wallet")
+                            .foregroundColor(.white)
+                            .underline()
+                    }
+                    .disabled(isAuthenticating)
+                    .padding(.top, 16)
                 }
                 .padding(32)
             }
@@ -96,26 +112,10 @@ struct WelcomeView: View {
                 throw PasskeyError.serverError
             }
         } catch PasskeyError.noPasskeysFound {
-            // No passkeys found, offer to create one
+            // No passkeys found
             print("⚠️ [WelcomeView] No passkeys found")
-            
-            let alert = UIAlertController(
-                title: "No Passkey Found",
-                message: "Would you like to create a new passkey for this device?",
-                preferredStyle: .alert
-            )
-            
-            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-            alert.addAction(UIAlertAction(title: "Create Passkey", style: .default) { _ in
-                Task {
-                    await createNewPasskey()
-                }
-            })
-            
-            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-               let rootViewController = windowScene.windows.first?.rootViewController {
-                rootViewController.present(alert, animated: true)
-            }
+            errorMessage = "No wallet found. Please create a new wallet first."
+            showError = true
         } catch {
             print("❌ [WelcomeView] Passkey authentication failed: \(error.localizedDescription)")
             errorMessage = error.localizedDescription

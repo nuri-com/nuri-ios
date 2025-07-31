@@ -1,12 +1,14 @@
 import SwiftUI
 import AuthenticationServices
+import UIKit
 
 struct SecurityView: View {
     @State private var resultText = "Press the button to test the encrypted iCloud backup."
     @State private var debugKeyText = "Press button to show encryption key info."
     @State private var isLoading = false
-    @State private var currentPassword = ""
-    @State private var editingPassword = false
+    @State private var showingExportOptions = false
+    @State private var exportedKey = ""
+    @State private var showingShareSheet = false
     @State private var importSeedPhrase = ""
     @State private var showingImportConfirmation = false
     @State private var showingLogoutConfirmation = false
@@ -37,42 +39,72 @@ struct SecurityView: View {
                     }
                 }
                 
-                Section(header: Text("Password Configuration")) {
+                Section(header: Text("Device Encryption Key")) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Current Password:")
+                        Text("Each device has a unique encryption key:")
                             .font(.caption)
                             .foregroundColor(.secondary)
                         
-                        if editingPassword {
-                            HStack {
-                                TextField("Enter password", text: $currentPassword)
-                                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                                Button("Save") {
-                                    SimpleEncryptionService.shared.setPassword(currentPassword)
-                                    editingPassword = false
-                                }
-                                Button("Cancel") {
-                                    currentPassword = SimpleEncryptionService.shared.getCurrentPassword()
-                                    editingPassword = false
-                                }
-                            }
-                        } else {
-                            HStack {
-                                Text(currentPassword)
-                                    .font(.system(.body, design: .monospaced))
-                                    .padding(8)
-                                    .background(Color.gray.opacity(0.1))
-                                    .cornerRadius(4)
-                                Spacer()
-                                Button("Edit") {
-                                    editingPassword = true
-                                }
-                            }
-                        }
+                        Text(DeviceEncryptionService.shared.getDeviceKeyInfo())
+                            .font(.system(.caption, design: .monospaced))
+                            .padding(8)
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(4)
                     }
                     
-                    Button(action: testSimpleEncryption) {
-                        Label("Test Simple Encryption", systemImage: "lock.circle")
+                    Button(action: { showingExportOptions = true }) {
+                        Label("Export Encryption Key", systemImage: "square.and.arrow.up")
+                    }
+                    
+                    Button(action: testDeviceEncryption) {
+                        Label("Test Device Encryption", systemImage: "lock.circle")
+                    }
+                }
+                
+                Section(header: Text("Passkey Backup")) {
+                    Button(action: backupEncryptionKeyToPasskey) {
+                        if isLoading {
+                            HStack {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                Text("Backing up...")
+                            }
+                        } else {
+                            Label("Backup Encryption Key to Passkey", systemImage: "icloud.and.arrow.up")
+                        }
+                    }
+                    .disabled(isLoading)
+                    
+                    Button(action: getEncryptionKeyFromPasskey) {
+                        if isLoading {
+                            HStack {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                Text("Retrieving...")
+                            }
+                        } else {
+                            Label("Get Encryption Key from Passkey", systemImage: "icloud.and.arrow.down")
+                        }
+                    }
+                    .disabled(isLoading)
+                    
+                    if !resultText.isEmpty && resultText != "Press the button to test the encrypted iCloud backup." {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Result:")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            ScrollView {
+                                Text(resultText)
+                                    .font(.system(.caption, design: .monospaced))
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .frame(maxHeight: 150)
+                            .padding(8)
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(4)
+                        }
                     }
                 }
                 
@@ -161,8 +193,58 @@ struct SecurityView: View {
             }
             .disabled(isLoading)
         }
-        .onAppear {
-            currentPassword = SimpleEncryptionService.shared.getCurrentPassword()
+        .sheet(isPresented: $showingExportOptions) {
+            NavigationView {
+                VStack(spacing: 20) {
+                    Text("Export Encryption Key")
+                        .font(.title2)
+                        .bold()
+                    
+                    Text("This key encrypts your Bitcoin wallet. Save it securely!")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                    
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Base64 Format:")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        if let key = try? DeviceEncryptionService.shared.exportDeviceKey() {
+                            Text(key)
+                                .font(.system(.caption, design: .monospaced))
+                                .padding()
+                                .background(Color.gray.opacity(0.1))
+                                .cornerRadius(8)
+                                .onTapGesture {
+                                    UIPasteboard.general.string = key
+                                }
+                        }
+                    }
+                    .padding(.horizontal)
+                    
+                    VStack(spacing: 10) {
+                        Button(action: exportAsTextFile) {
+                            Label("Save as Text File", systemImage: "doc.text")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        
+                        Button(action: exportAsQRCode) {
+                            Label("Show QR Code", systemImage: "qrcode")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    .padding(.horizontal)
+                    
+                    Spacer()
+                }
+                .navigationBarItems(trailing: Button("Done") {
+                    showingExportOptions = false
+                })
+            }
         }
         .alert("Confirm Seed Import", isPresented: $showingImportConfirmation) {
             Button("Cancel", role: .cancel) { }
@@ -182,11 +264,36 @@ struct SecurityView: View {
         }
     }
     
-    private func testSimpleEncryption() {
-        debugKeyText = "Testing simple encryption with hardcoded password..."
+    private func testDeviceEncryption() {
+        debugKeyText = "Testing device-specific encryption..."
         Task {
             let result = await Task.detached {
-                return SimpleEncryptionService.shared.testRoundtrip(testData: "test seed phrase: abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about")
+                do {
+                    let testData = "test seed phrase: abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+                    
+                    // Test encryption
+                    let encrypted = try DeviceEncryptionService.shared.encrypt(data: testData)
+                    
+                    // Test decryption
+                    let decrypted = try DeviceEncryptionService.shared.decrypt(encryptedBase64: encrypted)
+                    
+                    // Verify
+                    let matches = testData == decrypted
+                    
+                    return """
+                    🧪 DEVICE ENCRYPTION TEST:
+                    
+                    ✅ Original: \(testData)
+                    🔐 Encrypted: \(encrypted.prefix(50))...
+                    🔓 Decrypted: \(decrypted)
+                    🎯 Match: \(matches ? "✅ SUCCESS" : "❌ FAILED")
+                    
+                    Device Key Info:
+                    \(DeviceEncryptionService.shared.getDeviceKeyInfo())
+                    """
+                } catch {
+                    return "❌ Device encryption test failed: \(error)"
+                }
             }.value
             await MainActor.run {
                 debugKeyText = result
@@ -322,6 +429,209 @@ struct SecurityView: View {
         Log.ui.success("Logout completed - user will see welcome screen")
     }
     
+    private func exportAsTextFile() {
+        guard let key = try? DeviceEncryptionService.shared.exportDeviceKey() else { return }
+        
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd_HH-mm"
+        let dateString = dateFormatter.string(from: Date())
+        
+        let content = """
+        Nuri Wallet Encryption Key
+        ==========================
+        Device: \(UIDevice.current.name)
+        Created: \(Date())
+        
+        IMPORTANT: This key encrypts your Bitcoin wallet.
+        Keep it safe! Without this key, you cannot recover your wallet.
+        
+        Encryption Key (Base64):
+        \(key)
+        
+        Instructions:
+        1. Save this file in a secure location
+        2. Do NOT share this key with anyone
+        3. You'll need this key to restore your wallet on a new device
+        """
+        
+        // Create temporary file
+        let fileName = "nuri-encryption-key-\(dateString).txt"
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+        
+        do {
+            try content.write(to: tempURL, atomically: true, encoding: .utf8)
+            
+            // Share the file
+            let activityVC = UIActivityViewController(activityItems: [tempURL], applicationActivities: nil)
+            
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let window = windowScene.windows.first,
+               let rootVC = window.rootViewController {
+                rootVC.present(activityVC, animated: true)
+            }
+        } catch {
+            print("Failed to create export file: \(error)")
+        }
+    }
+    
+    private func exportAsQRCode() {
+        // This would show a QR code view - for now just copy to clipboard
+        if let key = try? DeviceEncryptionService.shared.exportDeviceKey() {
+            UIPasteboard.general.string = key
+            // In a real implementation, you'd show a QR code here
+        }
+    }
+    
+    // MARK: - Passkey Backup Functions
+    
+    private func backupEncryptionKeyToPasskey() {
+        Log.ui.info("===== BACKUP ENCRYPTION KEY TO PASSKEY =====")
+        Log.ui.info("User initiated manual backup of encryption key")
+        
+        isLoading = true
+        resultText = ""
+        
+        Task {
+            do {
+                // Get current user info from UserDefaults (set during login)
+                guard let username = UserDefaults.standard.string(forKey: "passkeyUsername") else {
+                    Log.ui.error("No username found in UserDefaults")
+                    await MainActor.run {
+                        resultText = "❌ Error: Not logged in with passkey"
+                        isLoading = false
+                    }
+                    return
+                }
+                
+                let credentialId = UserDefaults.standard.string(forKey: "passkeyCredentialId")
+                let isAnonymous = UserDefaults.standard.bool(forKey: "passkeyIsAnonymous")
+                
+                Log.ui.info("Backing up for user", metadata: [
+                    "username": username,
+                    "isAnonymous": isAnonymous,
+                    "hasCredentialId": credentialId != nil
+                ])
+                
+                // Backup the encryption key
+                try await PasskeyAuthenticationService.shared.storeEncryptionKey(
+                    for: username,
+                    credentialId: credentialId,
+                    isAnonymous: isAnonymous
+                )
+                
+                Log.ui.success("Encryption key backed up successfully")
+                
+                await MainActor.run {
+                    resultText = """
+                    ✅ SUCCESS: Encryption key backed up to passkey server
+                    
+                    Username: \(username)
+                    Anonymous: \(isAnonymous)
+                    Timestamp: \(Date())
+                    
+                    Your encryption key is now safely backed up with your passkey.
+                    You can recover it on any device using your passkey.
+                    """
+                    isLoading = false
+                }
+                
+            } catch {
+                Log.ui.error("Failed to backup encryption key", error: error)
+                await MainActor.run {
+                    resultText = "❌ Error: \(error.localizedDescription)"
+                    isLoading = false
+                }
+            }
+        }
+    }
+    
+    private func getEncryptionKeyFromPasskey() {
+        Log.ui.info("===== GET ENCRYPTION KEY FROM PASSKEY =====")
+        Log.ui.info("User initiated retrieval of encryption key")
+        
+        isLoading = true
+        resultText = ""
+        
+        Task {
+            do {
+                // Get current user info from UserDefaults
+                guard let username = UserDefaults.standard.string(forKey: "passkeyUsername") else {
+                    Log.ui.error("No username found in UserDefaults")
+                    await MainActor.run {
+                        resultText = "❌ Error: Not logged in with passkey"
+                        isLoading = false
+                    }
+                    return
+                }
+                
+                let credentialId = UserDefaults.standard.string(forKey: "passkeyCredentialId")
+                let isAnonymous = UserDefaults.standard.bool(forKey: "passkeyIsAnonymous")
+                
+                Log.ui.info("Retrieving key for user", metadata: [
+                    "username": username,
+                    "isAnonymous": isAnonymous,
+                    "hasCredentialId": credentialId != nil
+                ])
+                
+                // Retrieve the encryption key
+                if let retrievedKey = try await PasskeyAuthenticationService.shared.retrieveEncryptionKey(
+                    for: username,
+                    credentialId: credentialId,
+                    isAnonymous: isAnonymous
+                ) {
+                    Log.ui.success("Encryption key retrieved successfully", metadata: [
+                        "keyLength": retrievedKey.count
+                    ])
+                    
+                    // Compare with current device key
+                    let currentKey = try? DeviceEncryptionService.shared.exportDeviceKey()
+                    let keysMatch = currentKey == retrievedKey
+                    
+                    Log.ui.info("Key comparison", metadata: [
+                        "keysMatch": keysMatch,
+                        "currentKeyExists": currentKey != nil
+                    ])
+                    
+                    await MainActor.run {
+                        resultText = """
+                        ✅ SUCCESS: Encryption key retrieved from passkey server
+                        
+                        Username: \(username)
+                        Anonymous: \(isAnonymous)
+                        
+                        Retrieved Key:
+                        \(retrievedKey)
+                        
+                        Status: \(keysMatch ? "✅ Matches current device key" : "⚠️ Different from current device key")
+                        
+                        ⚠️ IMPORTANT: Save this key securely if you need to recover your wallet on another device!
+                        """
+                        isLoading = false
+                    }
+                } else {
+                    Log.ui.warning("No encryption key found on server")
+                    await MainActor.run {
+                        resultText = """
+                        ⚠️ No encryption key found on passkey server
+                        
+                        Username: \(username)
+                        
+                        This user has not backed up their encryption key yet.
+                        Use "Backup Encryption Key to Passkey" to create a backup.
+                        """
+                        isLoading = false
+                    }
+                }
+                
+            } catch {
+                Log.ui.error("Failed to retrieve encryption key", error: error)
+                await MainActor.run {
+                    resultText = "❌ Error: \(error.localizedDescription)"
+                    isLoading = false
+                }
+            }
+        }
+    }
 }
 
 #if DEBUG
