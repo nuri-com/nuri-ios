@@ -215,9 +215,15 @@ final class PasskeyAuthenticationService: NSObject {
         let securityKeyProvider = ASAuthorizationSecurityKeyPublicKeyCredentialProvider(relyingPartyIdentifier: rpId)
         let securityKeyRequest = securityKeyProvider.createCredentialAssertionRequest(challenge: challenge)
         
+        // Override userVerification for security keys to avoid PIN prompt during authentication
+        // This matches our registration behavior
+        securityKeyRequest.userVerificationPreference = .discouraged
+        
         Log.passkey.success("Assertion requests created for both platform and security keys", metadata: [
             "challengeSize": challenge.count,
-            "rpId": rpId
+            "rpId": rpId,
+            "securityKeyUserVerification": "discouraged",
+            "serverUserVerification": authOptions.userVerification
         ])
         
         // Step 3: Perform authorization with both request types
@@ -225,6 +231,13 @@ final class PasskeyAuthenticationService: NSObject {
         let authController = ASAuthorizationController(authorizationRequests: [assertionRequest, securityKeyRequest])
         authController.delegate = self
         authController.presentationContextProvider = self
+        
+        Log.passkey.debug("🔍 Authentication controller setup", metadata: [
+            "requestCount": "2",
+            "platformRequest": "included",
+            "securityKeyRequest": "included",
+            "rpId": rpId
+        ])
         
         do {
             let authorization = try await performAuthorization(controller: authController)
