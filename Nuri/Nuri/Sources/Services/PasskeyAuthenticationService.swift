@@ -276,8 +276,14 @@ final class PasskeyAuthenticationService: NSObject {
                         Log.passkey.success("Found backed up encryption key on server", metadata: [
                             "keyPrefix": String(storedKey.prefix(10)) + "..."
                         ])
-                        // The key is available if the user needs to recover their wallet
-                        // It's NOT automatically imported - that's a manual process
+                        // Import the encryption key to enable wallet decryption
+                        do {
+                            try DeviceEncryptionService.shared.importDeviceKey(base64Key: storedKey)
+                            Log.passkey.success("Successfully imported encryption key into DeviceEncryptionService")
+                        } catch {
+                            Log.passkey.error("Failed to import encryption key", error: error)
+                            // Continue anyway - key is still available in server
+                        }
                     } else {
                         Log.passkey.info("No backed up encryption key found on server")
                     }
@@ -317,8 +323,14 @@ final class PasskeyAuthenticationService: NSObject {
                         Log.passkey.success("Found backed up encryption key on server", metadata: [
                             "keyPrefix": String(storedKey.prefix(10)) + "..."
                         ])
-                        // The key is available if the user needs to recover their wallet
-                        // It's NOT automatically imported - that's a manual process
+                        // Import the encryption key to enable wallet decryption
+                        do {
+                            try DeviceEncryptionService.shared.importDeviceKey(base64Key: storedKey)
+                            Log.passkey.success("Successfully imported encryption key into DeviceEncryptionService")
+                        } catch {
+                            Log.passkey.error("Failed to import encryption key", error: error)
+                            // Continue anyway - key is still available in server
+                        }
                     } else {
                         Log.passkey.info("No backed up encryption key found on server")
                     }

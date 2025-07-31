@@ -19,6 +19,14 @@ struct SecurityView: View {
     @State private var userPasskeys: [PasskeyAuthenticationService.UserPasskeysResponse.PasskeyInfo] = []
     private let bitcoinWalletService = BitcoinWalletService.shared
     
+    // Encryption verification state
+    @AppStorage("encryptionKeyVerified") var encryptionKeyVerified: Bool = false
+    @AppStorage("hasLocalEncryptionKey") var hasLocalEncryptionKey: Bool = false
+    @AppStorage("hasServerBackup") var hasServerBackup: Bool = false
+    @AppStorage("hasWalletBackup") var hasWalletBackup: Bool = false
+    @AppStorage("encryptionKeysMatch") var encryptionKeysMatch: Bool = false
+    @AppStorage("canDecryptWallet") var canDecryptWallet: Bool = false
+    
 
 
     var body: some View {
@@ -141,6 +149,153 @@ struct SecurityView: View {
                             .foregroundColor(.orange)
                     }
                     .padding(.top, 8)
+                }
+                
+                Section(header: Text("Encryption Key Verification Status")) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Security Checks:")
+                            .font(.caption.bold())
+                            .padding(.bottom, 4)
+                        
+                        // Local encryption key check
+                        HStack {
+                            Image(systemName: hasLocalEncryptionKey ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                .foregroundColor(hasLocalEncryptionKey ? .green : .red)
+                                .font(.system(size: 20))
+                            VStack(alignment: .leading) {
+                                Text("Local Encryption Key")
+                                    .font(.caption.bold())
+                                Text("Device has encryption key for wallet protection")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                        }
+                        
+                        Divider()
+                        
+                        // Server backup check
+                        HStack {
+                            Image(systemName: hasServerBackup ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                .foregroundColor(hasServerBackup ? .green : .red)
+                                .font(.system(size: 20))
+                            VStack(alignment: .leading) {
+                                Text("Server Backup")
+                                    .font(.caption.bold())
+                                Text("Encryption key is backed up with passkey")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                        }
+                        
+                        Divider()
+                        
+                        // Wallet backup check
+                        HStack {
+                            Image(systemName: hasWalletBackup ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                .foregroundColor(hasWalletBackup ? .green : .red)
+                                .font(.system(size: 20))
+                            VStack(alignment: .leading) {
+                                Text("Wallet Backup")
+                                    .font(.caption.bold())
+                                Text("Encrypted wallet backup exists in iCloud")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                        }
+                        
+                        Divider()
+                        
+                        // Keys match check
+                        HStack {
+                            Image(systemName: encryptionKeysMatch ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                .foregroundColor(encryptionKeysMatch ? .green : .red)
+                                .font(.system(size: 20))
+                            VStack(alignment: .leading) {
+                                Text("Key Synchronization")
+                                    .font(.caption.bold())
+                                Text("Server and local encryption keys match")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                        }
+                        
+                        Divider()
+                        
+                        // Can decrypt check
+                        HStack {
+                            Image(systemName: canDecryptWallet ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                .foregroundColor(canDecryptWallet ? .green : .red)
+                                .font(.system(size: 20))
+                            VStack(alignment: .leading) {
+                                Text("Wallet Decryption")
+                                    .font(.caption.bold())
+                                Text("Can decrypt wallet with current key")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                        }
+                        
+                        // Overall status
+                        if encryptionKeyVerified {
+                            HStack {
+                                Image(systemName: "shield.checkered")
+                                    .foregroundColor(.green)
+                                    .font(.system(size: 24))
+                                VStack(alignment: .leading) {
+                                    Text("All Security Checks Passed")
+                                        .font(.caption.bold())
+                                        .foregroundColor(.green)
+                                    Text("Your wallet encryption is properly configured")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                            }
+                            .padding(.top, 8)
+                            .padding(12)
+                            .background(Color.green.opacity(0.1))
+                            .cornerRadius(8)
+                        } else {
+                            HStack {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundColor(.orange)
+                                    .font(.system(size: 24))
+                                VStack(alignment: .leading) {
+                                    Text("Security Issues Detected")
+                                        .font(.caption.bold())
+                                        .foregroundColor(.orange)
+                                    Text("Some encryption checks failed. Please review.")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                            }
+                            .padding(.top, 8)
+                            .padding(12)
+                            .background(Color.orange.opacity(0.1))
+                            .cornerRadius(8)
+                        }
+                        
+                        // Manual verification button
+                        Button(action: runManualVerification) {
+                            if isLoading {
+                                HStack {
+                                    ProgressView().scaleEffect(0.8)
+                                    Text("Running verification...")
+                                }
+                            } else {
+                                Label("Run Manual Verification", systemImage: "arrow.clockwise")
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .padding(.top, 8)
+                    }
+                    .padding(.vertical, 4)
                 }
                 
                 Section(header: Text("Device Encryption Key")) {
@@ -508,6 +663,21 @@ struct SecurityView: View {
         }
         .onAppear {
             loadUserPasskeys()
+            
+            // Run verification check on view load
+            Task {
+                let result = await bitcoinWalletService.verifyEncryptionKeyIntegrity()
+                
+                await MainActor.run {
+                    // Update UserDefaults with latest results
+                    UserDefaults.standard.set(result.isFullyVerified, forKey: "encryptionKeyVerified")
+                    UserDefaults.standard.set(result.hasLocalEncryptionKey, forKey: "hasLocalEncryptionKey")
+                    UserDefaults.standard.set(result.hasServerBackup, forKey: "hasServerBackup")
+                    UserDefaults.standard.set(result.hasEncryptedWalletBackup, forKey: "hasWalletBackup")
+                    UserDefaults.standard.set(result.keysMatch, forKey: "encryptionKeysMatch")
+                    UserDefaults.standard.set(result.canDecryptWallet, forKey: "canDecryptWallet")
+                }
+            }
         }
         .sheet(isPresented: $showingQRCode) {
             NavigationView {
@@ -1377,6 +1547,66 @@ struct SecurityView: View {
     }
     
     // MARK: - Load User Passkeys
+    
+    private func runManualVerification() {
+        Log.ui.info("===== MANUAL ENCRYPTION KEY VERIFICATION =====")
+        Log.ui.info("User initiated manual verification of encryption keys")
+        
+        isLoading = true
+        
+        Task {
+            // Run comprehensive verification
+            let result = await bitcoinWalletService.verifyEncryptionKeyIntegrity()
+            
+            await MainActor.run {
+                isLoading = false
+                
+                // Update UserDefaults with latest results
+                UserDefaults.standard.set(result.isFullyVerified, forKey: "encryptionKeyVerified")
+                UserDefaults.standard.set(result.hasLocalEncryptionKey, forKey: "hasLocalEncryptionKey")
+                UserDefaults.standard.set(result.hasServerBackup, forKey: "hasServerBackup")
+                UserDefaults.standard.set(result.hasEncryptedWalletBackup, forKey: "hasWalletBackup")
+                UserDefaults.standard.set(result.keysMatch, forKey: "encryptionKeysMatch")
+                UserDefaults.standard.set(result.canDecryptWallet, forKey: "canDecryptWallet")
+                
+                // Provide user feedback
+                if result.isFullyVerified {
+                    resultText = "✅ All encryption key checks passed!\n\nYour wallet encryption is properly configured and synchronized."
+                } else {
+                    var issues: [String] = []
+                    if !result.hasLocalEncryptionKey {
+                        issues.append("❌ No local encryption key found")
+                    }
+                    if !result.hasServerBackup {
+                        issues.append("❌ Encryption key not backed up on server")
+                    }
+                    if !result.hasEncryptedWalletBackup {
+                        issues.append("❌ No encrypted wallet backup in iCloud")
+                    }
+                    if !result.keysMatch {
+                        issues.append("❌ Server and local keys don't match")
+                    }
+                    if !result.canDecryptWallet {
+                        issues.append("❌ Cannot decrypt wallet with current key")
+                    }
+                    
+                    resultText = "⚠️ Encryption verification failed:\n\n" + issues.joined(separator: "\n")
+                    if let error = result.errorMessage {
+                        resultText += "\n\nError: \(error)"
+                    }
+                }
+                
+                Log.ui.info("Verification complete", metadata: [
+                    "fullyVerified": result.isFullyVerified,
+                    "hasLocalKey": result.hasLocalEncryptionKey,
+                    "hasServerBackup": result.hasServerBackup,
+                    "hasWalletBackup": result.hasEncryptedWalletBackup,
+                    "keysMatch": result.keysMatch,
+                    "canDecrypt": result.canDecryptWallet
+                ])
+            }
+        }
+    }
     
     private func loadUserPasskeys() {
         guard isUserLoggedIn,

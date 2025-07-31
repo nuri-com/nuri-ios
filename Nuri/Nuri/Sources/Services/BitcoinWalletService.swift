@@ -420,10 +420,17 @@ final class BitcoinWalletService {
         do {
             try loadExistingWalletWithSingleAuth()
             print("✅ [BitcoinWalletService] Existing wallet loaded successfully")
+            
+            // Perform encryption key verification after successful wallet load
+            Task {
+                await performStartupVerification()
+            }
         } catch WalletError.noExistingWallet {
             print("ℹ️ [BitcoinWalletService] No existing wallet found, creating new one")
             Task {
                 await createAndStoreWallet()
+                // Verify after creating new wallet
+                await performStartupVerification()
             }
         } catch WalletError.keychainAccessFailed {
             print("❌ [BitcoinWalletService] Keychain access failed - may need biometric auth")
@@ -1982,6 +1989,134 @@ final class BitcoinWalletService {
         } catch {
             print("   ❌ Failed to verify or decrypt iCloud backup: \(error.localizedDescription)")
             // This can happen if the user cancels the biometric prompt, which is not a critical error.
+        }
+    }
+    
+    // MARK: - Encryption Key Verification
+    
+    struct EncryptionKeyVerificationResult {
+        let hasLocalEncryptionKey: Bool
+        let hasServerBackup: Bool
+        let hasEncryptedWalletBackup: Bool
+        let keysMatch: Bool
+        let canDecryptWallet: Bool
+        let errorMessage: String?
+        
+        var isFullyVerified: Bool {
+            hasLocalEncryptionKey && hasServerBackup && hasEncryptedWalletBackup && keysMatch && canDecryptWallet
+        }
+    }
+    
+    /// Comprehensive verification of encryption key integrity
+    func verifyEncryptionKeyIntegrity() async -> EncryptionKeyVerificationResult {
+        print("🔐 [BitcoinWalletService] Starting comprehensive encryption key verification...")
+        
+        var hasLocalKey = false
+        var hasServerBackup = false
+        var hasWalletBackup = false
+        var keysMatch = false
+        var canDecrypt = false
+        var errorMsg: String? = nil
+        
+        // 1. Check if device has encryption key
+        hasLocalKey = DeviceEncryptionService.shared.hasDeviceKey()
+        print("   ✓ Local encryption key exists: \(hasLocalKey)")
+        
+        // 2. Check if encrypted wallet backup exists in iCloud
+        if let backupKeychain = backupKeychain {
+            do {
+                if let _ = try backupKeychain.get(Keys.encryptedMnemonicBackup) {
+                    hasWalletBackup = true
+                }
+            } catch {
+                print("   ⚠️ Error checking wallet backup: \(error)")
+            }
+        }
+        print("   ✓ Encrypted wallet backup exists: \(hasWalletBackup)")
+        
+        // 3. Check if encryption key is backed up on server
+        if hasLocalKey {
+            do {
+                // Get current user info from passkey
+                if let username = UserDefaults.standard.string(forKey: "passkeyUsername"),
+                   let credentialId = UserDefaults.standard.string(forKey: "passkeyCredentialId") {
+                    let isAnonymous = UserDefaults.standard.bool(forKey: "passkeyIsAnonymous")
+                    
+                    // Try to retrieve key from server
+                    if let serverKey = try await PasskeyAuthenticationService.shared.retrieveEncryptionKey(
+                        for: username,
+                        credentialId: credentialId,
+                        isAnonymous: isAnonymous
+                    ) {
+                        hasServerBackup = true
+                        
+                        // Compare with local key
+                        if let localKey = try? DeviceEncryptionService.shared.exportDeviceKey() {
+                            keysMatch = (localKey == serverKey)
+                            print("   ✓ Server backup matches local key: \(keysMatch)")
+                        }
+                    }
+                }
+            } catch {
+                print("   ⚠️ Error checking server backup: \(error)")
+                errorMsg = "Server backup check failed: \(error.localizedDescription)"
+            }
+        }
+        print("   ✓ Encryption key backed up on server: \(hasServerBackup)")
+        
+        // 4. Verify we can decrypt the wallet backup
+        if hasLocalKey && hasWalletBackup {
+            do {
+                if let backupKeychain = backupKeychain,
+                   let encryptedBackup = try backupKeychain.get(Keys.encryptedMnemonicBackup) {
+                    // Try to decrypt
+                    let _ = try DeviceEncryptionService.shared.decrypt(encryptedBase64: encryptedBackup)
+                    canDecrypt = true
+                }
+            } catch {
+                print("   ❌ Cannot decrypt wallet backup: \(error)")
+                errorMsg = "Wallet decryption failed: \(error.localizedDescription)"
+            }
+        }
+        print("   ✓ Can decrypt wallet backup: \(canDecrypt)")
+        
+        let result = EncryptionKeyVerificationResult(
+            hasLocalEncryptionKey: hasLocalKey,
+            hasServerBackup: hasServerBackup,
+            hasEncryptedWalletBackup: hasWalletBackup,
+            keysMatch: keysMatch,
+            canDecryptWallet: canDecrypt,
+            errorMessage: errorMsg
+        )
+        
+        print("🔐 Verification complete. Fully verified: \(result.isFullyVerified)")
+        return result
+    }
+    
+    /// Run verification on wallet initialization
+    func performStartupVerification() async {
+        let verificationResult = await verifyEncryptionKeyIntegrity()
+        
+        if !verificationResult.isFullyVerified {
+            print("⚠️ [BitcoinWalletService] Encryption key verification failed!")
+            print("   - Has local key: \(verificationResult.hasLocalEncryptionKey)")
+            print("   - Has server backup: \(verificationResult.hasServerBackup)")
+            print("   - Has wallet backup: \(verificationResult.hasEncryptedWalletBackup)")
+            print("   - Keys match: \(verificationResult.keysMatch)")
+            print("   - Can decrypt: \(verificationResult.canDecryptWallet)")
+            if let error = verificationResult.errorMessage {
+                print("   - Error: \(error)")
+            }
+        }
+        
+        // Store result for UI display
+        await MainActor.run {
+            UserDefaults.standard.set(verificationResult.isFullyVerified, forKey: "encryptionKeyVerified")
+            UserDefaults.standard.set(verificationResult.hasLocalEncryptionKey, forKey: "hasLocalEncryptionKey")
+            UserDefaults.standard.set(verificationResult.hasServerBackup, forKey: "hasServerBackup")
+            UserDefaults.standard.set(verificationResult.hasEncryptedWalletBackup, forKey: "hasWalletBackup")
+            UserDefaults.standard.set(verificationResult.keysMatch, forKey: "encryptionKeysMatch")
+            UserDefaults.standard.set(verificationResult.canDecryptWallet, forKey: "canDecryptWallet")
         }
     }
 }
