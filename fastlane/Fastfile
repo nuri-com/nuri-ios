@@ -58,6 +58,23 @@ platform :ios do
     )
   end
   
+  desc "Build archive only (no export)"
+  lane :archive do
+    # Build the archive without exporting
+    gym(
+      workspace: "Nuri.xcworkspace",
+      scheme: "Nuri",
+      configuration: "Release",
+      clean: true,
+      output_directory: "./builds",
+      skip_package_ipa: true,
+      archive_path: "./builds/Nuri.xcarchive"
+    )
+    
+    puts "Archive created at: ./builds/Nuri.xcarchive"
+    puts "You can now open this archive in Xcode Organizer to manually distribute"
+  end
+  
   desc "Upload existing IPA to TestFlight"
   lane :upload_ipa do
     upload_to_testflight(
