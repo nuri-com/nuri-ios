@@ -185,8 +185,10 @@ final class PasskeyAuthenticationService: NSObject {
     
     // MARK: - Main Authentication Flow
     
-    func authenticateWithPasskey(presentationAnchor: ASPresentationAnchor) async throws -> (verified: Bool, username: String?, isAnonymous: Bool) {
-        Log.passkey.info("Starting passkey authentication flow")
+    func authenticateWithPasskey(username: String? = nil, presentationAnchor: ASPresentationAnchor) async throws -> (verified: Bool, username: String?, isAnonymous: Bool) {
+        Log.passkey.info("Starting passkey authentication flow", metadata: [
+            "username": username ?? "any"
+        ])
         
         // Store the presentation anchor
         self.currentPresentationAnchor = presentationAnchor
@@ -194,10 +196,11 @@ final class PasskeyAuthenticationService: NSObject {
         
         // Step 1: Get authentication options
         Log.passkey.info("Step 1: Fetching authentication options")
-        let authOptions = try await fetchAuthenticationOptions()
+        let authOptions = try await fetchAuthenticationOptions(username: username)
         Log.passkey.success("Received auth options", metadata: [
             "challengeLength": authOptions.challenge.count,
-            "rpId": authOptions.rpId
+            "rpId": authOptions.rpId,
+            "username": username ?? "any"
         ])
         
         // Step 2: Create credential assertion request
@@ -263,6 +266,11 @@ final class PasskeyAuthenticationService: NSObject {
                     UserDefaults.standard.set(credential.credentialID.base64URLEncodedString(), forKey: "passkeyCredentialId")
                     UserDefaults.standard.set(result.isAnonymous, forKey: "passkeyIsAnonymous")
                     
+                    // If username is an email, store it as email too
+                    if username.contains("@") {
+                        UserDefaults.standard.set(username, forKey: "passkeyUserEmail")
+                    }
+                    
                     Log.passkey.info("Step 5: Checking for backed up encryption key", metadata: [
                         "username": username,
                         "isAnonymous": result.isAnonymous
@@ -309,6 +317,11 @@ final class PasskeyAuthenticationService: NSObject {
                     UserDefaults.standard.set(username, forKey: "passkeyUsername")
                     UserDefaults.standard.set(credential.credentialID.base64URLEncodedString(), forKey: "passkeyCredentialId")
                     UserDefaults.standard.set(result.isAnonymous, forKey: "passkeyIsAnonymous")
+                    
+                    // If username is an email, store it as email too
+                    if username.contains("@") {
+                        UserDefaults.standard.set(username, forKey: "passkeyUserEmail")
+                    }
                     
                     Log.passkey.info("Step 5: Checking for backed up encryption key", metadata: [
                         "username": username,
@@ -533,6 +546,11 @@ final class PasskeyAuthenticationService: NSObject {
                 UserDefaults.standard.set(credential.credentialID.base64URLEncodedString(), forKey: "passkeyCredentialId")
                 UserDefaults.standard.set(username.starts(with: "anon_") || username == "Anonymous", forKey: "passkeyIsAnonymous")
                 
+                // If username is an email, store it as email too
+                if username.contains("@") {
+                    UserDefaults.standard.set(username, forKey: "passkeyUserEmail")
+                }
+                
                 do {
                     try await storeEncryptionKey(
                         for: username,
@@ -614,6 +632,11 @@ final class PasskeyAuthenticationService: NSObject {
                 UserDefaults.standard.set(credential.credentialID.base64URLEncodedString(), forKey: "passkeyCredentialId")
                 UserDefaults.standard.set(username.starts(with: "anon_") || username == "Anonymous", forKey: "passkeyIsAnonymous")
                 
+                // If username is an email, store it as email too
+                if username.contains("@") {
+                    UserDefaults.standard.set(username, forKey: "passkeyUserEmail")
+                }
+                
                 do {
                     try await storeEncryptionKey(
                         for: username,
@@ -640,11 +663,18 @@ final class PasskeyAuthenticationService: NSObject {
     
     // MARK: - API Methods
     
-    private func fetchAuthenticationOptions() async throws -> AuthenticationOptionsResponse {
-        let endpoint = "\(baseURL)/generate-authentication-options"
+    private func fetchAuthenticationOptions(username: String? = nil) async throws -> AuthenticationOptionsResponse {
+        guard var urlComponents = URLComponents(string: "\(baseURL)/generate-authentication-options") else {
+            throw PasskeyError.invalidURL
+        }
         
-        guard let url = URL(string: endpoint) else {
-            Log.network.error("Invalid URL", metadata: ["endpoint": endpoint])
+        // Add username as query parameter if provided
+        if let username = username {
+            urlComponents.queryItems = [URLQueryItem(name: "username", value: username)]
+        }
+        
+        guard let url = urlComponents.url else {
+            Log.network.error("Invalid URL", metadata: ["baseURL": baseURL])
             throw PasskeyError.invalidURL
         }
         
@@ -652,7 +682,7 @@ final class PasskeyAuthenticationService: NSObject {
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        Log.network.info("Sending auth options request", metadata: ["url": endpoint])
+        Log.network.info("Sending auth options request", metadata: ["url": url.absoluteString, "username": username ?? "any"])
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
