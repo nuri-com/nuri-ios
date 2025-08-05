@@ -20,6 +20,18 @@ final class ObservableUserSettings {
             return self?.userSettings.strigaUserId
         }
     }()
+    
+    lazy var strigaCardId: AnyPublisher<String?, Never> = {
+        observedStream(key: .strigaCardId) { [weak self] in
+            return self?.userSettings.strigaCardId
+        }
+    }()
+    
+    lazy var strigaWalletId: AnyPublisher<String?, Never> = {
+        observedStream(key: .strigaWalletId) { [weak self] in
+            return self?.userSettings.strigaWalletId
+        }
+    }()
 
     // MARK: - Private
 

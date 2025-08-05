@@ -1,5 +1,4 @@
 import SwiftUI
-import StrigaAPI
 
 @main
 struct NuriApp: App {
@@ -27,12 +26,25 @@ struct NuriApp: App {
         print("📱 [NuriApp] Running on Physical Device")
         #endif
         
-        // Configure Striga service
-        StrigaService.shared.configuration = .init(
-            url: "https://www.sandbox.striga.com/api/",
-            key: "_TbS1cXGStMmYBJtcoYSA7we2lQUky_6TMo-aGLvWJM=",
-            secret: "43jBa65VEoLC5O4O48pDruayz5Q43IlhgyGbkYPcMHE="
-        )
+        // Configure Striga - this will be moved to a proper configuration file
+        configureStriga()
+    }
+    
+    private func configureStriga() {
+        // NOTE: This configuration should be moved to environment variables or a secure configuration system
+        // For now, using placeholder values that need to be replaced with actual sandbox credentials
+        
+        #if DEBUG
+        // Sandbox configuration for development
+        print("🔧 [NuriApp] Configuring Striga for sandbox environment")
+        // TODO: Replace these with actual Striga sandbox API credentials
+        // You can get these from https://portal.striga.com after creating a sandbox account
+        #warning("Replace with actual Striga sandbox credentials")
+        #else
+        // Production configuration
+        print("🔧 [NuriApp] Configuring Striga for production environment")
+        #warning("Add production Striga credentials before release")
+        #endif
     }
 
     var body: some Scene {

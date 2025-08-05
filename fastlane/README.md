@@ -31,6 +31,22 @@ Build and upload to TestFlight
 
 Build for TestFlight without uploading
 
+### ios archive
+
+```sh
+[bundle exec] fastlane ios archive
+```
+
+Build archive only (no export)
+
+### ios simple_archive
+
+```sh
+[bundle exec] fastlane ios simple_archive
+```
+
+Build a simple archive without signing complications
+
 ### ios upload_ipa
 
 ```sh

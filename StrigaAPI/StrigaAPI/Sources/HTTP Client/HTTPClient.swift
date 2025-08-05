@@ -9,7 +9,11 @@ final class HTTPClient {
     // MARK: - Dependencies
 
     private let urlSession = URLSession(configuration: .default)
-    private let encoder = JSONEncoder()
+    private let encoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        return encoder
+    }()
     private let decoder = JSONDecoder()
 
     // MARK: - Variables
@@ -52,7 +56,21 @@ final class HTTPClient {
     }
 
     private func data<O: Decodable>(for request: URLRequest) async throws -> O {
+        print("[HTTPClient] Making request to: \(request.url?.absoluteString ?? "nil")")
+        print("[HTTPClient] Method: \(request.httpMethod ?? "nil")")
+        if let body = request.httpBody, let bodyString = String(data: body, encoding: .utf8) {
+            print("[HTTPClient] Body: \(bodyString)")
+        }
+        
         let (data, response) = try await urlSession.data(for: request)
+        
+        if let httpResponse = response as? HTTPURLResponse {
+            print("[HTTPClient] Response status: \(httpResponse.statusCode)")
+        }
+        if let responseString = String(data: data, encoding: .utf8) {
+            print("[HTTPClient] Response data: \(responseString)")
+        }
+        
         return try parseResponse(for: data, response: response)
     }
 
@@ -69,16 +87,19 @@ final class HTTPClient {
         case 200..<300:
             break
         default:
+            print("[HTTPClient] ❌ Error response with status: \(httpResponse.statusCode)")
+            if let string = String(data: data, encoding: .utf8) {
+                print("[HTTPClient] Error response body: \(string)")
+            }
+            
             if let error = try? decoder.decode(ErrorResponse.self, from: data) {
+                print("[HTTPClient] Decoded as ErrorResponse: \(error)")
                 throw error
             } else if let error = try? decoder.decode(ValidationErrorResponse.self, from: data) {
+                print("[HTTPClient] Decoded as ValidationErrorResponse: \(error)")
                 throw error
             } else {
-                if let string = String(data: data, encoding: .utf8) {
-                    print("[Lukas] \(string)")
-                } else {
-                    print("[Lukas] Unknown error")
-                }
+                print("[HTTPClient] Could not decode error response, throwing URLError")
                 throw URLError(.init(rawValue: httpResponse.statusCode))
             }
         }
@@ -99,16 +120,19 @@ final class HTTPClient {
                 throw error
             }
         default:
+            print("[HTTPClient] ❌ Error response with status: \(httpResponse.statusCode)")
+            if let string = String(data: data, encoding: .utf8) {
+                print("[HTTPClient] Error response body: \(string)")
+            }
+            
             if let error = try? decoder.decode(ErrorResponse.self, from: data) {
+                print("[HTTPClient] Decoded as ErrorResponse: \(error)")
                 throw error
             } else if let error = try? decoder.decode(ValidationErrorResponse.self, from: data) {
+                print("[HTTPClient] Decoded as ValidationErrorResponse: \(error)")
                 throw error
             } else {
-                if let string = String(data: data, encoding: .utf8) {
-                    print("[Lukas] \(string)")
-                } else {
-                    print("[Lukas] Unknown error")
-                }
+                print("[HTTPClient] Could not decode error response, throwing URLError")
                 throw URLError(.init(rawValue: httpResponse.statusCode))
             }
         }

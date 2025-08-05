@@ -89,7 +89,10 @@ public final class StrigaService {
               var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
             throw NSError(domain: "Striga", code: 1002, userInfo: [NSLocalizedDescriptionKey: "URL not set."])
         }
-        components.path += path
+        // Ensure proper path concatenation
+        let basePath = components.path.hasSuffix("/") ? components.path : components.path + "/"
+        let cleanPath = path.hasPrefix("/") ? String(path.dropFirst()) : path
+        components.path = basePath + cleanPath
         guard let url = components.url else {
             throw NSError(domain: "Striga", code: 1003, userInfo: [NSLocalizedDescriptionKey: "Could not construct URL. \(components)"])
         }

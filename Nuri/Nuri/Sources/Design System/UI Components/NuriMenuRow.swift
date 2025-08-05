@@ -68,7 +68,7 @@ public extension NuriMenuRow where Trailing == EmptyView {
 }
 
 #if DEBUG
-#Preview {
+#Preview(traits: .sizeThatFitsLayout) {
     VStack(spacing: 0) {
         NuriMenuRow(icon: "passkey-new", title: "Passkey", subtitle: "Account is secured with Apple iCloud Passkey") {
             Image(systemName: "chevron.right")
@@ -79,6 +79,5 @@ public extension NuriMenuRow where Trailing == EmptyView {
         }
         NuriMenuRow(icon: "touch-id", title: "Add Hardware Key", subtitle: "Add a security key to your account")
     }
-    .previewLayout(.sizeThatFits)
 }
 #endif

@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import StrigaAPI
 
 struct CardViewActive: View {
     @State private var isTransactionsPresented = false
@@ -9,7 +10,15 @@ struct CardViewActive: View {
     @State private var isTopUpPresented = false
     @State private var isShareSheetPresented = false
     @State private var qrImage: UIImage? = nil
-
+    @State private var walletBalance = "€0.00"
+    @State private var cardHolderName = "Loading..."
+    @State private var cardNumber = ""
+    @State private var cardExpiry = ""
+    @State private var cardCVV = ""
+    @State private var showVerification = false
+    @State private var cardAuthToken: String?
+    
+    private let striga = StrigaService.shared
     private let btcAddress = "bc1qsmd4xz68a7fhwvhjkd0cawx4uvs9a43746xld4yh0spfmwefpr5qc9wvv6"
 
     var body: some View {
@@ -41,13 +50,13 @@ struct CardViewActive: View {
 
             VStack {
                 Spacer()
-                NuriTitleWithSubtitle(title: "€1,337.00", subtitle: "Available Balance")
+                NuriTitleWithSubtitle(title: walletBalance, subtitle: "Available Balance")
                 .padding(.bottom, 30)
 
                 let cardOpacity = isCardFrozen ? 0.4 : 1.0
 
                 if showCardDetails {
-                    CardMini(card: CardModel(holder: "Cim Topal", number: "5354 5655 2079 6981", expiry: "03/30", cvv: "041"), qrAddress: btcAddress, onQRTap: { isLargeQRPresented = true })
+                    CardMini(card: CardModel(holder: cardHolderName, number: cardNumber, expiry: cardExpiry, cvv: cardCVV), qrAddress: btcAddress, onQRTap: { isLargeQRPresented = true })
                         .transition(.opacity)
                         .opacity(cardOpacity)
                         .padding(.horizontal, 16)
@@ -59,10 +68,26 @@ struct CardViewActive: View {
                 }
 
                 HStack(spacing: 32) {
-                    NuriSmallIconToggle(isActive: $showCardDetails,
-                                        label: showCardDetails ? "Hide" : "Show",
-                                        iconActive: "eye",  // open eye
-                                        iconInactive: "eye_hidden")
+                    SmallIconButton(icon: showCardDetails ? "eye" : "eye_hidden", 
+                                  title: showCardDetails ? "Hide" : "Show") {
+                        print("[CardViewActive] Show/Hide button pressed")
+                        print("[CardViewActive] Current showCardDetails: \(showCardDetails)")
+                        if showCardDetails {
+                            print("[CardViewActive] Hiding card details")
+                            // Hide card details
+                            showCardDetails = false
+                            cardAuthToken = nil
+                            // Clear sensitive data
+                            cardNumber = ""
+                            cardExpiry = ""
+                            cardCVV = ""
+                        } else {
+                            print("[CardViewActive] Showing verification sheet")
+                            print("[CardViewActive] Setting showVerification = true")
+                            // Always show verification to get fresh card details
+                            showVerification = true
+                        }
+                    }
                     SmallIconButton(icon: isCardFrozen ? "lock" : "lock_open", title: isCardFrozen ? "Unfreeze" : "Freeze") {
                         isCardFrozen.toggle()
                     }
@@ -89,25 +114,6 @@ struct CardViewActive: View {
                     .cornerRadius(100)
                 }
 
-                // Activate Card button
-                NavigationLink(destination: ResidenceCitizenshipUSTaxView()) {
-                    HStack(spacing: 8) {
-                        Image("head")
-                            .resizable()
-                            .renderingMode(.template)
-                            .foregroundColor(Color("PrimaryNuriBlack"))
-                            .frame(width: 24, height: 24)
-                        Text("Activate Card")
-                            .font(.brandBody)
-                            .foregroundColor(Color("PrimaryNuriBlack"))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 54)
-                    .background(Color("PrimaryNuriLilac"))
-                    .cornerRadius(100)
-                }
-                .padding(.top, 16)
-
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 24)
@@ -132,6 +138,29 @@ struct CardViewActive: View {
         .sheet(isPresented: $isTopUpPresented) {
             NavigationStack {
                 TopUpCardView(isPresented: $isTopUpPresented)
+            }
+        }
+        .onAppear {
+            loadCardData()
+        }
+        .sheet(isPresented: $showVerification) {
+            CardVerificationView(isPresented: $showVerification) { authToken in
+                print("[CardViewActive] Verification successful, received authToken")
+                // On successful verification
+                cardAuthToken = authToken
+                showCardDetails = true
+                Task {
+                    await loadRealCardData(authToken: authToken)
+                }
+            }
+            .onAppear {
+                print("[CardViewActive] Verification sheet appeared")
+                print("[CardViewActive] Current session data:")
+                print("[CardViewActive] - userId: \(StrigaSession.shared.userId ?? "nil")")
+                print("[CardViewActive] - cardId: \(StrigaSession.shared.cardId ?? "nil")")
+            }
+            .onDisappear {
+                print("[CardViewActive] Verification sheet disappeared")
             }
         }
         .fullScreenCover(isPresented: $isLargeQRPresented) {
@@ -175,6 +204,94 @@ struct CardViewActive: View {
                         ShareSheet(activityItems: [btcAddress])
                     }
                 }
+            }
+        }
+    }
+    
+    private func loadCardData() {
+        // Load basic card info (non-sensitive)
+        if let name = StrigaSession.shared.name {
+            cardHolderName = name
+        }
+        
+        // Store IDs in session for later use
+        if let userId = UserSettings().strigaUserId {
+            StrigaSession.shared.userId = userId
+            print("[CardView] Loaded userId: \(userId)")
+        }
+        if let cardId = UserSettings().strigaCardId {
+            StrigaSession.shared.cardId = cardId
+            print("[CardView] Loaded cardId: \(cardId)")
+            
+            // Check if we have a mock card ID and need to create a real card
+            if cardId == "mock-card-id" {
+                print("[CardView] WARNING: Found mock card ID, clearing it to trigger real card creation")
+                UserSettings().strigaCardId = nil
+                StrigaSession.shared.cardId = nil
+                // This will trigger the NoCardView which can create a real card
+            }
+        } else {
+            print("[CardView] WARNING: No card ID found in UserSettings")
+        }
+        
+        // TODO: Fetch wallet balance from API
+        walletBalance = "€0.00"
+        isCardFrozen = false
+    }
+    
+    @MainActor
+    private func loadRealCardData(authToken: String) async {
+        do {
+            guard let userId = StrigaSession.shared.userId,
+                  let cardId = StrigaSession.shared.cardId else {
+                print("[CardView] Missing user or card ID")
+                return
+            }
+            
+            print("[CardView] Fetching card details with auth token")
+            print("[CardView] Card ID: \(cardId)")
+            
+            // Fetch card details with auth token
+            let cardDetails = try await striga.getCard(.init(
+                userId: userId,
+                cardId: cardId,
+                authToken: authToken
+            ))
+            
+            print("[CardView] Card details received")
+            
+            // Update UI with real card data
+            cardHolderName = cardDetails.name
+            
+            // Format card number with spaces
+            if let fullCardNumber = cardDetails.cardNumber {
+                // Add spaces every 4 digits
+                let cleaned = fullCardNumber.replacingOccurrences(of: " ", with: "")
+                var formatted = ""
+                for (index, char) in cleaned.enumerated() {
+                    if index > 0 && index % 4 == 0 {
+                        formatted += " "
+                    }
+                    formatted += String(char)
+                }
+                cardNumber = formatted
+            } else {
+                // Fallback to masked number
+                cardNumber = cardDetails.maskedCardNumber
+            }
+            
+            // Format expiry date
+            cardExpiry = "\(cardDetails.expiryMonth)/\(String(cardDetails.expiryYear).suffix(2))"
+            
+            // Set CVV
+            cardCVV = cardDetails.cvv ?? "***"
+            
+            print("[CardView] Card details updated successfully")
+            
+        } catch {
+            print("[CardView] Error loading card details: \(error)")
+            if let validationError = error as? ValidationErrorResponse {
+                print("[CardView] Validation error: \(validationError.message)")
             }
         }
     }
