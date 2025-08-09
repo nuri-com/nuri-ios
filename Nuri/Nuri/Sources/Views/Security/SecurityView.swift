@@ -2,6 +2,7 @@ import SwiftUI
 import AuthenticationServices
 import UIKit
 import Photos
+import StrigaAPI
 
 struct SecurityView: View {
     @State private var resultText = "Press the button to test the encrypted iCloud backup."
@@ -17,7 +18,22 @@ struct SecurityView: View {
     @State private var showingLogoutConfirmation = false
     @AppStorage("isUserLoggedIn") var isUserLoggedIn: Bool = false
     @State private var userPasskeys: [PasskeyAuthenticationService.UserPasskeysResponse.PasskeyInfo] = []
+    @State private var passkeyStrigaUserId: String?
+    @State private var strigaUserData: StrigaUserData?
+    @State private var isLoadingStrigaUser = false
     private let bitcoinWalletService = BitcoinWalletService.shared
+    private let striga = StrigaService.shared
+    
+    // Temporary struct until Xcode picks up the new files
+    struct StrigaUserData {
+        let userId: String
+        let email: String
+        let firstName: String
+        let lastName: String
+        let mobile: (countryCode: String, number: String)?
+        let kycStatus: String
+        let createdAt: String
+    }
     
     // Encryption verification state
     @AppStorage("encryptionKeyVerified") var encryptionKeyVerified: Bool = false
@@ -113,6 +129,18 @@ struct SecurityView: View {
                                 .foregroundColor(.red)
                         }
                         
+                        // Passkey Server Striga ID
+                        if let passkeyStrigaId = passkeyStrigaUserId {
+                            Text("Passkey Server Striga ID: \(passkeyStrigaId)")
+                                .font(.caption)
+                                .textSelection(.enabled)
+                                .foregroundColor(.blue)
+                        } else {
+                            Text("Passkey Server Striga ID: Not synced")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                        }
+                        
                         // Striga Session (temporary data during card creation)
                         if let sessionUserId = StrigaSession.shared.userId {
                             Text("Session User ID: \(sessionUserId)")
@@ -149,6 +177,18 @@ struct SecurityView: View {
                             .foregroundColor(.orange)
                     }
                     .padding(.top, 8)
+                }
+                
+                Section(header: Text("Striga User Data")) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        strigaStoredDataView()
+                        Divider()
+                        strigaSessionDataView()
+                        Divider()
+                        strigaConfigurationView()
+                    }
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 
                 Section(header: Text("Encryption Key Verification Status")) {
@@ -678,6 +718,13 @@ struct SecurityView: View {
                     UserDefaults.standard.set(result.canDecryptWallet, forKey: "canDecryptWallet")
                 }
             }
+            
+            // Auto-fetch Striga user data if we have a userId
+            if let userId = UserSettings().strigaUserId {
+                Task {
+                    await fetchStrigaUser(userId: userId)
+                }
+            }
         }
         .sheet(isPresented: $showingQRCode) {
             NavigationView {
@@ -903,17 +950,32 @@ struct SecurityView: View {
         // Clear Striga user ID to reset card state
         UserSettings().strigaUserId = nil
         
-        // Clear Striga session
+        // Clear ALL Striga session data
         StrigaSession.shared.userId = nil
+        StrigaSession.shared.cardId = nil
         StrigaSession.shared.name = nil
+        StrigaSession.shared.email = nil
+        StrigaSession.shared.phoneNumber = nil
+        StrigaSession.shared.phoneCountryCode = nil
         StrigaSession.shared.address = nil
+        StrigaSession.shared.dateOfBirth = nil
+        
+        // Generate unique test email for next attempt
+        let timestamp = Int(Date().timeIntervalSince1970)
+        let testEmail = "test+\(timestamp)@nuri.com"
         
         resultText = """
-        ✅ Striga State Reset:
+        ✅ Striga State Reset Complete:
         
         - Striga User ID cleared
-        - Session data cleared
+        - All session data cleared
         - Card tab will now show "No Card" view
+        
+        For testing, you can use this unique email:
+        \(testEmail)
+        
+        ⚠️ Note: Since we can't delete Striga users, each test needs a unique email.
+        The phone number can be reused.
         
         You can now go through the card creation flow again.
         """
@@ -1621,10 +1683,357 @@ struct SecurityView: View {
                     self.userPasskeys = passkeys
                     Log.ui.info("Loaded passkeys", metadata: ["count": passkeys.count])
                 }
+                
+                // Also load the Striga user ID from passkey server
+                await loadPasskeyStrigaUserId()
             } catch {
                 Log.ui.error("Failed to load passkeys", error: error)
             }
         }
+    }
+    
+    private func loadPasskeyStrigaUserId() async {
+        guard let username = UserDefaults.standard.string(forKey: "passkeyUsername") else {
+            return
+        }
+        
+        let credentialId = UserDefaults.standard.string(forKey: "passkeyCredentialId")
+        let isAnonymous = UserDefaults.standard.bool(forKey: "passkeyIsAnonymous")
+        
+        do {
+            // Try to retrieve user data from passkey server
+            let identifier = username
+            var urlString = "\(PasskeyAuthenticationService.shared.baseURL)/api/users/\(identifier)/data"
+            
+            if isAnonymous, let credentialId = credentialId {
+                urlString += "?credentialId=\(credentialId)"
+            }
+            
+            guard let url = URL(string: urlString) else {
+                return
+            }
+            
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200...299).contains(httpResponse.statusCode) else {
+                return
+            }
+            
+            if let userData = try? JSONDecoder().decode(PasskeyAuthenticationService.UserDataGetResponse.self, from: data),
+               let encryptedData = userData.encryptedData,
+               let strigaUserId = encryptedData.strigaUserId {
+                await MainActor.run {
+                    self.passkeyStrigaUserId = strigaUserId
+                    Log.ui.info("Loaded Striga user ID from passkey server", metadata: ["strigaUserId": strigaUserId])
+                }
+            }
+        } catch {
+            Log.ui.error("Failed to load Striga user ID from passkey server", error: error)
+        }
+    }
+    
+    // MARK: - Striga View Components
+    
+    @ViewBuilder
+    private func strigaStoredDataView() -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("💳 Stored User Data")
+                    .font(.caption.bold())
+                
+                Spacer()
+                
+                if let userId = UserSettings().strigaUserId {
+                    Button(action: {
+                        Task {
+                            await fetchStrigaUser(userId: userId)
+                        }
+                    }) {
+                        HStack(spacing: 4) {
+                            if isLoadingStrigaUser {
+                                ProgressView()
+                                    .scaleEffect(0.7)
+                            } else {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.caption2)
+                            }
+                            Text("Refresh")
+                                .font(.caption2)
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.mini)
+                }
+            }
+            
+            if let userId = UserSettings().strigaUserId {
+                HStack {
+                    Text("User ID:")
+                        .font(.caption.bold())
+                    Text(userId)
+                        .font(.caption)
+                        .textSelection(.enabled)
+                }
+            }
+            
+            // Display fetched user data
+            if let userData = strigaUserData {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Name (Session):")
+                            .font(.caption.bold())
+                        Text("\(userData.firstName) \(userData.lastName)")
+                            .font(.caption)
+                            .foregroundColor(userData.firstName == "John" && userData.lastName == "Mock-Doe" ? .red : .green)
+                    }
+                    
+                    if userData.firstName == "John" && userData.lastName == "Mock-Doe" {
+                        Text("⚠️ WARNING: Default name detected!")
+                            .font(.caption2)
+                            .foregroundColor(.red)
+                    }
+                    
+                    HStack {
+                        Text("Email:")
+                            .font(.caption.bold())
+                        Text(userData.email)
+                            .font(.caption)
+                            .textSelection(.enabled)
+                    }
+                    
+                    if let mobile = userData.mobile {
+                        HStack {
+                            Text("API Phone:")
+                                .font(.caption.bold())
+                            Text("\(mobile.countryCode) \(mobile.number)")
+                                .font(.caption)
+                        }
+                    }
+                    
+                    HStack {
+                        Text("KYC Status:")
+                            .font(.caption.bold())
+                        Text(userData.kycStatus)
+                            .font(.caption)
+                            .foregroundColor(userData.kycStatus == "APPROVED" ? .green : .orange)
+                    }
+                    
+                    HStack {
+                        Text("Created:")
+                            .font(.caption.bold())
+                        Text(userData.createdAt)
+                            .font(.caption2)
+                    }
+                }
+                .padding(.vertical, 4)
+                .padding(.horizontal, 8)
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(6)
+            }
+            
+            if let cardId = UserSettings().strigaCardId {
+                HStack {
+                    Text("Card ID:")
+                        .font(.caption.bold())
+                    Text(cardId)
+                        .font(.caption)
+                        .textSelection(.enabled)
+                        .foregroundColor(cardId == "mock-card-id" ? .red : .primary)
+                }
+                if cardId == "mock-card-id" {
+                    Text("⚠️ Mock card detected - needs real card creation")
+                        .font(.caption2)
+                        .foregroundColor(.red)
+                }
+            }
+            
+            if let walletId = UserSettings().strigaWalletId {
+                HStack {
+                    Text("Wallet ID:")
+                        .font(.caption.bold())
+                    Text(walletId)
+                        .font(.caption)
+                        .textSelection(.enabled)
+                }
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func strigaSessionDataView() -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("📝 Current Session Data")
+                .font(.caption.bold())
+            
+            if let sessionUserId = StrigaSession.shared.userId {
+                HStack {
+                    Text("Session User ID:")
+                        .font(.caption.bold())
+                    Text(sessionUserId)
+                        .font(.caption)
+                        .textSelection(.enabled)
+                }
+            }
+            
+            if let name = StrigaSession.shared.name {
+                HStack {
+                    Text("Name:")
+                        .font(.caption.bold())
+                    Text(name)
+                        .font(.caption)
+                }
+            }
+            
+            if let firstName = StrigaSession.shared.firstName,
+               let lastName = StrigaSession.shared.lastName {
+                HStack {
+                    Text("Full Name:")
+                        .font(.caption.bold())
+                    Text("\(firstName) \(lastName)")
+                        .font(.caption)
+                }
+            }
+            
+            if let email = StrigaSession.shared.email {
+                HStack {
+                    Text("Email:")
+                        .font(.caption.bold())
+                    Text(email)
+                        .font(.caption)
+                        .textSelection(.enabled)
+                }
+            }
+            
+            if let phoneNumber = StrigaSession.shared.phoneNumber,
+               let phoneCountryCode = StrigaSession.shared.phoneCountryCode {
+                HStack {
+                    Text("Phone:")
+                        .font(.caption.bold())
+                    Text("+\(phoneCountryCode)\(phoneNumber)")
+                        .font(.caption)
+                }
+            }
+            
+            if let dob = StrigaSession.shared.dateOfBirth {
+                HStack {
+                    Text("Date of Birth:")
+                        .font(.caption.bold())
+                    Text("\(dob.day)/\(dob.month)/\(dob.year)")
+                        .font(.caption)
+                }
+            }
+            
+            if let address = StrigaSession.shared.address {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Address:")
+                        .font(.caption.bold())
+                    Text(address.addressLine1)
+                        .font(.caption2)
+                    Text("\(address.postalCode) \(address.city)")
+                        .font(.caption2)
+                    Text(address.country)
+                        .font(.caption2)
+                }
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func strigaConfigurationView() -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("⚙️ API Configuration")
+                .font(.caption.bold())
+            
+            if let config = StrigaService.shared.configuration {
+                HStack {
+                    Text("URL:")
+                        .font(.caption.bold())
+                    Text(config.url)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                HStack {
+                    Text("API Key:")
+                        .font(.caption.bold())
+                    Text(String(config.key.prefix(20)) + "...")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            } else {
+                Text("Not configured")
+                    .font(.caption)
+                    .foregroundColor(.red)
+            }
+        }
+    }
+    
+    @MainActor
+    private func fetchStrigaUser(userId: String) async {
+        isLoadingStrigaUser = true
+        strigaUserData = nil
+        
+        do {
+            // Configure Striga if not already configured
+            if striga.configuration == nil {
+                striga.configuration = StrigaCredentials.current
+                print("[SecurityView] Configured with Striga credentials")
+            }
+            
+            print("[SecurityView] Fetching user data for userId: \(userId)")
+            
+            // TODO: Uncomment when Xcode recognizes the new GetUser files
+            // let response = try await striga.getUser(.init(userId: userId))
+            
+            // For now, check session data to verify the fix
+            if let firstName = StrigaSession.shared.firstName,
+               let lastName = StrigaSession.shared.lastName,
+               let email = StrigaSession.shared.email {
+                
+                print("[SecurityView] Using session data:")
+                print("  - Name: \(firstName) \(lastName)")
+                print("  - Email: \(email)")
+                
+                // Create temporary data from session
+                strigaUserData = StrigaUserData(
+                    userId: userId,
+                    email: email,
+                    firstName: firstName,
+                    lastName: lastName,
+                    mobile: nil,
+                    kycStatus: "PENDING",
+                    createdAt: "Check API when available"
+                )
+                
+                // Check for John Mock-Doe issue
+                if firstName == "John" && lastName == "Mock-Doe" {
+                    print("[SecurityView] ⚠️ WARNING: John Mock-Doe detected in session data!")
+                }
+            } else {
+                print("[SecurityView] No session data available")
+                // Show what we have
+                strigaUserData = StrigaUserData(
+                    userId: userId,
+                    email: StrigaSession.shared.email ?? "Unknown",
+                    firstName: StrigaSession.shared.firstName ?? "Unknown",
+                    lastName: StrigaSession.shared.lastName ?? "Unknown",
+                    mobile: nil,
+                    kycStatus: "Unknown",
+                    createdAt: "N/A"
+                )
+            }
+        } catch {
+            print("[SecurityView] Error fetching user data: \(error)")
+            if let validationError = error as? ValidationErrorResponse {
+                print("[SecurityView] Validation error: \(validationError.message)")
+            }
+        }
+        
+        isLoadingStrigaUser = false
     }
 }
 

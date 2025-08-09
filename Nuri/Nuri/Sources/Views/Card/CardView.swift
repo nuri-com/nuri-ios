@@ -23,7 +23,14 @@ class CardViewModel: ObservableObject {
 
     private func updateHasCard() {
         Task { @MainActor in
-            hasCard = UserSettings().strigaUserId != nil
+            let strigaUserId = UserSettings().strigaUserId
+            let strigaCardId = UserSettings().strigaCardId
+            hasCard = strigaUserId != nil && strigaCardId != nil
+            
+            print("[CardViewModel] updateHasCard called:")
+            print("[CardViewModel] - strigaUserId: \(strigaUserId ?? "nil")")
+            print("[CardViewModel] - strigaCardId: \(strigaCardId ?? "nil")")
+            print("[CardViewModel] - hasCard: \(hasCard)")
         }
     }
 }

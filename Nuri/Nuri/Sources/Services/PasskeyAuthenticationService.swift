@@ -29,7 +29,7 @@ final class PasskeyAuthenticationService: NSObject {
     static let shared = PasskeyAuthenticationService()
     
     // Configuration
-    private var baseURL: String {
+    var baseURL: String {
         // Always use production passkey server
         return "https://passkey.nuri.com"
     }
@@ -164,6 +164,7 @@ final class PasskeyAuthenticationService: NSObject {
             let keyFormat: String
             let createdAt: String
             let deviceName: String
+            let strigaUserId: String?
         }
     }
     
@@ -555,7 +556,8 @@ final class PasskeyAuthenticationService: NSObject {
                     try await storeEncryptionKey(
                         for: username,
                         credentialId: credential.credentialID.base64URLEncodedString(),
-                        isAnonymous: username.starts(with: "anon_") || username == "Anonymous"
+                        isAnonymous: username.starts(with: "anon_") || username == "Anonymous",
+                        strigaUserId: nil
                     )
                     Log.passkey.success("Encryption key stored successfully with security key")
                 } catch {
@@ -641,7 +643,8 @@ final class PasskeyAuthenticationService: NSObject {
                     try await storeEncryptionKey(
                         for: username,
                         credentialId: credential.credentialID.base64URLEncodedString(),
-                        isAnonymous: username.starts(with: "anon_") || username == "Anonymous"
+                        isAnonymous: username.starts(with: "anon_") || username == "Anonymous",
+                        strigaUserId: nil
                     )
                     Log.passkey.success("Encryption key stored successfully with passkey")
                 } catch {
@@ -1058,7 +1061,7 @@ final class PasskeyAuthenticationService: NSObject {
         return nil
     }
     
-    func storeEncryptionKey(for username: String, credentialId: String? = nil, isAnonymous: Bool) async throws {
+    func storeEncryptionKey(for username: String, credentialId: String? = nil, isAnonymous: Bool, strigaUserId: String? = nil) async throws {
         // Get the device encryption key
         guard let encryptionKey = try? DeviceEncryptionService.shared.exportDeviceKey() else {
             Log.passkey.error("Failed to export device encryption key")
@@ -1077,7 +1080,8 @@ final class PasskeyAuthenticationService: NSObject {
                 encryptionKey: encryptionKey,
                 keyFormat: "base64",
                 createdAt: dateFormatter.string(from: Date()),
-                deviceName: UIDevice.current.name
+                deviceName: UIDevice.current.name,
+                strigaUserId: strigaUserId
             ),
             authProof: "ios_app_\(UUID().uuidString)", // Placeholder since server doesn't validate yet
             credentialId: isAnonymous ? credentialId : nil
@@ -1091,7 +1095,8 @@ final class PasskeyAuthenticationService: NSObject {
         Log.passkey.info("Storing encryption key for user", metadata: [
             "username": username,
             "isAnonymous": isAnonymous,
-            "hasCredentialId": credentialId != nil
+            "hasCredentialId": credentialId != nil,
+            "hasStrigaUserId": strigaUserId != nil
         ])
         
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -1110,6 +1115,89 @@ final class PasskeyAuthenticationService: NSObject {
         Log.passkey.success("Encryption key stored successfully", metadata: [
             "success": storeResponse.success,
             "hasEncryptedData": storeResponse.hasEncryptedData
+        ])
+    }
+    
+    func updateStrigaUserId(for username: String, strigaUserId: String) async throws {
+        // First, retrieve existing data
+        let identifier = username
+        var urlString = "\(baseURL)/api/users/\(identifier)/data"
+        
+        guard let getUrl = URL(string: urlString) else {
+            throw PasskeyError.invalidURL
+        }
+        
+        var getRequest = URLRequest(url: getUrl)
+        getRequest.httpMethod = "GET"
+        getRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        Log.passkey.info("Retrieving existing user data to update Striga ID", metadata: [
+            "username": username
+        ])
+        
+        let (getData, getResponse) = try await URLSession.shared.data(for: getRequest)
+        
+        guard let httpGetResponse = getResponse as? HTTPURLResponse,
+              (200...299).contains(httpGetResponse.statusCode) else {
+            Log.passkey.error("Failed to retrieve existing data", metadata: [
+                "status": (getResponse as? HTTPURLResponse)?.statusCode ?? -1
+            ])
+            throw PasskeyError.serverError
+        }
+        
+        let existingData = try JSONDecoder().decode(UserDataGetResponse.self, from: getData)
+        
+        // Check if we have encrypted data to update
+        guard let encryptedData = existingData.encryptedData else {
+            Log.passkey.error("No encrypted data found to update")
+            throw PasskeyError.serverError
+        }
+        
+        // Update with new Striga user ID
+        guard let postUrl = URL(string: "\(baseURL)/api/users/\(identifier)/data") else {
+            throw PasskeyError.invalidURL
+        }
+        
+        let dateFormatter = ISO8601DateFormatter()
+        let updatedData = UserDataRequest(
+            email: existingData.email,
+            encryptedData: UserDataRequest.EncryptedData(
+                encryptionKey: encryptedData.encryptionKey,
+                keyFormat: encryptedData.keyFormat,
+                createdAt: encryptedData.createdAt,
+                deviceName: encryptedData.deviceName,
+                strigaUserId: strigaUserId
+            ),
+            authProof: "ios_app_\(UUID().uuidString)",
+            credentialId: nil // Not needed for update
+        )
+        
+        var postRequest = URLRequest(url: postUrl)
+        postRequest.httpMethod = "POST"
+        postRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        postRequest.httpBody = try JSONEncoder().encode(updatedData)
+        
+        Log.passkey.info("Updating user data with Striga ID", metadata: [
+            "username": username,
+            "strigaUserId": strigaUserId
+        ])
+        
+        let (postData, postResponse) = try await URLSession.shared.data(for: postRequest)
+        
+        guard let httpPostResponse = postResponse as? HTTPURLResponse,
+              (200...299).contains(httpPostResponse.statusCode) else {
+            let errorString = String(data: postData, encoding: .utf8) ?? "Unknown error"
+            Log.passkey.error("Failed to update Striga ID", metadata: [
+                "status": (postResponse as? HTTPURLResponse)?.statusCode ?? -1,
+                "error": errorString
+            ])
+            throw PasskeyError.serverError
+        }
+        
+        let updateResponse = try JSONDecoder().decode(UserDataResponse.self, from: postData)
+        Log.passkey.success("Striga ID updated successfully", metadata: [
+            "success": updateResponse.success,
+            "hasEncryptedData": updateResponse.hasEncryptedData
         ])
     }
     
@@ -1184,12 +1272,23 @@ final class PasskeyAuthenticationService: NSObject {
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             
-            guard let httpResponse = response as? HTTPURLResponse,
-                  (200...299).contains(httpResponse.statusCode) else {
-                Log.passkey.error("Failed to fetch passkeys", metadata: [
-                    "status": (response as? HTTPURLResponse)?.statusCode ?? -1
-                ])
+            guard let httpResponse = response as? HTTPURLResponse else {
+                Log.passkey.error("Invalid response type")
+                throw PasskeyError.serverError
+            }
+            
+            // If we get 404, the user doesn't exist - return empty array
+            if httpResponse.statusCode == 404 {
+                Log.passkey.info("User not found, returning empty passkeys")
                 return []
+            }
+            
+            // For other errors, throw
+            guard (200...299).contains(httpResponse.statusCode) else {
+                Log.passkey.error("Failed to fetch passkeys", metadata: [
+                    "status": httpResponse.statusCode
+                ])
+                throw PasskeyError.serverError
             }
             
             let passkeysResponse = try JSONDecoder().decode(UserPasskeysResponse.self, from: data)

@@ -1,5 +1,6 @@
 import SwiftUI
 import PassKit
+import StrigaAPI
 
 // Apple Pay Button wrapper
 struct ApplePayButton: UIViewRepresentable {
@@ -95,12 +96,37 @@ struct BuyBitcoinView: View {
     @Binding var isPresented: Bool
     @State private var applePayCoordinator: ApplePayCoordinator?
     
+    // Bank account state
+    @State private var isLoadingAccount = true
+    @State private var ibanDetails: IBANDetails?
+    @State private var accountError: String?
+    
+    struct IBANDetails {
+        let iban: String
+        let bic: String
+        let accountHolderName: String
+        let accountId: String
+    }
+    
+    // Striga service
+    private let striga = StrigaService.shared
+    
     // Debug mode to test without Apple Pay
     #if DEBUG
     @State private var debugMode = false // Changed to false to test real Apple Pay
     #else
     @State private var debugMode = false
     #endif
+    
+    init(isPresented: Binding<Bool>) {
+        self._isPresented = isPresented
+        
+        // Ensure Striga is configured
+        if striga.configuration == nil {
+            striga.configuration = StrigaCredentials.current
+            print("🏦 [BuyBitcoinView] Configured with Striga credentials")
+        }
+    }
 
     var formatter: NumberFormatter {
         let formatter = NumberFormatter()
@@ -118,6 +144,8 @@ struct BuyBitcoinView: View {
 
     @State private var exchangeRate: Double = 0 // will update from API
     @State private var shouldNavigateToSuccess = false
+    @State private var showCopiedToast = false
+    @State private var copiedField: String = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -180,32 +208,135 @@ struct BuyBitcoinView: View {
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(Color(hex: "#6D6D86"))
                 }
-                // Show Apple Pay button only when payments can be made
-                if PKPaymentAuthorizationViewController.canMakePayments() {
-                    // Using Apple's official PKPaymentButton
-                    Button(action: {
-                        print("🔵 Apple Pay button tapped")
-                        print("🔵 Amount value: \(amountValue)")
-                        print("🔵 Exchange rate: \(exchangeRate)")
-                        print("🔵 Is primary BTC: \(isPrimaryBTC)")
-                        if amountValue > 0 {
-                            startApplePayment()
-                        } else {
-                            print("❌ Cannot start payment: amount is 0")
+                
+                // IBAN Account Section
+                VStack(spacing: 16) {
+                    Text("Transfer EUR to buy Bitcoin")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(Color(hex: "#6D6D86"))
+                    
+                    if isLoadingAccount {
+                        VStack(spacing: 12) {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle())
+                            Text("Loading bank account...")
+                                .font(.system(size: 14))
+                                .foregroundColor(Color(hex: "#6D6D86"))
                         }
-                    }) {
-                        ApplePayButton()
-                            .frame(height: 56)
-                            .cornerRadius(28)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(amountValue == 0)
-                    .opacity(amountValue == 0 ? 0.5 : 1.0)
-                } else {
-                    NavigationLink(destination: SuccessView(illustration: "hand-plant", title: "Bitcoin purchased!", subtitle: "You've purchased ₿ 91,230,000!") {
-                        isPresented = false
-                    }) {
-                        NuriButton(icon: "bitcoin-circle", title: "Buy with Apple Pay", style: .primary)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color(hex: "#F5F5F7"))
+                        .cornerRadius(12)
+                    } else if let error = accountError {
+                        VStack(spacing: 12) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(.system(size: 24))
+                                .foregroundColor(.red)
+                            Text(error)
+                                .font(.system(size: 14))
+                                .foregroundColor(.red)
+                                .multilineTextAlignment(.center)
+                            Button("Retry") {
+                                Task {
+                                    await loadOrCreateIBANAccount()
+                                }
+                            }
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(Color("PrimaryNuriLilac"))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color(hex: "#FFF5F5"))
+                        .cornerRadius(12)
+                    } else if let iban = ibanDetails {
+                        VStack(alignment: .leading, spacing: 12) {
+                            // IBAN Row
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("IBAN")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(Color(hex: "#6D6D86"))
+                                    Text(iban.iban)
+                                        .font(.system(size: 14, weight: .medium, design: .monospaced))
+                                        .foregroundColor(Color("PrimaryNuriBlack"))
+                                }
+                                Spacer()
+                                Button(action: {
+                                    UIPasteboard.general.string = iban.iban
+                                    copiedField = "IBAN"
+                                    showCopiedToast = true
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                        showCopiedToast = false
+                                    }
+                                }) {
+                                    Image(systemName: "doc.on.doc")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(Color("PrimaryNuriLilac"))
+                                }
+                            }
+                            
+                            Divider()
+                            
+                            // BIC Row
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("BIC/SWIFT")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(Color(hex: "#6D6D86"))
+                                    Text(iban.bic)
+                                        .font(.system(size: 14, weight: .medium, design: .monospaced))
+                                        .foregroundColor(Color("PrimaryNuriBlack"))
+                                }
+                                Spacer()
+                                Button(action: {
+                                    UIPasteboard.general.string = iban.bic
+                                    copiedField = "BIC"
+                                    showCopiedToast = true
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                        showCopiedToast = false
+                                    }
+                                }) {
+                                    Image(systemName: "doc.on.doc")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(Color("PrimaryNuriLilac"))
+                                }
+                            }
+                            
+                            Divider()
+                            
+                            // Account Holder Row
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Account Holder")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(Color(hex: "#6D6D86"))
+                                Text(iban.accountHolderName)
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(Color("PrimaryNuriBlack"))
+                            }
+                        }
+                        .padding()
+                        .background(Color(hex: "#F5F5F7"))
+                        .cornerRadius(12)
+                        
+                        // Info text
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "info.circle")
+                                    .font(.system(size: 12))
+                                Text("Important:")
+                                    .font(.system(size: 12, weight: .semibold))
+                            }
+                            .foregroundColor(Color(hex: "#6D6D86"))
+                            
+                            Text("• Only send funds from accounts in your name\n• SEPA transfers arrive in 1-2 business days\n• SEPA Instant transfers arrive within seconds")
+                                .font(.system(size: 12))
+                                .foregroundColor(Color(hex: "#6D6D86"))
+                                .lineSpacing(4)
+                        }
+                        .padding()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(hex: "#FFF9E6"))
+                        .cornerRadius(12)
                     }
                 }
             }
@@ -217,13 +348,34 @@ struct BuyBitcoinView: View {
                 isPresented = false
             }
         }
+        .overlay(
+            Group {
+                if showCopiedToast {
+                    VStack {
+                        HStack {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.white)
+                            Text("\(copiedField) copied!")
+                                .foregroundColor(.white)
+                                .font(.system(size: 14, weight: .medium))
+                        }
+                        .padding()
+                        .background(Color.black.opacity(0.8))
+                        .cornerRadius(20)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        Spacer()
+                    }
+                    .padding(.top, 50)
+                    .animation(.easeInOut, value: showCopiedToast)
+                }
+            }
+        )
         .onAppear {
             print("🟢 BuyBitcoinView appeared")
-            print("🟢 Can make payments: \(PKPaymentAuthorizationViewController.canMakePayments())")
-            print("🟢 Can make payments with cards: \(PKPaymentAuthorizationViewController.canMakePayments(usingNetworks: [.visa, .masterCard, .amex, .discover]))")
             isFieldFocused = true
             Task {
                 await fetchPrice()
+                await loadOrCreateIBANAccount()
             }
         }
     }
@@ -301,6 +453,109 @@ struct BuyBitcoinView: View {
         formatter.usesGroupingSeparator = true
         formatter.groupingSeparator = ","
         return formatter.string(from: NSNumber(value: amount)) ?? ""
+    }
+    
+    private func loadOrCreateIBANAccount() async {
+        print("🏦 Loading IBAN account...")
+        isLoadingAccount = true
+        accountError = nil
+        ibanDetails = nil
+        
+        // Get current user ID
+        guard let userId = UserSettings().strigaUserId else {
+            await MainActor.run {
+                isLoadingAccount = false
+                accountError = "No user ID found. Please complete registration first."
+            }
+            return
+        }
+        
+        print("🏦 User ID: \(userId)")
+        
+        do {
+            // Get all wallets for the user
+            let walletsResponse = try await striga.getWallets(userId: userId)
+            print("🏦 Got \(walletsResponse.wallets.count) wallets")
+            
+            // Look for existing EUR account
+            var eurAccount: GetWalletsResponse.Account?
+            for wallet in walletsResponse.wallets {
+                if let eur = wallet.accounts.eur {
+                    eurAccount = eur
+                    break
+                }
+            }
+            
+            if let existingAccount = eurAccount {
+                print("🏦 Found existing EUR account: \(existingAccount.accountId)")
+                
+                // Check if it already has IBAN
+                if let bankingDetails = existingAccount.bankingDetails {
+                    print("🏦 Account already has IBAN: \(bankingDetails.iban)")
+                    await MainActor.run {
+                        self.ibanDetails = IBANDetails(
+                            iban: bankingDetails.iban,
+                            bic: bankingDetails.bic,
+                            accountHolderName: bankingDetails.accountHolderName,
+                            accountId: existingAccount.accountId
+                        )
+                        self.isLoadingAccount = false
+                    }
+                } else {
+                    // Enrich the account
+                    print("🏦 Enriching account with IBAN...")
+                    let enrichResponse = try await striga.enrichAccount(
+                        EnrichAccount(accountId: existingAccount.accountId)
+                    )
+                    print("🏦 Account enriched successfully")
+                    await MainActor.run {
+                        self.ibanDetails = IBANDetails(
+                            iban: enrichResponse.iban,
+                            bic: enrichResponse.bic,
+                            accountHolderName: enrichResponse.accountHolderName,
+                            accountId: enrichResponse.accountId
+                        )
+                        self.isLoadingAccount = false
+                    }
+                }
+            } else {
+                // Create new EUR wallet
+                print("🏦 Creating new EUR wallet...")
+                let createWalletResponse = try await striga.createWallet(
+                    CreateWallet(userId: userId, currency: "EUR")
+                )
+                
+                if let newEurAccount = createWalletResponse.accounts.eur {
+                    print("🏦 Created new EUR account: \(newEurAccount.accountId)")
+                    
+                    // Enrich the new account
+                    print("🏦 Enriching new account with IBAN...")
+                    let enrichResponse = try await striga.enrichAccount(
+                        EnrichAccount(accountId: newEurAccount.accountId)
+                    )
+                    print("🏦 New account enriched successfully")
+                    await MainActor.run {
+                        self.ibanDetails = IBANDetails(
+                            iban: enrichResponse.iban,
+                            bic: enrichResponse.bic,
+                            accountHolderName: enrichResponse.accountHolderName,
+                            accountId: enrichResponse.accountId
+                        )
+                        self.isLoadingAccount = false
+                    }
+                } else {
+                    throw NSError(domain: "BuyBitcoin", code: 1, userInfo: [
+                        NSLocalizedDescriptionKey: "Failed to create EUR account"
+                    ])
+                }
+            }
+        } catch {
+            print("❌ Error loading IBAN account: \(error)")
+            await MainActor.run {
+                self.isLoadingAccount = false
+                self.accountError = "Failed to load bank account: \(error.localizedDescription)"
+            }
+        }
     }
     
     private func startApplePayment() {

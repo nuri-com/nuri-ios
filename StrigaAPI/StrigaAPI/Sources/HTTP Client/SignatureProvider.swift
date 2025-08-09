@@ -6,7 +6,11 @@ class SignatureProvider {
     // MARK: - Dependencies
 
     private let configuration: StrigaConfiguration
-    private let jsonEncoder = JSONEncoder()
+    private let jsonEncoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        return encoder
+    }()
 
     // MARK: - Initialization
 
@@ -22,7 +26,6 @@ class SignatureProvider {
             throw URLError(.badURL)
         }
         let bodyData = try body ?? jsonEncoder.encode(EmptyRequest())
-        let dataString = String(data: bodyData, encoding: .utf8)!
         return try generateHeaders(for: path, method: method, body: bodyData)
     }
 
@@ -33,10 +36,21 @@ class SignatureProvider {
         let timestamp = makeTimestamp()
         let md5Hex = makeMD5Hex(body: body)
         let stringToSign = [timestamp, method.uppercased(), validPath, md5Hex].joined()
+        
+        print("[SignatureProvider] Original path: \(path)")
+        print("[SignatureProvider] Valid path for HMAC: \(validPath)")
+        print("[SignatureProvider] Timestamp: \(timestamp)")
+        print("[SignatureProvider] Method: \(method.uppercased())")
+        print("[SignatureProvider] MD5 of body: \(md5Hex)")
+        print("[SignatureProvider] String to sign: \(stringToSign)")
+        
         let key = SymmetricKey(data: Data(configuration.secret.utf8))
         let signature = HMAC<SHA256>.authenticationCode(for: Data(stringToSign.utf8), using: key)
         let hexSignature = signature.map { String(format: "%02hhx", $0) }.joined()
         let authorization = "HMAC \(timestamp):\(hexSignature)"
+        
+        print("[SignatureProvider] HMAC signature: \(hexSignature)")
+        
         return [
             "Authorization": authorization,
             "api-key": configuration.key,

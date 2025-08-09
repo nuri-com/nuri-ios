@@ -1,5 +1,4 @@
 import Combine
-import StrigaAPI
 import Foundation
 
 @MainActor
@@ -7,7 +6,7 @@ final class EmailViewModel: ObservableObject {
 
     // MARK: - Dependencies
 
-    private let strigaService = StrigaService.shared
+    private let cardService = CardCreationServiceProvider.shared.service
     private let countryCode: String
     private let phoneNumber: String
 
@@ -21,13 +20,12 @@ final class EmailViewModel: ObservableObject {
         self.countryCode = countryCode
         self.phoneNumber = phoneNumber
 
-        let timestamp = Int(Date().timeIntervalSince1970)
         viewState = .init(
             title: "Your Email",
             subtitle: "Enter your email address to get started.",
             emailTextField: .init(
                 label: "Email address",
-                text: "email+\(timestamp)@nuri.com",
+                text: "",
                 placeholder: "Email address"
             ),
             nextButton: .init(
@@ -63,39 +61,19 @@ final class EmailViewModel: ObservableObject {
 
     private func continueButtonPressed() {
         print("[Lukas] continue button")
-        Task {
-            do {
-                let timestamp = Int(Date().timeIntervalSince1970)
-                let firstName = "first\(timestamp)"
-                let lastName = "last\(timestamp)"
-                let name = "\(firstName) \(lastName)"
-                let address = CreateUser.Address(
-                    addressLine1: "Sonnenallee 1",
-                    city: "Berlin",
-                    country: "DE",
-                    postalCode: "12047"
-                )
-                let input = CreateUser(
-                    firstName: firstName,
-                    lastName: lastName,
-                    email: viewState.emailTextField.text,
-                    mobile: .init(
-                        countryCode: countryCode,
-                        number: phoneNumber
-                    ),
-                    address: address,
-                    dateOfBirth: .init(year: 2005, month: 1, day: 1)
-                )
-                updateViewState(action: .showLoading)
-                let userResponse = try await strigaService.createUser(input)
-                StrigaSession.shared.userId = userResponse.userId
-                StrigaSession.shared.name = name
-                StrigaSession.shared.address = address
-                print("[Lukas] success \(userResponse)")
-                updateViewState(action: .showSMSView)
-            } catch {
-                print("[Lukas] error \(error)")
-            }
-        }
+        
+        // Save email and phone to StrigaSession for later user creation
+        StrigaSession.shared.email = viewState.emailTextField.text
+        StrigaSession.shared.phoneCountryCode = countryCode
+        StrigaSession.shared.phoneNumber = phoneNumber
+        
+        print("[Lukas] Saved email and phone to session:")
+        print("  - Email: \(viewState.emailTextField.text)")
+        print("  - Phone Country Code: \(countryCode)")
+        print("  - Phone Number: \(phoneNumber)")
+        
+        // DO NOT create user here! User will be created in EnterSMSCodeViewModel
+        // after we have collected the name to prevent John Mock-Doe
+        updateViewState(action: .showSMSView)
     }
 }

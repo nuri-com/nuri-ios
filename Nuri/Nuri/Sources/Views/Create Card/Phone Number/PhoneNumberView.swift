@@ -5,71 +5,31 @@ struct PhoneNumberView: View {
     @ObservedObject var viewModel = PhoneNumberViewModel()
 
     var body: some View {
-        contentView(viewState: viewModel.viewState)
-    }
-
-    @ViewBuilder
-    private func contentView(viewState: PhoneNumberViewState) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(viewState.title)
-                .font(.brandTitle1)
-                .foregroundStyle(Color.primary)
-            Text(viewState.subtitle)
-                .font(.brandBody)
-                .foregroundStyle(Color.secondary)
-            HStack {
-                Text(viewState.countryPickerTitle)
-                    .font(.brandCaption)
-                    .foregroundStyle(Color.secondary)
-                Spacer()
-                Text(viewState.countryPickerValue)
-                    .font(.brandBody)
-                    .foregroundStyle(Color.primary)
+        ZStack {
+            UnifiedInputView(
+                mode: .phone,
+                inputText: $viewModel.viewState.phoneNumber.text,
+                countryCode: $viewModel.viewState.countryCode,
+                showCountryPicker: $viewModel.viewState.showCountryPicker,
+                countryName: viewModel.viewState.countryPickerValue,
+                isValid: !viewModel.viewState.confirmButton.isDisabled,
+                onNext: {
+                    viewModel.viewState.confirmButton.action.action()
+                },
+                onCountryPicked: { result in
+                    viewModel.viewState.countryPickedAction.action(result)
+                }
+            )
+            .onChange(of: viewModel.viewState.phoneNumber.text) { _, newValue in
+                viewModel.viewState.phoneNumber.textChangeHandler?.action(newValue)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 16)
-            .background(NuriAsset.inputBackground.swiftUIColor)
-            .clipShape(RoundedRectangle(cornerRadius: 3))
-            .padding(.vertical, 8)
-            .onTapGesture {
-                viewState.countryPickerSelected.action()
+            .navigationDestination(isPresented: $viewModel.viewState.showEmailScreen) {
+                EnterSMSCodeView()
             }
-            HStack(spacing: 8) {
-                Text(viewState.countryCode)
-                TextField(viewState.phoneNumber.placeholder, text: $viewModel.viewState.phoneNumber.text)
-                    .keyboardType(.phonePad)
-                    .textContentType(.telephoneNumber)
-                    .onChange(of: viewState.phoneNumber.text) { _, newValue in
-                        viewState.phoneNumber.textChangeHandler?.action(newValue)
-                    }
+            
+            if viewModel.viewState.isCreatingUser {
+                LoadingOverlay(title: "Creating your account...", subtitle: nil)
             }
-            .font(.brandCaption)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 16)
-            .background(NuriAsset.inputBackground.swiftUIColor)
-            .clipShape(RoundedRectangle(cornerRadius: 3))
-            if let countryCodeHint = viewState.countryCodeHint {
-                Text(countryCodeHint)
-                    .font(.brandBody)
-                    .foregroundStyle(Color.secondary)
-            }
-            Spacer()
-            TextButton(viewState: viewState.confirmButton)
-                .buttonStyle(ProminentButtonStyle())
-        }
-        .padding(32)
-        .frame(maxHeight: .infinity)
-        .background(NuriAsset.background.swiftUIColor)
-        .sheet(isPresented: $viewModel.viewState.showCountryPicker) {
-            SearchCountryDialCodeView() { result in
-                viewState.countryPickedAction.action(result)
-            }
-        }
-        .navigationDestination(isPresented: $viewModel.viewState.showEmailScreen) {
-            EmailView(viewModel: .init(
-                countryCode: viewState.countryCode,
-                phoneNumber: viewState.phoneNumber.text
-            ))
         }
     }
 }

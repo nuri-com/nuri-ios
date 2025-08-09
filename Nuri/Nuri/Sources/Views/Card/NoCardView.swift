@@ -35,10 +35,11 @@ struct NoCardView: View {
         } content: {
             VStack(spacing: 0) {
                 NuriCardIllustration()
-                    .padding(.bottom, 16)
+                    .padding(.bottom, 24)
                 NuriTitleWithSubtitle(title: "Nuri Card for Apple Pay", subtitle: "")
                 featureList()
-                    .padding(.bottom,8)
+                    .padding(.top, -6)
+                    .padding(.bottom, 24)
                 Button(action: {
                     navigation.isPresented = true
                 }) {

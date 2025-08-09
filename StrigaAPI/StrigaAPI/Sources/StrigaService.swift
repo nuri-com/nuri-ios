@@ -79,6 +79,18 @@ public final class StrigaService {
         return try await httpClient.post(url: url, input: input)
     }
 
+    @discardableResult
+    public func getWallets(userId: String) async throws -> GetWalletsResponse {
+        let url = try url(for: "v1/wallets/\(userId)")
+        return try await httpClient.get(url: url)
+    }
+    
+    @discardableResult
+    public func enrichAccount(_ input: EnrichAccount) async throws -> EnrichAccountResponse {
+        let url = try url(for: "v1/account/enrich")
+        return try await httpClient.post(url: url, input: input)
+    }
+
     // MARK: - Private
 
     internal func url(for path: String) throws -> URL {
@@ -89,7 +101,10 @@ public final class StrigaService {
               var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
             throw NSError(domain: "Striga", code: 1002, userInfo: [NSLocalizedDescriptionKey: "URL not set."])
         }
-        components.path += path
+        // Ensure proper path concatenation
+        let basePath = components.path.hasSuffix("/") ? components.path : components.path + "/"
+        let cleanPath = path.hasPrefix("/") ? String(path.dropFirst()) : path
+        components.path = basePath + cleanPath
         guard let url = components.url else {
             throw NSError(domain: "Striga", code: 1003, userInfo: [NSLocalizedDescriptionKey: "Could not construct URL. \(components)"])
         }

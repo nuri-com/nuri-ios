@@ -6,16 +6,18 @@ platform :ios do
     # Ensure we're on the right branch
     ensure_git_status_clean
     
-    # Increment build number
-    increment_build_number(
-      build_number: latest_testflight_build_number + 1
-    )
+    # Generate Xcode project with Tuist
+    sh("cd .. && tuist generate")
     
-    # Build the app
+    # Get current build number from TestFlight
+    build_number = latest_testflight_build_number + 1
+    
+    # Build the app with specific build number
     build_app(
       workspace: "Nuri.xcworkspace",
       scheme: "Nuri",
       export_method: "app-store",
+      build_number: build_number.to_s,
       export_options: {
         provisioningProfiles: {
           "com.nuri.mobile-ios" => "match AppStore com.nuri.mobile-ios"
@@ -28,18 +30,15 @@ platform :ios do
     # Upload to TestFlight
     upload_to_testflight(
       skip_waiting_for_build_processing: true,
-      apple_id: "6736962812" # You'll need to replace this with your app's Apple ID
+      apple_id: "6736962812"
     )
-    
-    # Commit the version bump
-    commit_version_bump
-    
-    # Push to remote
-    push_to_git_remote
   end
   
   desc "Build for TestFlight without uploading"
   lane :build_only do
+    # Generate Xcode project with Tuist
+    sh("cd .. && tuist generate")
+    
     # Build the app
     build_app(
       workspace: "Nuri.xcworkspace",
@@ -48,14 +47,50 @@ platform :ios do
       output_directory: "./builds",
       output_name: "Nuri-TestFlight.ipa",
       export_options: {
-        signingStyle: "manual",
-        teamID: "MH2SRQ3N27",
-        signingCertificate: "Apple Distribution",
+        signingStyle: "automatic",
+        teamID: "NSLWDP4W5G",
         provisioningProfiles: {
           "com.nuri.mobile-ios" => "com.nuri.mobile-ios AppStore"
         }
       }
     )
+  end
+  
+  desc "Build archive only (no export)"
+  lane :archive do
+    # Generate Xcode project with Tuist
+    sh("cd .. && tuist generate")
+    
+    # Build the archive without exporting
+    gym(
+      workspace: "Nuri.xcworkspace",
+      scheme: "Nuri",
+      configuration: "Release",
+      clean: true,
+      output_directory: "./builds",
+      skip_package_ipa: true,
+      archive_path: "./builds/Nuri.xcarchive"
+    )
+    
+    puts "Archive created at: ./builds/Nuri.xcarchive"
+    puts "You can now open this archive in Xcode Organizer to manually distribute"
+  end
+  
+  desc "Build a simple archive without signing complications"
+  lane :simple_archive do
+    # Generate Xcode project with Tuist
+    sh("cd .. && tuist generate")
+    
+    # Build using xcodebuild directly
+    sh("cd .. && xcodebuild -workspace Nuri.xcworkspace -scheme Nuri -configuration Release -sdk iphoneos archive -archivePath fastlane/builds/Nuri.xcarchive")
+    
+    puts "Archive created at: ./builds/Nuri.xcarchive"
+    puts "You can now:"
+    puts "1. Open Xcode"
+    puts "2. Go to Window → Organizer (⌘⇧2)"
+    puts "3. Select your archive"
+    puts "4. Click 'Distribute App'"
+    puts "5. Choose 'App Store Connect' and follow the wizard"
   end
   
   desc "Upload existing IPA to TestFlight"

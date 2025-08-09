@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Card Consent Test</title>
+</head>
+<body>
+    <h1>Test Page</h1>
+    <div id="status">Loading...</div>
+    
+    <script>
+        console.log('INLINE SCRIPT EXECUTING');
+        document.getElementById('status').innerHTML = 'Script Loaded';
+        
+        // Define test function
+        window.testFunction = function() {
+            return 'Test works!';
+        };
+        
+        // Define requestConsent stub
+        window.requestConsent = function(userId, channel) {
+            console.log('requestConsent called:', userId, channel);
+            document.getElementById('status').innerHTML = 'Request Consent Called';
+            
+            // Send fake challengeId to Swift
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.strigaNative) {
+                window.webkit.messageHandlers.strigaNative.postMessage({
+                    type: 'challengeId',
+                    challengeId: 'test-challenge-123',
+                    expires: new Date().toISOString()
+                });
+            }
+            
+            return Promise.resolve({ challengeId: 'test-challenge-123' });
+        };
+        
+        console.log('Functions defined');
+        console.log('typeof testFunction:', typeof window.testFunction);
+        console.log('typeof requestConsent:', typeof window.requestConsent);
+    </script>
+    
+    <!-- Try loading Striga SDK -->
+    <script src="https://www.vault.striga.eu/web/sandbox/v1.1/client.min.js" 
+            onload="console.log('STRIGA SDK LOADED'); document.getElementById('status').innerHTML += ' | Striga Loaded';" 
+            onerror="console.log('STRIGA SDK FAILED'); document.getElementById('status').innerHTML += ' | Striga Failed';"></script>
+</body>
+</html>

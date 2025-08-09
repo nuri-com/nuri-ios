@@ -4,6 +4,7 @@ import StrigaAPI
 class CreatingCardViewModel: ObservableObject {
 
     @Published var viewState: CreatingCardViewState = .empty
+    private let cardService = CardCreationServiceProvider.shared.service
 
     private func reduce(viewState: CreatingCardViewState, action: CreatingCardViewState.Action) -> CreatingCardViewState {
         var viewState = viewState
@@ -23,43 +24,44 @@ class CreatingCardViewModel: ObservableObject {
         do {
             print("[Lukas] Creating card ....")
             let session = StrigaSession.shared
-            guard let name = session.name, let userId = session.userId else {
-                print("[Lukas] Session details missing")
+            guard let userId = session.userId else {
+                print("[Lukas] Session userId missing")
                 return
             }
-            let password = generatePassword()
-            print("[Lukas] generated password: \(password)")
-            let response = try await StrigaService.shared.createCard(.init(
-                nameOnCard: name,
-                userId: userId,
-                type: "VIRTUAL",
-                threeDSecurePassword: password
-            ))
+            
+            // Use firstName + lastName for card name
+            let name: String
+            if let firstName = session.firstName, let lastName = session.lastName {
+                name = "\(firstName) \(lastName)"
+                print("[Lukas] Using full name: \(name)")
+            } else if let sessionName = session.name {
+                name = sessionName
+                print("[Lukas] Using session name: \(name)")
+            } else {
+                print("[Lukas] ERROR: No name available for card creation")
+                return
+            }
+            let response = try await cardService.createCard(name: name, userId: userId)
             print("[Lukas] Card created \(response)")
             UserSettings().strigaUserId = userId
+            UserSettings().strigaCardId = response.id
+            UserSettings().strigaWalletId = response.parentWalletId
+            
+            // Post notification that card was created
+            NotificationCenter.default.post(name: Notification.Name("CardCreatedSuccessfully"), object: nil)
+            
             await updateViewState(action: .finish)
         } catch {
-            if let error = error as? ValidationErrorResponse, error.errorCode == "00002" { // password too weak
-                print("[Lukas] Password too weak. Trying with a new password.")
-                await createCard()
-            } else {
-                print("[Lukas] Error creating card: \(error)")
+            print("[Lukas] Error creating card: \(error)")
+            if let errorResponse = error as? ErrorResponse {
+                print("[Lukas] Error details:")
+                print("[Lukas] - Message: \(errorResponse.message)")
+                print("[Lukas] - Code: \(errorResponse.errorCode)")
+                print("[Lukas] - Details: \(errorResponse.errorDetails)")
             }
+            // TODO: Show error to user and possibly retry
         }
     }
 
-    private func generatePassword() -> String {
-        let allowedCharacters = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!\"#;:?&*()+=/\\,.[]{}")
-        let passwordLength = Int.random(in: 8...36)
-
-        var password = ""
-        for _ in 0..<passwordLength {
-            if let randomChar = allowedCharacters.randomElement() {
-                password.append(randomChar)
-            }
-        }
-
-        return password
-    }
 
 }

@@ -1,0 +1,248 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>Striga Loader</title>
+    <style>
+        body { 
+            margin: 0; 
+            padding: 16px;
+            background: transparent; 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 16px;
+        }
+        #status {
+            padding: 12px;
+            background: #f0f4f8;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            text-align: center;
+            color: #4a5568;
+        }
+        #cardNumber, #cvv { 
+            padding: 16px; 
+            margin: 12px 0; 
+            background: white; 
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            min-height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #2d3748;
+            font-size: 18px;
+            letter-spacing: 2px;
+            font-family: 'Courier New', monospace;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+        }
+        #cardNumber:empty::before {
+            content: 'Card Number';
+            color: #a0aec0;
+            font-style: italic;
+            letter-spacing: normal;
+        }
+        #cvv:empty::before {
+            content: 'CVV';
+            color: #a0aec0;
+            font-style: italic;
+            letter-spacing: normal;
+        }
+        .error {
+            background: #fed7d7 !important;
+            color: #c53030 !important;
+        }
+        .success {
+            background: #c6f6d5 !important;
+            color: #276749 !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="status">Initializing...</div>
+    <div id="cardNumber"></div>
+    <div id="cvv"></div>
+    
+    <script>
+        // Enhanced logging system
+        const log = {
+            info: (msg) => {
+                console.log('[INFO] ' + msg);
+                postToNative('log', '[INFO] ' + msg);
+                updateStatus(msg);
+            },
+            error: (msg) => {
+                console.error('[ERROR] ' + msg);
+                postToNative('log', '[ERROR] ' + msg);
+                updateStatus(msg, 'error');
+            },
+            success: (msg) => {
+                console.log('[SUCCESS] ' + msg);
+                postToNative('log', '[SUCCESS] ' + msg);
+                updateStatus(msg, 'success');
+            }
+        };
+        
+        function updateStatus(msg, type = 'info') {
+            const statusEl = document.getElementById('status');
+            if (statusEl) {
+                statusEl.textContent = msg;
+                statusEl.className = type;
+            }
+        }
+        
+        function postToNative(type, data) {
+            try {
+                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.strigaNative) {
+                    window.webkit.messageHandlers.strigaNative.postMessage({ type, data });
+                }
+            } catch (e) {
+                console.warn('Could not post to native:', e);
+            }
+        }
+        
+        // Global state
+        window.strigaReady = false;
+        window.strigaInitialized = false;
+        
+        // Dynamically load the Striga SDK
+        function loadStrigaSDK() {
+            log.info('Loading Striga SDK...');
+            
+            const script = document.createElement('script');
+            script.src = 'https://www.vault.striga.eu/web/sandbox/v1.1/client.min.js';
+            script.async = false;
+            
+            script.onload = () => {
+                log.success('SDK script loaded');
+                // Check if StrigaUXPlugin is available
+                setTimeout(checkStrigaAvailable, 100);
+            };
+            
+            script.onerror = (e) => {
+                log.error('Failed to load SDK script: ' + e);
+                // Try alternative loading method
+                tryAlternativeLoad();
+            };
+            
+            document.head.appendChild(script);
+        }
+        
+        // Alternative loading via fetch
+        function tryAlternativeLoad() {
+            log.info('Trying alternative load method...');
+            
+            fetch('https://www.vault.striga.eu/web/sandbox/v1.1/client.min.js')
+                .then(response => response.text())
+                .then(scriptText => {
+                    const scriptEl = document.createElement('script');
+                    scriptEl.textContent = scriptText;
+                    document.head.appendChild(scriptEl);
+                    log.success('SDK loaded via fetch');
+                    setTimeout(checkStrigaAvailable, 100);
+                })
+                .catch(error => {
+                    log.error('Alternative load failed: ' + error);
+                });
+        }
+        
+        // Check if Striga is available
+        function checkStrigaAvailable() {
+            if (typeof StrigaUXPlugin !== 'undefined') {
+                log.success('StrigaUXPlugin is available!');
+                window.strigaReady = true;
+                postToNative('log', 'Striga SDK ready for initialization');
+            } else {
+                log.error('StrigaUXPlugin not found after load');
+                // Retry a few times
+                if (window.retryCount === undefined) window.retryCount = 0;
+                if (window.retryCount < 10) {
+                    window.retryCount++;
+                    setTimeout(checkStrigaAvailable, 500);
+                }
+            }
+        }
+        
+        // Initialize Striga (called from Swift)
+        window.initStriga = function(uiSecret, applicationId) {
+            log.info('initStriga called');
+            
+            if (!window.strigaReady || typeof StrigaUXPlugin === 'undefined') {
+                log.error('Striga not ready for initialization');
+                return false;
+            }
+            
+            try {
+                StrigaUXPlugin.create(uiSecret, { applicationId: applicationId });
+                window.strigaInitialized = true;
+                log.success('Striga initialized successfully');
+                return true;
+            } catch(e) {
+                log.error('Failed to initialize: ' + e);
+                return false;
+            }
+        };
+        
+        // Request consent
+        window.requestConsent = async function(userId, channel) {
+            log.info('requestConsent called for user: ' + userId);
+            
+            if (!window.strigaInitialized) {
+                log.error('Striga not initialized');
+                return;
+            }
+            
+            try {
+                const params = { userId: userId };
+                if (channel) params.channel = channel;
+                
+                const result = await StrigaUXPlugin.requestConsent(params);
+                log.success('Consent requested, challengeId: ' + result.challengeId);
+                postToNative('challenge', result);
+            } catch(e) {
+                log.error('requestConsent failed: ' + e);
+                postToNative('error', String(e));
+            }
+        };
+        
+        // Render card
+        window.renderCard = async function(cardId, authToken) {
+            log.info('renderCard called');
+            
+            if (!window.strigaInitialized) {
+                log.error('Striga not initialized');
+                return;
+            }
+            
+            try {
+                log.info('Rendering card number...');
+                await StrigaUXPlugin.render('cardNumber', { 
+                    cardId: cardId, 
+                    authToken: authToken 
+                });
+                
+                log.info('Rendering CVV...');
+                await StrigaUXPlugin.render('cvv', { 
+                    cardId: cardId, 
+                    authToken: authToken 
+                });
+                
+                log.success('Card rendered successfully');
+                document.getElementById('status').style.display = 'none';
+                postToNative('rendered', {});
+            } catch(e) {
+                log.error('renderCard failed: ' + e);
+                postToNative('error', String(e));
+            }
+        };
+        
+        // Start loading on page load
+        document.addEventListener('DOMContentLoaded', loadStrigaSDK);
+        
+        // Also try loading immediately
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            loadStrigaSDK();
+        }
+    </script>
+</body>
+</html>

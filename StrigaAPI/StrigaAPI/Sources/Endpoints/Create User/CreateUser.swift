@@ -5,6 +5,15 @@ public struct CreateUser: Encodable {
     public let mobile: Mobile
     public let address: Address?
     public let dateOfBirth: Date?
+    
+    enum CodingKeys: String, CodingKey {
+        case firstName
+        case lastName
+        case email
+        case mobile
+        case address
+        case dateOfBirth
+    }
 
     public init(
         firstName: String,

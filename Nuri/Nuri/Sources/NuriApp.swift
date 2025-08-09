@@ -27,12 +27,21 @@ struct NuriApp: App {
         print("📱 [NuriApp] Running on Physical Device")
         #endif
         
-        // Configure Striga service
-        StrigaService.shared.configuration = .init(
-            url: "https://www.sandbox.striga.com/api/",
-            key: "_TbS1cXGStMmYBJtcoYSA7we2lQUky_6TMo-aGLvWJM=",
-            secret: "43jBa65VEoLC5O4O48pDruayz5Q43IlhgyGbkYPcMHE="
-        )
+        // Configure Striga
+        configureStriga()
+    }
+    
+    private func configureStriga() {
+        // Configure Striga with centralized credentials
+        StrigaService.shared.configuration = StrigaCredentials.current
+        
+        #if DEBUG
+        print("🔧 [NuriApp] Configured Striga for sandbox environment")
+        print("🔧 [NuriApp] API URL: \(StrigaCredentials.current.url)")
+        print("🔧 [NuriApp] Application ID: \(StrigaCredentials.current.applicationId ?? "Not set")")
+        #else
+        print("🔧 [NuriApp] Configured Striga for production environment")
+        #endif
     }
 
     var body: some Scene {

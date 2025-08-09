@@ -256,44 +256,48 @@ struct WelcomeView: View {
         do {
             guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
                   let window = windowScene.windows.first(where: { $0.isKeyWindow }) else {
-                throw PasskeyError.invalidURL
+                throw NSError(domain: "PasskeyError", code: 3, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
             }
             
-            // First try to authenticate with existing passkey
-            do {
+            // First check if a passkey exists for this email
+            let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+            print("[WelcomeView] Checking for existing passkeys for email: \(trimmedEmail)")
+            let passkeys = try await PasskeyAuthenticationService.shared.getUserPasskeys(for: trimmedEmail)
+            print("[WelcomeView] Found \(passkeys.count) passkeys for this email")
+            
+            if !passkeys.isEmpty {
+                // Passkey exists, authenticate with it
+                print("[WelcomeView] Authenticating with existing passkey...")
                 let result = try await PasskeyAuthenticationService.shared.authenticateWithPasskey(
-                    username: email.trimmingCharacters(in: .whitespacesAndNewlines),
+                    username: trimmedEmail,
                     presentationAnchor: window
                 )
                 
                 if result.verified {
-                    // Check if the authenticated username matches the entered email
-                    if let username = result.username, username == email.trimmingCharacters(in: .whitespacesAndNewlines) {
-                        // Store the email
-                        UserDefaults.standard.set(email.trimmingCharacters(in: .whitespacesAndNewlines), forKey: "passkeyUserEmail")
-                        
-                        // Successfully authenticated with correct email
-                        self.isUserLoggedIn = true
-                    } else {
-                        // Wrong account - the passkey doesn't match the entered email
-                        throw NSError(domain: "PasskeyError", code: 1, userInfo: [NSLocalizedDescriptionKey: "No passkey found for this email address. Please check your email or create a new account."])
-                    }
+                    // Store the email
+                    UserDefaults.standard.set(trimmedEmail, forKey: "passkeyUserEmail")
+                    
+                    // Successfully authenticated
+                    self.isUserLoggedIn = true
+                } else {
+                    throw NSError(domain: "PasskeyError", code: 2, userInfo: [NSLocalizedDescriptionKey: "Authentication failed"])
                 }
-            } catch {
-                // No existing passkey found or wrong email, create new account
+            } else {
+                // No passkey exists, create new account
+                print("[WelcomeView] No passkey found, creating new account...")
                 let result = try await PasskeyAuthenticationService.shared.createPasskey(
-                    username: email.trimmingCharacters(in: .whitespacesAndNewlines),
+                    username: trimmedEmail,
                     presentationAnchor: window
                 )
                 
                 if result.verified {
                     // Store email in UserDefaults
-                    UserDefaults.standard.set(email.trimmingCharacters(in: .whitespacesAndNewlines), forKey: "passkeyUserEmail")
+                    UserDefaults.standard.set(trimmedEmail, forKey: "passkeyUserEmail")
                     
                     // Successfully created and authenticated
                     self.isUserLoggedIn = true
                 } else {
-                    throw PasskeyError.serverError
+                    throw NSError(domain: "PasskeyError", code: 4, userInfo: [NSLocalizedDescriptionKey: "Server error"])
                 }
             }
         } catch {
@@ -312,7 +316,7 @@ struct WelcomeView: View {
         do {
             guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
                   let window = windowScene.windows.first(where: { $0.isKeyWindow }) else {
-                throw PasskeyError.invalidURL
+                throw NSError(domain: "PasskeyError", code: 3, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
             }
             
             let result = try await PasskeyAuthenticationService.shared.authenticateWithPasskey(
@@ -327,11 +331,8 @@ struct WelcomeView: View {
                 // Successfully authenticated
                 self.isUserLoggedIn = true
             } else {
-                throw PasskeyError.serverError
+                throw NSError(domain: "PasskeyError", code: 4, userInfo: [NSLocalizedDescriptionKey: "Server error"])
             }
-        } catch PasskeyError.noPasskeysFound {
-            errorMessage = "No wallet found for this email. Please check your email or create a new wallet."
-            showError = true
         } catch {
             errorMessage = error.localizedDescription
             showError = true

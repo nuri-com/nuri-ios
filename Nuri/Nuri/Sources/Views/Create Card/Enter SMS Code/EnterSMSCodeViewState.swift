@@ -5,7 +5,7 @@ struct EnterSMSCodeViewState: ViewModelViewState {
     var codeTextField: TextFieldViewState
     var isLoadingAnimationActive: Bool
     var showKYC: Bool
-    var isCreatingCard: Bool
+    // Removed isCreatingCard - card creation happens automatically after KYC
 
     static var empty: EnterSMSCodeViewState {
         .init(
@@ -15,13 +15,13 @@ struct EnterSMSCodeViewState: ViewModelViewState {
             codeTextField: .empty,
             isLoadingAnimationActive: false,
             showKYC: false,
-            isCreatingCard: false
+            // isCreatingCard removed
         )
     }
 
     enum Action: Equatable {
         case startLoadingAnimation
-        case showCreatingCardView
+        // case showCreatingCardView removed - card creation is automatic
         case showKYC
     }
 }

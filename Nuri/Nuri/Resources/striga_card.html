@@ -1,0 +1,212 @@
+<!doctype html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Striga Card Display</title>
+    <style>
+        body { 
+            margin: 0; 
+            padding: 10px;
+            background: transparent; 
+            font: 16px -apple-system; 
+        }
+        #cardNumber, #cvv { 
+            padding: 12px; 
+            margin: 8px 0; 
+            background: #f5f5f7; 
+            border-radius: 8px;
+            min-height: 60px;
+            border: 2px solid #007AFF;
+            position: relative;
+        }
+        #cardNumber iframe, #cvv iframe {
+            width: 100% !important;
+            height: 100% !important;
+            border: 1px solid red !important;
+        }
+        #status {
+            padding: 8px;
+            background: #fff3cd;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="status">Loading Striga SDK...</div>
+    <div id="cardNumber"></div>
+    <div id="cvv"></div>
+    
+    <!-- Load Striga SDK -->
+    <script src="https://www.vault.striga.eu/web/sandbox/v1.1/client.min.js"></script>
+    
+    <script>
+        // Global state
+        window.strigaReady = false;
+        window.strigaInitialized = false;
+        
+        // Debug logging
+        function log(msg) {
+            console.log(msg);
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.strigaNative) {
+                window.webkit.messageHandlers.strigaNative.postMessage({
+                    type: 'log',
+                    data: msg
+                });
+            }
+        }
+        
+        // Wait for SDK to load
+        function waitForStriga(callback) {
+            var attempts = 0;
+            var check = setInterval(function() {
+                attempts++;
+                if (typeof StrigaUXPlugin !== 'undefined') {
+                    clearInterval(check);
+                    log('StrigaUXPlugin is available after ' + attempts + ' attempts');
+                    callback();
+                } else if (attempts > 30) { // 15 seconds
+                    clearInterval(check);
+                    log('ERROR: StrigaUXPlugin never loaded');
+                    document.getElementById('status').innerHTML = 'Failed to load Striga SDK';
+                }
+            }, 500);
+        }
+        
+        // Initialize when ready
+        waitForStriga(function() {
+            document.getElementById('status').innerHTML = 'Striga SDK loaded - ready';
+            window.strigaReady = true;
+            // Auto-initialize if we have credentials
+            if (window.pendingInit) {
+                window.initStriga(window.pendingInit.uiSecret, window.pendingInit.applicationId);
+            }
+        });
+        
+        // Initialize Striga (called from Swift)
+        window.initStriga = function(uiSecret, applicationId) {
+            if (!window.strigaReady) {
+                log('SDK not ready yet, storing credentials for later');
+                window.pendingInit = { uiSecret: uiSecret, applicationId: applicationId };
+                return false;
+            }
+            
+            if (window.strigaInitialized) {
+                log('Striga already initialized');
+                return true;
+            }
+            
+            try {
+                StrigaUXPlugin.create(uiSecret, { applicationId: applicationId });
+                window.strigaInitialized = true;
+                log('Striga initialized successfully');
+                document.getElementById('status').innerHTML = 'Ready for card operations';
+                return true;
+            } catch(e) {
+                log('ERROR: Failed to initialize Striga: ' + e);
+                return false;
+            }
+        };
+        
+        // Request consent
+        window.requestConsent = function(userId, channel) {
+            log('requestConsent called: ' + userId);
+            
+            if (typeof StrigaUXPlugin === 'undefined') {
+                log('ERROR: StrigaUXPlugin not available');
+                return;
+            }
+            
+            if (!window.strigaInitialized) {
+                log('ERROR: Striga not initialized - call initStriga first');
+                return;
+            }
+            
+            var params = { userId: userId };
+            if (channel) params.channel = channel;
+            
+            StrigaUXPlugin.requestConsent(params).then(function(result) {
+                log('Got consent result: ' + JSON.stringify(result));
+                
+                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.strigaNative) {
+                    window.webkit.messageHandlers.strigaNative.postMessage({
+                        type: 'challenge',
+                        data: result
+                    });
+                }
+            }).catch(function(e) {
+                log('ERROR: requestConsent failed: ' + e);
+                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.strigaNative) {
+                    window.webkit.messageHandlers.strigaNative.postMessage({
+                        type: 'error',
+                        data: String(e)
+                    });
+                }
+            });
+        };
+        
+        // Render card
+        window.renderCard = function(cardId, authToken) {
+            log('renderCard called: ' + cardId);
+            
+            if (typeof StrigaUXPlugin === 'undefined') {
+                log('ERROR: StrigaUXPlugin not available');
+                return;
+            }
+            
+            log('Starting render with cardId: ' + cardId);
+            log('Auth token length: ' + authToken.length);
+            log('Auth token preview: ' + authToken.substring(0, 50) + '...');
+            
+            // Check if we have the render function
+            if (typeof StrigaUXPlugin.render !== 'function') {
+                log('ERROR: StrigaUXPlugin.render is not a function!');
+                return;
+            }
+            
+            // Render card number first
+            log('Calling StrigaUXPlugin.render for cardNumber...');
+            StrigaUXPlugin.render('cardNumber', { 
+                cardId: cardId, 
+                authToken: authToken 
+            }).then(function(result) {
+                log('Card number render promise resolved with: ' + JSON.stringify(result));
+                var cardNumEl = document.getElementById('cardNumber');
+                log('Card number element innerHTML: ' + cardNumEl.innerHTML.substring(0, 200));
+                log('Card number element children: ' + cardNumEl.children.length);
+                if (cardNumEl.children.length > 0) {
+                    log('First child tag: ' + cardNumEl.children[0].tagName);
+                }
+                
+                // Then render CVV
+                return StrigaUXPlugin.render('cvv', { 
+                    cardId: cardId, 
+                    authToken: authToken 
+                });
+            }).then(function() {
+                log('CVV rendered');
+                var cvvEl = document.getElementById('cvv');
+                log('CVV element innerHTML: ' + cvvEl.innerHTML.substring(0, 100));
+                log('CVV element children: ' + cvvEl.children.length);
+                
+                document.getElementById('status').style.display = 'none';
+                
+                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.strigaNative) {
+                    window.webkit.messageHandlers.strigaNative.postMessage({
+                        type: 'rendered'
+                    });
+                }
+            }).catch(function(e) {
+                log('ERROR: renderCard failed: ' + e);
+                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.strigaNative) {
+                    window.webkit.messageHandlers.strigaNative.postMessage({
+                        type: 'error',
+                        data: String(e)
+                    });
+                }
+            });
+        };
+    </script>
+</body>
+</html>
