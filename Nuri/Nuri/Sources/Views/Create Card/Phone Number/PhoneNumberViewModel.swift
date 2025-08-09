@@ -57,12 +57,8 @@ final class PhoneNumberViewModel: ObservableObject {
         
         // Configure Striga if not already configured
         if striga.configuration == nil {
-            striga.configuration = StrigaConfiguration(
-                url: "https://www.sandbox.striga.com/api/",
-                key: "_TbS1cXGStMmYBJtcoYSA7we2lQUky_6TMo-aGLvWJM=",
-                secret: "43jBa65VEoLC5O4O48pDruayz5Q43IlhgyGbkYPcMHE="
-            )
-            print("[PhoneNumber] Configured Striga for sandbox environment")
+            striga.configuration = StrigaCredentials.current
+            print("[PhoneNumber] Configured with Striga credentials")
         }
     }
 

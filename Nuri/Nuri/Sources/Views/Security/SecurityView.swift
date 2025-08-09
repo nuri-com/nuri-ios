@@ -1980,12 +1980,8 @@ struct SecurityView: View {
         do {
             // Configure Striga if not already configured
             if striga.configuration == nil {
-                striga.configuration = StrigaConfiguration(
-                    url: "https://www.sandbox.striga.com/api/",
-                    key: "_TbS1cXGStMmYBJtcoYSA7we2lQUky_6TMo-aGLvWJM=",
-                    secret: "43jBa65VEoLC5O4O48pDruayz5Q43IlhgyGbkYPcMHE="
-                )
-                print("[SecurityView] Configured Striga for sandbox environment")
+                striga.configuration = StrigaCredentials.current
+                print("[SecurityView] Configured with Striga credentials")
             }
             
             print("[SecurityView] Fetching user data for userId: \(userId)")

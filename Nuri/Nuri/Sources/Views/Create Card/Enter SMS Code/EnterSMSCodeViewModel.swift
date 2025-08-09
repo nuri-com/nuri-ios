@@ -10,14 +10,10 @@ final class EnterSMSCodeViewModel: ObservableObject {
     @Published var viewState: EnterSMSCodeViewState = .empty
 
     init() {
-        // Configure Striga for sandbox (development) if not already configured
+        // Configure Striga if not already configured
         if striga.configuration == nil {
-            striga.configuration = StrigaConfiguration(
-                url: "https://www.sandbox.striga.com/api/",
-                key: "_TbS1cXGStMmYBJtcoYSA7we2lQUky_6TMo-aGLvWJM=",
-                secret: "43jBa65VEoLC5O4O48pDruayz5Q43IlhgyGbkYPcMHE="
-            )
-            print("[Striga] Configured for sandbox environment")
+            striga.configuration = StrigaCredentials.current
+            print("[Striga] Configured with Striga credentials")
         }
         viewState = .init(
             title: "SMS Verification",

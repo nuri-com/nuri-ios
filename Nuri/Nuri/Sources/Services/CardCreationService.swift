@@ -61,14 +61,10 @@ class StrigaCardCreationService: CardCreationServiceProtocol {
     private let striga = StrigaService.shared
     
     init() {
-        // Configure Striga for sandbox (development) if not already configured
+        // Configure Striga if not already configured
         if striga.configuration == nil {
-            striga.configuration = StrigaConfiguration(
-                url: "https://www.sandbox.striga.com/api/",
-                key: "_TbS1cXGStMmYBJtcoYSA7we2lQUky_6TMo-aGLvWJM=",
-                secret: "43jBa65VEoLC5O4O48pDruayz5Q43IlhgyGbkYPcMHE="
-            )
-            print("[StrigaCardCreation] Configured for sandbox environment")
+            striga.configuration = StrigaCredentials.current
+            print("[StrigaCardCreation] Configured with Striga credentials")
         }
     }
     
