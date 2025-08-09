@@ -78,7 +78,34 @@ final class EnterSMSCodeViewModel: ObservableObject {
                     verificationCode: code
                 ))
                 
-                print("[SMS] Mobile verification successful. Starting KYC...")
+                print("[SMS] ✅ Mobile verification successful")
+                
+                // CRITICAL TODO: Also verify email to enable MFA!
+                // Without email verification, hosted card will fail with "Multi-factor authentication not enabled"
+                // 
+                // THE PROBLEM:
+                // - We only verify phone, NOT email
+                // - Striga requires BOTH for MFA
+                // - That's why hosted card fails with "Multi-factor authentication not enabled"
+                //
+                // THE FIX NEEDED:
+                // 1. Call striga.verifyEmail() with userId and verificationId (which is the code)
+                // 2. In sandbox, same code 123456 works for both email and phone
+                //
+                // COMMENTED OUT DUE TO BUILD ISSUES - NEEDS FIXING
+                /*
+                print("[SMS] 📧 Verifying email with same code (sandbox uses 123456 for both)...")
+                try await striga.verifyEmail(.init(
+                    userId: userId,
+                    verificationId: code  
+                ))
+                print("[SMS] ✅ Email verification successful")
+                print("[SMS] ✅ MFA is now enabled (both email AND phone verified)")
+                */
+                
+                print("[SMS] ⚠️ WARNING: Email NOT verified - MFA not fully enabled!")
+                print("[SMS] ⚠️ Hosted card will fail with 'Multi-factor authentication not enabled'")
+                print("[SMS] Starting KYC...")
                 
                 // Log all session data before KYC
                 let session = StrigaSession.shared

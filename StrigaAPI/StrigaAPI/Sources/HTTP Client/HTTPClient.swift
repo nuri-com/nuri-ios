@@ -8,7 +8,12 @@ final class HTTPClient {
 
     // MARK: - Dependencies
 
-    private let urlSession = URLSession(configuration: .default)
+    private let urlSession: URLSession = {
+        var config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 120 // 2 minutes timeout for sandbox
+        config.timeoutIntervalForResource = 120 // 2 minutes timeout
+        return URLSession(configuration: config)
+    }()
     private let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]

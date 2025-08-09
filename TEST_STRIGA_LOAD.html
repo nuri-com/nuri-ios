@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Striga SDK Loading</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+    <h1>Striga SDK Load Test</h1>
+    <div id="status">Loading...</div>
+    
+    <script>
+        console.log('Page loading...');
+        document.getElementById('status').innerHTML = 'Script started';
+    </script>
+    
+    <!-- Try loading Striga SDK -->
+    <script src="https://www.vault.striga.eu/web/sandbox/v1.1/client.min.js"></script>
+    
+    <script>
+        // Check if loaded
+        setTimeout(function() {
+            if (typeof StrigaUXPlugin !== 'undefined') {
+                document.getElementById('status').innerHTML = 'SUCCESS: StrigaUXPlugin loaded!';
+                console.log('StrigaUXPlugin is available:', StrigaUXPlugin);
+            } else {
+                document.getElementById('status').innerHTML = 'FAILED: StrigaUXPlugin not found';
+                console.log('StrigaUXPlugin is NOT available');
+            }
+        }, 2000);
+    </script>
+</body>
+</html>

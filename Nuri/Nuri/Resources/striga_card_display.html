@@ -1,0 +1,227 @@
+<!doctype html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>Striga Card Display</title>
+    <style>
+        body { 
+            margin: 0; 
+            background: #fff; 
+            font: 16px -apple-system;
+        }
+        
+        #wrap { 
+            padding: 16px; 
+        }
+        
+        #cardNumber, #cvv { 
+            display: block; 
+            height: 44px; 
+            margin: 12px 0; 
+            border: 1px solid #1e90ff; 
+            border-radius: 12px;
+            background: #fff;
+            position: relative;
+        }
+        
+        /* Label styling */
+        .label {
+            position: absolute;
+            top: -8px;
+            left: 12px;
+            background: #fff;
+            padding: 0 4px;
+            font-size: 12px;
+            color: #1e90ff;
+            font-weight: 500;
+        }
+        
+        #status {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="wrap">
+        <div style="position: relative;">
+            <span class="label">Card Number</span>
+            <div id="cardNumber"></div>
+        </div>
+        <div style="position: relative;">
+            <span class="label">CVV</span>
+            <div id="cvv"></div>
+        </div>
+    </div>
+    <div id="status"></div>
+    
+    <!-- Load Striga SDK -->
+    <script src="https://www.vault.striga.eu/web/sandbox/v1.1/client.min.js"></script>
+    
+    <script>
+        // Global state
+        window.strigaReady = false;
+        window.strigaInitialized = false;
+        
+        // Debug logging
+        function log(msg) {
+            console.log(msg);
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.strigaNative) {
+                window.webkit.messageHandlers.strigaNative.postMessage({
+                    type: 'log',
+                    data: msg
+                });
+            }
+        }
+        
+        // Wait for SDK to load
+        function waitForStriga(callback) {
+            var attempts = 0;
+            var check = setInterval(function() {
+                attempts++;
+                if (typeof StrigaUXPlugin !== 'undefined') {
+                    clearInterval(check);
+                    log('StrigaUXPlugin is available after ' + attempts + ' attempts');
+                    callback();
+                } else if (attempts > 30) {
+                    clearInterval(check);
+                    log('ERROR: StrigaUXPlugin never loaded');
+                }
+            }, 500);
+        }
+        
+        // Initialize when ready
+        waitForStriga(function() {
+            window.strigaReady = true;
+            log('Striga SDK is ready');
+            // Auto-initialize if we have pending credentials
+            if (window.pendingInit) {
+                window.initStriga(window.pendingInit.uiSecret, window.pendingInit.applicationId);
+            }
+        });
+        
+        // Initialize Striga (called from Swift)
+        window.initStriga = function(uiSecret, applicationId) {
+            if (!window.strigaReady) {
+                log('SDK not ready yet, storing credentials for later');
+                window.pendingInit = { uiSecret: uiSecret, applicationId: applicationId };
+                return false;
+            }
+            
+            if (window.strigaInitialized) {
+                log('Striga already initialized');
+                return true;
+            }
+            
+            try {
+                StrigaUXPlugin.create(uiSecret, { applicationId: applicationId });
+                window.strigaInitialized = true;
+                log('Striga initialized successfully');
+                return true;
+            } catch(e) {
+                log('ERROR: Failed to initialize Striga: ' + e);
+                return false;
+            }
+        };
+        
+        // Request consent
+        window.requestConsent = function(userId, channel) {
+            log('requestConsent called: ' + userId);
+            
+            if (typeof StrigaUXPlugin === 'undefined') {
+                log('ERROR: StrigaUXPlugin not available');
+                return;
+            }
+            
+            if (!window.strigaInitialized) {
+                log('ERROR: Striga not initialized - call initStriga first');
+                return;
+            }
+            
+            var params = { userId: userId };
+            if (channel) params.channel = channel;
+            
+            StrigaUXPlugin.requestConsent(params).then(function(result) {
+                log('Got consent result: ' + JSON.stringify(result));
+                
+                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.strigaNative) {
+                    window.webkit.messageHandlers.strigaNative.postMessage({
+                        type: 'challenge',
+                        data: result
+                    });
+                }
+            }).catch(function(e) {
+                log('ERROR: requestConsent failed: ' + e);
+                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.strigaNative) {
+                    window.webkit.messageHandlers.strigaNative.postMessage({
+                        type: 'error',
+                        data: String(e)
+                    });
+                }
+            });
+        };
+        
+        // Render card - EXACTLY as specified in the guide
+        window.renderCard = function(cardId, authToken) {
+            log('renderCard called: ' + cardId);
+            
+            if (typeof StrigaUXPlugin === 'undefined') {
+                log('ERROR: StrigaUXPlugin not available');
+                return;
+            }
+            
+            if (!window.strigaInitialized) {
+                log('ERROR: Striga not initialized');
+                return;
+            }
+            
+            // Render card number first with proper styling
+            StrigaUXPlugin.render('cardNumber', { 
+                id: 'cardNumber',  // IMPORTANT: specify the target ID
+                cardId: cardId, 
+                authToken: authToken,
+                hideData: false,
+                style: {
+                    color: '#111',
+                    'font-size': '20px',
+                    'letter-spacing': '1.5px',
+                    'padding': '12px',
+                    'font-weight': '500'
+                }
+            }).then(function() {
+                log('Card number rendered');
+                
+                // Then render CVV with proper styling
+                return StrigaUXPlugin.render('cvv', { 
+                    id: 'cvv',  // IMPORTANT: specify the target ID
+                    cardId: cardId, 
+                    authToken: authToken,
+                    hideData: false,
+                    style: {
+                        color: '#111',
+                        'font-size': '20px',
+                        'letter-spacing': '1.5px',
+                        'padding': '12px',
+                        'font-weight': '500'
+                    }
+                });
+            }).then(function() {
+                log('CVV rendered');
+                
+                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.strigaNative) {
+                    window.webkit.messageHandlers.strigaNative.postMessage({
+                        type: 'rendered'
+                    });
+                }
+            }).catch(function(e) {
+                log('ERROR: renderCard failed: ' + e);
+                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.strigaNative) {
+                    window.webkit.messageHandlers.strigaNative.postMessage({
+                        type: 'error',
+                        data: String(e)
+                    });
+                }
+            });
+        };
+    </script>
+</body>
+</html>

@@ -158,8 +158,13 @@ struct HostedCardView: View {
     
     @MainActor
     private func createSession() async {
+        print("[HostedCardView] 🚀 STARTING HOSTED CARD FLOW")
+        print("[HostedCardView] ℹ️ This is the CORRECT approach for iOS apps")
+        print("[HostedCardView] ℹ️ Flow: Create session → Open WebView → Handle consent in JS")
+        
         do {
             guard let userId = UserSettings().strigaUserId else {
+                print("[HostedCardView] ❌ ERROR: User ID not found")
                 errorMessage = "User ID not found"
                 isLoading = false
                 return
@@ -169,7 +174,11 @@ struct HostedCardView: View {
             // For now, we'll use a placeholder
             let ipAddress = await getUserIPAddress()
             
-            print("[HostedCardView] Creating session for user: \(userId)")
+            print("[HostedCardView] 📋 Session Details:")
+            print("[HostedCardView]   - User ID: \(userId)")
+            print("[HostedCardView]   - IP Address: \(ipAddress)")
+            print("[HostedCardView]   - Environment: SANDBOX")
+            print("[HostedCardView] 🔄 Creating session via REST API...")
             
             let response = try await striga.startHostedCardSession(.init(
                 userId: userId,
@@ -178,9 +187,11 @@ struct HostedCardView: View {
             
             // Check if we got an error response
             if response.isError {
-                print("[HostedCardView] Error from API: \(response.errorMessage ?? "Unknown error")")
+                print("[HostedCardView] ❌ ERROR from API: \(response.errorMessage ?? "Unknown error")")
                 
                 if response.errorMessage?.contains("Multi-factor authentication not enabled") == true {
+                    print("[HostedCardView] ⚠️ PREREQUISITE MISSING: Email/Phone not verified")
+                    print("[HostedCardView] ℹ️ User must verify email AND phone first")
                     errorMessage = "Please verify both your email and phone number to enable card features"
                 } else {
                     errorMessage = response.errorMessage ?? "Failed to create card session"
@@ -190,12 +201,19 @@ struct HostedCardView: View {
             }
             
             guard let sessionId = response.sessionId else {
+                print("[HostedCardView] ❌ ERROR: No session ID in response")
                 errorMessage = "Invalid response from server"
                 isLoading = false
                 return
             }
             
-            print("[HostedCardView] Session created: \(sessionId)")
+            print("[HostedCardView] ✅ Session created successfully!")
+            print("[HostedCardView] 📱 Session ID: \(sessionId)")
+            print("[HostedCardView] 🌐 WebView will load: https://cards-sandbox.striga.com")
+            print("[HostedCardView] ℹ️ Inside WebView:")
+            print("[HostedCardView]   1. JavaScript SDK calls requestConsent()")
+            print("[HostedCardView]   2. User enters OTP (sandbox: 123456)")
+            print("[HostedCardView]   3. Card details displayed securely")
             self.sessionId = sessionId
             isLoading = false
             
