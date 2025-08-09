@@ -158,38 +158,20 @@ struct CardViewActive: View {
         }
         .sheet(isPresented: $showOTPInput) {
             NavigationStack {
-                UnifiedInputView(
-                    mode: .smsCode,
-                    inputText: $otpCode,
-                    countryCode: .constant(""),
-                    showCountryPicker: .constant(false),
-                    countryName: "",
-                    isValid: otpCode.count == 6,
-                    onNext: {
+                CardOTPVerificationView(
+                    otpCode: $otpCode,
+                    isLoading: $isLoadingCard,
+                    onVerify: { code in
                         Task {
-                            await confirmConsentAndLoadCard(verificationCode: otpCode)
+                            await confirmConsentAndLoadCard(verificationCode: code)
                         }
                     },
-                    onCountryPicked: { _ in }
-                )
-                .loadingOverlay(
-                    isPresented: isLoadingCard,
-                    title: "Verifying code...",
-                    subtitle: nil
-                )
-                .onChange(of: otpCode) { newValue in
-                    // Auto-submit when 6 digits entered
-                    if newValue.count == 6 {
-                        Task {
-                            await confirmConsentAndLoadCard(verificationCode: newValue)
-                        }
+                    onDismiss: {
+                        showOTPInput = false
+                        otpCode = ""
+                        isLoadingCard = false
                     }
-                }
-                .onDisappear {
-                    // Clean up when sheet is dismissed
-                    otpCode = ""
-                    isLoadingCard = false
-                }
+                )
             }
         }
         .sheet(isPresented: $showVerification) {
@@ -318,11 +300,11 @@ struct CardViewActive: View {
                 print("[CardView] 🏖️ SANDBOX MODE - No actual SMS/email will be sent, use code 123456")
             }
             
-            // Try with explicit channel parameter for better compatibility
+            // Don't specify channel - this sends OTP to BOTH email and SMS
             let consentResponse = try await striga.requestConsent(.init(
                 userId: userId,
-                cardId: cardId,
-                channel: "sms"  // Try specifying SMS channel explicitly
+                cardId: cardId
+                // No channel specified = sends to both email and SMS
             ))
             
             // Success! Got a real challenge ID from Striga
@@ -333,7 +315,7 @@ struct CardViewActive: View {
             if isSandbox {
                 print("[CardView] In sandbox: No actual SMS/email sent, use code 123456")
             } else {
-                print("[CardView] OTP sent to user's registered phone")
+                print("[CardView] ✅ OTP sent to user's registered phone AND email")
             }
             
             challengeId = consentResponse.challengeId
@@ -376,11 +358,35 @@ struct CardViewActive: View {
     
     @MainActor
     private func confirmConsentAndLoadCard(verificationCode: String) async {
+        // Prevent duplicate calls
+        guard !isLoadingCard else {
+            print("[CardView] Already loading card")
+            return
+        }
+        
         do {
             guard let userId = StrigaSession.shared.userId ?? UserSettings().strigaUserId,
-                  let cardId = StrigaSession.shared.cardId ?? UserSettings().strigaCardId,
-                  let challengeId = challengeId else {
-                print("[CardView] Missing required data for confirmation")
+                  let cardId = StrigaSession.shared.cardId ?? UserSettings().strigaCardId else {
+                print("[CardView] Missing user or card ID")
+                return
+            }
+            
+            // Check if we have a challenge ID (might still be loading in background)
+            var actualChallengeId = challengeId
+            if actualChallengeId == nil {
+                print("[CardView] Waiting for challenge ID from request-consent...")
+                // Wait a bit for the background request to complete
+                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                actualChallengeId = challengeId
+                
+                if actualChallengeId == nil {
+                    print("[CardView] Still no challenge ID, cannot proceed")
+                    return
+                }
+            }
+            
+            guard let finalChallengeId = actualChallengeId else {
+                print("[CardView] No challenge ID available")
                 return
             }
             
@@ -390,7 +396,7 @@ struct CardViewActive: View {
             var authToken: String = ""
             
             // Handle sandbox challenge differently
-            if isSandbox && challengeId.starts(with: "sandbox-challenge-") {
+            if isSandbox && finalChallengeId.starts(with: "sandbox-challenge-") {
                 // Sandbox fallback when request-consent timed out
                 print("[CardView] 🏖️ SANDBOX FALLBACK - Using workaround for timed-out consent")
                 
@@ -457,7 +463,7 @@ struct CardViewActive: View {
             
             let confirmResponse = try await striga.confirmConsent(.init(
                 userId: userId,
-                challengeId: challengeId,
+                challengeId: finalChallengeId,
                 verificationCode: verificationCode
             ))
             
@@ -729,4 +735,127 @@ struct ShareSheet: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+// Custom OTP verification view for card consent
+struct CardOTPVerificationView: View {
+    @Binding var otpCode: String
+    @Binding var isLoading: Bool
+    let onVerify: (String) -> Void
+    let onDismiss: () -> Void
+    
+    @Environment(\.dismiss) private var dismiss
+    @FocusState private var isInputFocused: Bool
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            NuriHeader<AnyView, AnyView>(title: "Card Verification") {
+                AnyView(
+                    Button(action: { 
+                        onDismiss()
+                        dismiss()
+                    }) {
+                        Image("arrow-back")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 24, height: 24)
+                            .frame(width: 32, height: 32)
+                    }
+                )
+            } trailing: {
+                AnyView(
+                    Button(action: {
+                        if otpCode.count == 6 {
+                            onVerify(otpCode)
+                        }
+                    }) {
+                        Text("Verify")
+                            .font(.custom("Inter", size: 14).weight(.medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color("PrimaryNuriBlack"))
+                            .cornerRadius(64)
+                    }
+                    .disabled(otpCode.count != 6 || isLoading)
+                    .opacity((otpCode.count == 6 && !isLoading) ? 1.0 : 0.5)
+                )
+            }
+            .padding(.top, 10)
+            
+            VStack(alignment: .leading, spacing: 24) {
+                // Headline
+                Text("Enter verification code")
+                    .font(.brandTitle1)
+                    .foregroundColor(Color("PrimaryNuriBlack"))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 16)
+                
+                // Important: Tell user code is sent to BOTH email and SMS
+                Text("We've sent a 6-digit code to your registered email AND phone number")
+                    .font(.brandBody)
+                    .foregroundColor(Color.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 24)
+                    .padding(.top, -16)
+                
+                // In sandbox, show hint
+                #if DEBUG
+                let isSandbox = StrigaService.shared.configuration?.url.contains("sandbox") ?? true
+                if isSandbox {
+                    Text("🏖️ Sandbox: Use code 123456")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                        .padding(.horizontal, 24)
+                        .padding(.top, -8)
+                }
+                #endif
+                
+                // OTP Input field
+                VStack(spacing: 16) {
+                    TextField("000000", text: $otpCode)
+                        .keyboardType(.numberPad)
+                        .textContentType(.oneTimeCode)
+                        .font(.system(size: 24, weight: .semibold, design: .monospaced))
+                        .multilineTextAlignment(.center)
+                        .frame(height: 56)
+                        .background(Color.gray.opacity(0.1))
+                        .cornerRadius(12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color("PrimaryNuriBlack").opacity(isInputFocused ? 1 : 0.3), lineWidth: 2)
+                        )
+                        .focused($isInputFocused)
+                        .onChange(of: otpCode) { newValue in
+                            // Limit to 6 digits
+                            if newValue.count > 6 {
+                                otpCode = String(newValue.prefix(6))
+                            }
+                            // Auto-submit when 6 digits entered
+                            if newValue.count == 6 && !isLoading {
+                                onVerify(newValue)
+                            }
+                        }
+                        .padding(.horizontal, 60)
+                }
+                .padding(.top, 8)
+                
+                Spacer()
+            }
+        }
+        .navigationBarHidden(true)
+        .background(Color(UIColor.systemGray6))
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                isInputFocused = true
+            }
+        }
+        .loadingOverlay(
+            isPresented: isLoading,
+            title: "Verifying code...",
+            subtitle: nil
+        )
+    }
 }
