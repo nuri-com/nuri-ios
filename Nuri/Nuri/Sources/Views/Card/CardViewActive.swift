@@ -22,6 +22,7 @@ struct CardViewActive: View {
     @State private var showOTPInput = false
     @State private var otpCode = ""
     @State private var isLoadingCard = false
+    @State private var isRequestingConsent = false
     
     private let striga = StrigaService.shared
     private let btcAddress = "bc1qsmd4xz68a7fhwvhjkd0cawx4uvs9a43746xld4yh0spfmwefpr5qc9wvv6"
@@ -88,8 +89,10 @@ struct CardViewActive: View {
                             showCardDetails = false
                         } else {
                             // Request consent to get full card details
-                            Task {
-                                await requestCardConsent()
+                            if !isRequestingConsent {
+                                Task {
+                                    await requestCardConsent()
+                                }
                             }
                         }
                     }
@@ -151,64 +154,45 @@ struct CardViewActive: View {
         .sheet(isPresented: $showHostedCard) {
             HostedCardView(isPresented: $showHostedCard)
         }
+        .loadingOverlay(
+            isPresented: isRequestingConsent,
+            title: "Requesting card access...",
+            subtitle: "This may take a moment"
+        )
         .sheet(isPresented: $showOTPInput) {
             NavigationStack {
-                VStack(spacing: 20) {
-                    Text("Enter Verification Code")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                    
-                    Text("We've sent a code to your registered phone and email")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-                    
-                    // In sandbox, show hint
-                    #if DEBUG
-                    Text("Sandbox: Use code 123456")
-                        .font(.caption)
-                        .foregroundColor(.orange)
-                    #endif
-                    
-                    TextField("Enter 6-digit code", text: $otpCode)
-                        .keyboardType(.numberPad)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .frame(width: 200)
-                        .onChange(of: otpCode) { newValue in
-                            // Auto-submit when 6 digits entered
-                            if newValue.count == 6 {
-                                Task {
-                                    await confirmConsentAndLoadCard(verificationCode: newValue)
-                                }
-                            }
+                UnifiedInputView(
+                    mode: .smsCode,
+                    inputText: $otpCode,
+                    countryCode: .constant(""),
+                    showCountryPicker: .constant(false),
+                    countryName: "",
+                    isValid: otpCode.count == 6,
+                    onNext: {
+                        Task {
+                            await confirmConsentAndLoadCard(verificationCode: otpCode)
                         }
-                    
-                    if isLoadingCard {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle())
+                    },
+                    onCountryPicked: { _ in }
+                )
+                .loadingOverlay(
+                    isPresented: isLoadingCard,
+                    title: "Verifying code...",
+                    subtitle: nil
+                )
+                .onChange(of: otpCode) { newValue in
+                    // Auto-submit when 6 digits entered
+                    if newValue.count == 6 {
+                        Task {
+                            await confirmConsentAndLoadCard(verificationCode: newValue)
+                        }
                     }
-                    
-                    HStack(spacing: 20) {
-                        Button("Cancel") {
-                            showOTPInput = false
-                            otpCode = ""
-                            isLoadingCard = false
-                        }
-                        .foregroundColor(.red)
-                        
-                        Button("Verify") {
-                            Task {
-                                await confirmConsentAndLoadCard(verificationCode: otpCode)
-                            }
-                        }
-                        .disabled(otpCode.count != 6 || isLoadingCard)
-                    }
-                    .padding(.top)
                 }
-                .padding()
-                .navigationTitle("Card Verification")
-                .navigationBarTitleDisplayMode(.inline)
+                .onDisappear {
+                    // Clean up when sheet is dismissed
+                    otpCode = ""
+                    isLoadingCard = false
+                }
             }
         }
         .sheet(isPresented: $showVerification) {
@@ -309,6 +293,12 @@ struct CardViewActive: View {
     
     @MainActor
     private func requestCardConsent() async {
+        // Prevent duplicate requests
+        guard !isRequestingConsent else {
+            print("[CardView] Request already in progress")
+            return
+        }
+        
         do {
             guard let userId = StrigaSession.shared.userId ?? UserSettings().strigaUserId,
                   let cardId = StrigaSession.shared.cardId ?? UserSettings().strigaCardId else {
@@ -320,6 +310,7 @@ struct CardViewActive: View {
             print("[CardView] User ID: \(userId)")
             print("[CardView] Card ID: \(cardId)")
             
+            isRequestingConsent = true
             isLoadingCard = true
             
             // Always try to request consent - this is required for production
@@ -349,6 +340,7 @@ struct CardViewActive: View {
             
             challengeId = consentResponse.challengeId
             isLoadingCard = false
+            isRequestingConsent = false
             
             // Show OTP input dialog
             showOTPInput = true
@@ -366,6 +358,7 @@ struct CardViewActive: View {
                 // Generate a fallback challenge ID for sandbox
                 challengeId = "sandbox-challenge-\(UUID().uuidString)"
                 isLoadingCard = false
+                isRequestingConsent = false
                 
                 // Show OTP input with sandbox instructions
                 showOTPInput = true
@@ -383,6 +376,7 @@ struct CardViewActive: View {
                 print("[CardView] Error details: \(validationError.errorDetails)")
             }
             isLoadingCard = false
+            isRequestingConsent = false
         }
     }
     
