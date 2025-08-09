@@ -312,29 +312,29 @@ struct CardViewActive: View {
             
             let isSandbox = striga.configuration?.url.contains("sandbox") ?? true
             
+            // Always try to request consent properly
+            print("[CardView] Requesting card consent from Striga...")
             if isSandbox {
-                print("[CardView] 🏖️ SANDBOX MODE - Skipping request-consent (always times out)")
-                print("[CardView] Using fallback for sandbox")
-                // Generate a fallback challenge ID for sandbox immediately
-                challengeId = "sandbox-challenge-\(UUID().uuidString)"
-                isRequestingConsent = false
-                print("[CardView] Ready for OTP entry (use 123456 in sandbox)")
-                return
+                print("[CardView] 🏖️ SANDBOX MODE - No actual SMS/email will be sent, use code 123456")
             }
             
-            // Production: Actually request consent
-            print("[CardView] Requesting card consent from Striga...")
-            
+            // Try with explicit channel parameter for better compatibility
             let consentResponse = try await striga.requestConsent(.init(
                 userId: userId,
-                cardId: cardId
+                cardId: cardId,
+                channel: "sms"  // Try specifying SMS channel explicitly
             ))
             
             // Success! Got a real challenge ID from Striga
             print("[CardView] ✅ Consent requested successfully!")
             print("[CardView] Challenge ID: \(consentResponse.challengeId)")
             print("[CardView] Expires: \(consentResponse.dateExpires)")
-            print("[CardView] OTP sent to user's registered phone/email")
+            
+            if isSandbox {
+                print("[CardView] In sandbox: No actual SMS/email sent, use code 123456")
+            } else {
+                print("[CardView] OTP sent to user's registered phone")
+            }
             
             challengeId = consentResponse.challengeId
             isRequestingConsent = false
@@ -342,15 +342,35 @@ struct CardViewActive: View {
         } catch {
             print("[CardView] ❌ Error requesting consent: \(error)")
             
-            // In production, this is a real error
-            let isSandbox = striga.configuration?.url.contains("sandbox") ?? true
-            if !isSandbox {
-                // Production error - close OTP screen
-                showOTPInput = false
-                print("[CardView] Production error - unable to request consent")
+            // Check if it's a timeout error
+            if let urlError = error as? URLError, urlError.code == .timedOut {
+                print("[CardView] ⏱️ Request timed out")
+                
+                let isSandbox = striga.configuration?.url.contains("sandbox") ?? true
+                if isSandbox {
+                    print("[CardView] Using fallback challenge ID for sandbox timeout")
+                    // Generate a fallback challenge ID for sandbox
+                    challengeId = "sandbox-challenge-\(UUID().uuidString)"
+                    isRequestingConsent = false
+                    print("[CardView] Ready for OTP entry (use 123456 in sandbox)")
+                    return
+                }
+            }
+            
+            // Log error details
+            if let validationError = error as? ValidationErrorResponse {
+                print("[CardView] Validation error: \(validationError.message)")
+                print("[CardView] Error details: \(validationError.errorDetails)")
             }
             
             isRequestingConsent = false
+            
+            // In production, close OTP screen on error
+            let isSandbox = striga.configuration?.url.contains("sandbox") ?? true
+            if !isSandbox {
+                showOTPInput = false
+                print("[CardView] Production error - unable to request consent")
+            }
         }
     }
     
