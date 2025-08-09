@@ -322,58 +322,58 @@ struct CardViewActive: View {
             
             isLoadingCard = true
             
-            // Check if we're in sandbox mode
+            // Always try to request consent - this is required for production
+            print("[CardView] Requesting card consent from Striga...")
+            
             let isSandbox = striga.configuration?.url.contains("sandbox") ?? true
+            if isSandbox {
+                print("[CardView] 🏖️ SANDBOX MODE - Request may timeout, but we'll handle it")
+            }
+            
+            // Always make the API call - required for production
+            let consentResponse = try await striga.requestConsent(.init(
+                userId: userId,
+                cardId: cardId
+            ))
+            
+            // Success! Got a real challenge ID from Striga
+            print("[CardView] ✅ Consent requested successfully!")
+            print("[CardView] Challenge ID: \(consentResponse.challengeId)")
+            print("[CardView] Expires: \(consentResponse.dateExpires)")
             
             if isSandbox {
-                print("[CardView] 🏖️ SANDBOX MODE - Bypassing consent timeout issue")
-                print("[CardView] In sandbox, consent request may timeout. Using mock flow.")
+                print("[CardView] In sandbox: No actual SMS/email sent, use code 123456")
+            } else {
+                print("[CardView] OTP sent to user's registered phone/email")
+            }
+            
+            challengeId = consentResponse.challengeId
+            isLoadingCard = false
+            
+            // Show OTP input dialog
+            showOTPInput = true
+            print("[CardView] Showing OTP input dialog...")
+            
+        } catch {
+            print("[CardView] ❌ Error requesting consent: \(error)")
+            
+            // Check if it's a sandbox timeout
+            let isSandbox = striga.configuration?.url.contains("sandbox") ?? true
+            if isSandbox && (error as? URLError)?.code == .timedOut {
+                print("[CardView] ⏱️ Request timed out in sandbox (expected)")
+                print("[CardView] Using fallback challenge ID for sandbox")
                 
-                // For sandbox, simulate the consent flow since the endpoint times out
+                // Generate a fallback challenge ID for sandbox
                 challengeId = "sandbox-challenge-\(UUID().uuidString)"
                 isLoadingCard = false
                 
                 // Show OTP input with sandbox instructions
                 showOTPInput = true
                 print("[CardView] Showing OTP input dialog for sandbox (use 123456)...")
-                
-            } else {
-                // Production flow
-                print("[CardView] Sending request consent...")
-                print("[CardView] This may take a moment...")
-                
-                let consentResponse = try await striga.requestConsent(.init(
-                    userId: userId,
-                    cardId: cardId
-                ))
-                
-                print("[CardView] ✅ Consent requested successfully!")
-                print("[CardView] Challenge ID: \(consentResponse.challengeId)")
-                print("[CardView] Expires: \(consentResponse.dateExpires)")
-                print("[CardView] OTP sent to user's registered phone/email")
-                
-                challengeId = consentResponse.challengeId
-                isLoadingCard = false
-                
-                // Show OTP input dialog
-                showOTPInput = true
-                print("[CardView] Showing OTP input dialog...")
-            }
-            
-        } catch {
-            print("[CardView] ❌ Error requesting consent: \(error)")
-            
-            // If timeout in sandbox, use workaround
-            if let urlError = error as? URLError, 
-               urlError.code == .timedOut,
-               striga.configuration?.url.contains("sandbox") ?? false {
-                print("[CardView] 🏖️ SANDBOX TIMEOUT - Using workaround")
-                challengeId = "sandbox-challenge-\(UUID().uuidString)"
-                isLoadingCard = false
-                showOTPInput = true
                 return
             }
             
+            // Log other error details
             if let urlError = error as? URLError {
                 print("[CardView] URL Error code: \(urlError.code)")
                 print("[CardView] URL Error description: \(urlError.localizedDescription)")
@@ -401,16 +401,16 @@ struct CardViewActive: View {
             let isSandbox = striga.configuration?.url.contains("sandbox") ?? true
             var authToken: String = ""
             
+            // Handle sandbox challenge differently
             if isSandbox && challengeId.starts(with: "sandbox-challenge-") {
-                // Sandbox workaround - try alternative approaches since request-consent times out
-                print("[CardView] 🏖️ SANDBOX MODE - Working around consent timeout")
+                // Sandbox fallback when request-consent timed out
+                print("[CardView] 🏖️ SANDBOX FALLBACK - Using workaround for timed-out consent")
                 
                 if verificationCode == "123456" {
                     print("[CardView] ✅ Sandbox OTP verified (123456)")
                     
-                    // First, let's try to get card details WITHOUT auth token
-                    // This will give us masked data but it's real from Striga
-                    print("[CardView] Step 1: Fetching REAL card data from Striga sandbox (masked)...")
+                    // In sandbox with timeout, we can only get masked card data
+                    print("[CardView] Fetching REAL card data from Striga sandbox (masked)...")
                     
                     isLoadingCard = true
                     
@@ -427,22 +427,10 @@ struct CardViewActive: View {
                         print("[CardView] Card name: \(cardDetails.name)")
                         print("[CardView] Masked number: \(cardDetails.maskedCardNumber)")
                         print("[CardView] Expiry: \(cardDetails.expiryMonth)/\(cardDetails.expiryYear)")
-                        print("[CardView] Card type: \(cardDetails.type)")
-                        print("[CardView] Card status: \(cardDetails.status)")
                         
                         // Update UI with REAL card data from Striga
                         cardHolderName = cardDetails.name
-                        
-                        // Format the masked card number properly
-                        let maskedNum = cardDetails.maskedCardNumber
-                        if maskedNum.contains("*") {
-                            // Already masked format like ****7720
-                            cardNumber = maskedNum
-                        } else {
-                            // Format if needed
-                            cardNumber = maskedNum
-                        }
-                        
+                        cardNumber = cardDetails.maskedCardNumber
                         cardExpiry = String(format: "%02d/%02d", cardDetails.expiryMonth, cardDetails.expiryYear % 100)
                         cardCVV = "***"  // CVV is always hidden without auth token
                         
@@ -452,13 +440,10 @@ struct CardViewActive: View {
                         isLoadingCard = false
                         otpCode = ""
                         
-                        print("[CardView] ✅ REAL card details displayed from Striga sandbox (masked version)")
-                        print("[CardView] Note: Full card number and CVV require auth token from consent flow")
-                        print("[CardView] In production, consent flow will work and provide full details")
+                        print("[CardView] ✅ REAL card details displayed from Striga sandbox (masked)")
                         
                     } catch {
                         print("[CardView] ❌ Error fetching card details: \(error)")
-                        // Even if this fails, show what we can
                         showOTPInput = false
                         isLoadingCard = false
                         otpCode = ""
@@ -470,20 +455,27 @@ struct CardViewActive: View {
                     isLoadingCard = false
                     return
                 }
-            } else {
-                // Production flow - real consent confirmation
-                let confirmResponse = try await striga.confirmConsent(.init(
-                    userId: userId,
-                    challengeId: challengeId,
-                    verificationCode: verificationCode
-                ))
-                
-                print("[CardView] Consent confirmed, received auth token")
-                authToken = confirmResponse.cardAuthToken
-                cardAuthToken = authToken
             }
             
-            // Step 3: Get full card details with auth token
+            // Normal flow - try to confirm consent with real challenge ID
+            print("[CardView] Confirming consent with Striga...")
+            
+            // In sandbox, the verification code is always 123456
+            if isSandbox && verificationCode != "123456" {
+                print("[CardView] ⚠️ SANDBOX: Verification code should be 123456")
+            }
+            
+            let confirmResponse = try await striga.confirmConsent(.init(
+                userId: userId,
+                challengeId: challengeId,
+                verificationCode: verificationCode
+            ))
+            
+            print("[CardView] ✅ Consent confirmed, received auth token")
+            authToken = confirmResponse.cardAuthToken
+            cardAuthToken = authToken
+            
+            // Get full card details with auth token
             let cardDetails = try await striga.getCard(.init(
                 userId: userId,
                 cardId: cardId,
