@@ -7,6 +7,7 @@ final class StrigaBridge: NSObject, WKScriptMessageHandler {
     var onRendered: (() -> Void)?
     var onError: ((String) -> Void)?
     var onLog: ((String) -> Void)?
+    var onReady: (() -> Void)?
 
     func userContentController(_ uc: WKUserContentController, didReceive m: WKScriptMessage) {
         guard m.name == "strigaNative",
@@ -31,6 +32,15 @@ final class StrigaBridge: NSObject, WKScriptMessageHandler {
             let message = dict["data"] as? String ?? ""
             print("📱 [StrigaBridge JS]: \(message)")
             onLog?(message)
+        case "copyRequest":
+            let field = dict["field"] as? String ?? ""
+            let message = dict["message"] as? String ?? "Please copy manually"
+            print("📋 [StrigaBridge] Copy requested for: \(field)")
+            print("📋 [StrigaBridge] \(message)")
+            // Could show an alert or toast here
+        case "ready":
+            print("✅ [StrigaBridge] Striga SDK is ready")
+            onReady?()
         default:
             break
         }
@@ -70,8 +80,15 @@ struct StrigaCardWebView: UIViewRepresentable {
         cfg.userContentController.add(bridge, name: "strigaNative")
         
         let wv = WKWebView(frame: .zero, configuration: cfg)
-        wv.isOpaque = false
-        wv.backgroundColor = .clear
+        wv.isOpaque = true
+        wv.backgroundColor = .white
+        wv.scrollView.backgroundColor = .white
+        wv.scrollView.isScrollEnabled = false
+        wv.scrollView.bounces = false
+        wv.scrollView.bouncesZoom = false
+        wv.scrollView.minimumZoomScale = 1.0
+        wv.scrollView.maximumZoomScale = 1.0
+        wv.scrollView.contentInsetAdjustmentBehavior = .never
         
         // Load from file for better external script support
         if let htmlPath = Bundle.main.path(forResource: "striga_card_display", ofType: "html") {
@@ -163,6 +180,27 @@ extension WKWebView {
                 print("❌ [WKWebView] Error calling renderCard: \(error)")
             } else {
                 print("✅ [WKWebView] renderCard called successfully")
+            }
+        }
+    }
+    
+    func setCardDetails(holder: String, expiry: String) {
+        print("📝 [WKWebView] Setting card details: \(holder), \(expiry)")
+        
+        let js = """
+        if (window.setCardDetails) {
+            window.setCardDetails('\(holder)', '\(expiry)');
+        } else {
+            document.getElementById('cardHolder').innerText = '\(holder.uppercased())';
+            document.getElementById('expiry').innerText = '\(expiry)';
+        }
+        """
+        
+        evaluateJavaScript(js) { result, error in
+            if let error = error {
+                print("❌ [WKWebView] Error setting card details: \(error)")
+            } else {
+                print("✅ [WKWebView] Card details set successfully")
             }
         }
     }

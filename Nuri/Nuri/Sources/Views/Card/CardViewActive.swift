@@ -83,13 +83,13 @@ struct CardViewActive: View {
                             showCardDetails = false
                         } else {
                             print("\n════════════════════════════════════════")
-                            print("🎯 [CardViewActive] STARTING CARD DISPLAY FLOW")
+                            print("🎯 [CardViewActive] STARTING STREAMLINED CARD FLOW")
                             print("════════════════════════════════════════")
-                            print("📍 Flow Overview:")
-                            print("  1️⃣  Hidden WebView: JS requestConsent -> challengeId")
-                            print("  2️⃣  Native Sheet: Collect OTP code (sandbox: 123456)")
-                            print("  3️⃣  Proxy Server: POST /striga/confirm-consent -> authToken")
-                            print("  4️⃣  WebView: Render card in secure Striga iframes")
+                            print("📍 Simplified Flow:")
+                            print("  1️⃣  Auto-start consent request in background")
+                            print("  2️⃣  OTP screen appears automatically")
+                            print("  3️⃣  Auto-submit when 6 digits entered")
+                            print("  4️⃣  Card details display immediately")
                             print("════════════════════════════════════════\n")
                             
                             // Verify we have required IDs
@@ -104,7 +104,7 @@ struct CardViewActive: View {
                                 return
                             }
                             
-                            print("✅ [CardViewActive] All IDs present, opening CardDetailsWebView...")
+                            print("✅ [CardViewActive] Opening streamlined flow...")
                             showCardDetailsFlow = true
                         }
                     }
@@ -164,7 +164,7 @@ struct CardViewActive: View {
             loadCardData()
         }
         .fullScreenCover(isPresented: $showCardDetailsFlow) {
-            CardScreenNew(
+            CardDetailsFlowView(
                 userId: StrigaSession.shared.userId ?? UserSettings().strigaUserId ?? "",
                 cardId: StrigaSession.shared.cardId ?? UserSettings().strigaCardId ?? ""
             )
