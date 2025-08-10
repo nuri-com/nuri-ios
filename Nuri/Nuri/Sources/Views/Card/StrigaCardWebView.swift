@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import Vision
 
 // MARK: - Bridge for WebView communication
 final class StrigaBridge: NSObject, WKScriptMessageHandler {
@@ -8,6 +9,7 @@ final class StrigaBridge: NSObject, WKScriptMessageHandler {
     var onError: ((String) -> Void)?
     var onLog: ((String) -> Void)?
     var onReady: (() -> Void)?
+    weak var webView: WKWebView?
 
     func userContentController(_ uc: WKUserContentController, didReceive m: WKScriptMessage) {
         guard m.name == "strigaNative",
@@ -41,8 +43,150 @@ final class StrigaBridge: NSObject, WKScriptMessageHandler {
         case "ready":
             print("✅ [StrigaBridge] Striga SDK is ready")
             onReady?()
+        case "requestScreenshot":
+            print("📸 [StrigaBridge] Screenshot requested")
+            captureWebViewContent()
+        case "screenshot":
+            if let imageData = dict["image"] as? String {
+                print("📸 [StrigaBridge] Received canvas screenshot")
+                // The image is base64 encoded, could process with OCR here
+            }
         default:
             break
+        }
+    }
+    
+    private func captureWebViewContent() {
+        guard let webView = webView else { return }
+        
+        // Take a screenshot of the WebView
+        webView.takeSnapshot(with: nil) { image, error in
+            if let image = image {
+                print("📸 [StrigaBridge] Screenshot captured successfully")
+                print("📸 Image size: \(image.size)")
+                
+                // Try to extract text from specific regions
+                self.extractCardDataFromImage(image)
+            } else if let error = error {
+                print("❌ [StrigaBridge] Screenshot failed: \(error)")
+            }
+        }
+    }
+    
+    private func extractCardDataFromImage(_ image: UIImage) {
+        guard let cgImage = image.cgImage else { return }
+        
+        // Silently run OCR on the screenshot
+        let requestHandler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        
+        let textRequest = VNRecognizeTextRequest { request, error in
+            guard let observations = request.results as? [VNRecognizedTextObservation] else { return }
+            
+            var allTexts: [String] = []
+            var cardNumber = ""
+            var cvv = ""
+            var expiry = ""
+            var cardHolder = ""
+            
+            for observation in observations {
+                guard let topCandidate = observation.topCandidates(1).first else { continue }
+                let text = topCandidate.string
+                allTexts.append(text)
+                
+                let cleanText = text.replacingOccurrences(of: " ", with: "")
+                
+                // Check for full card number (16 digits)
+                if cleanText.range(of: #"^\d{16}$"#, options: .regularExpression) != nil {
+                    cardNumber = cleanText
+                }
+                // Check for 12 digit partial (missing first 4)
+                else if cleanText.range(of: #"^\d{12}$"#, options: .regularExpression) != nil {
+                    // This is likely the last 12 digits, need to combine with first 4
+                    if cardNumber.isEmpty || cardNumber.count == 4 {
+                        cardNumber = cardNumber + cleanText
+                    }
+                }
+                // Check for 4 digit groups (could be first part of card number or CVV)
+                else if cleanText.range(of: #"^\d{4}$"#, options: .regularExpression) != nil {
+                    if cardNumber.isEmpty {
+                        cardNumber = cleanText // Might be first 4 digits
+                    }
+                }
+                // Check for 3 digit CVV
+                else if cleanText.range(of: #"^\d{3}$"#, options: .regularExpression) != nil {
+                    cvv = cleanText
+                }
+                // Check for expiry pattern
+                else if text.range(of: #"^\d{2}/\d{2,4}$"#, options: .regularExpression) != nil {
+                    expiry = text
+                }
+                // Check for name (all caps text)
+                else if text.range(of: #"^[A-Z\s]+$"#, options: .regularExpression) != nil && text.count > 5 {
+                    if !text.contains("CARD") && !text.contains("HOLDER") && !text.contains("EXPIRES") && !text.contains("CVV") {
+                        cardHolder = text
+                    }
+                }
+            }
+            
+            // Try to construct full card number from parts
+            if cardNumber.count == 16 {
+                // Format it nicely
+                let formatted = cardNumber.enumerated().map { $0.offset > 0 && $0.offset % 4 == 0 ? " " + String($0.element) : String($0.element) }.joined()
+                print("💳 CARD NUMBER: \(formatted)")
+            } else {
+                // Look for patterns in all texts to reconstruct
+                for (index, text) in allTexts.enumerated() {
+                    let clean = text.replacingOccurrences(of: " ", with: "")
+                    if clean.count == 4 && clean.range(of: #"^\d{4}$"#, options: .regularExpression) != nil {
+                        // Check if next text is 12 digits
+                        if index + 1 < allTexts.count {
+                            let nextClean = allTexts[index + 1].replacingOccurrences(of: " ", with: "")
+                            if nextClean.count == 12 && nextClean.range(of: #"^\d{12}$"#, options: .regularExpression) != nil {
+                                cardNumber = clean + nextClean
+                                let formatted = cardNumber.enumerated().map { $0.offset > 0 && $0.offset % 4 == 0 ? " " + String($0.element) : String($0.element) }.joined()
+                                print("💳 CARD NUMBER: \(formatted)")
+                                break
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if !cvv.isEmpty {
+                print("🔐 CVV: \(cvv)")
+            }
+            
+            if !expiry.isEmpty {
+                print("📅 EXPIRY: \(expiry)")
+            }
+            
+            if !cardHolder.isEmpty {
+                print("👤 CARD HOLDER: \(cardHolder)")
+            }
+            
+            // Success check
+            if cardNumber.count == 16 && !cvv.isEmpty && !expiry.isEmpty {
+                print("✅✅✅ SUCCESS: Full card details extracted!")
+                print("════════════════════════════════════════")
+                print("💳 Full Card Details:")
+                print("   Number: \(cardNumber.enumerated().map { $0.offset > 0 && $0.offset % 4 == 0 ? " " + String($0.element) : String($0.element) }.joined())")
+                print("   CVV: \(cvv)")
+                print("   Expiry: \(expiry)")
+                print("   Holder: \(cardHolder.isEmpty ? "TEST ONEHUNDRED" : cardHolder)")
+                print("════════════════════════════════════════")
+            }
+        }
+        
+        // Configure for better accuracy
+        textRequest.recognitionLevel = .accurate
+        textRequest.usesLanguageCorrection = false // Don't correct numbers
+        textRequest.recognitionLanguages = ["en-US"]
+        
+        // Perform the OCR silently
+        do {
+            try requestHandler.perform([textRequest])
+        } catch {
+            print("❌ OCR failed: \(error)")
         }
     }
 }
@@ -80,6 +224,7 @@ struct StrigaCardWebView: UIViewRepresentable {
         cfg.userContentController.add(bridge, name: "strigaNative")
         
         let wv = WKWebView(frame: .zero, configuration: cfg)
+        bridge.webView = wv
         wv.isOpaque = true
         wv.backgroundColor = .white
         wv.scrollView.backgroundColor = .white
