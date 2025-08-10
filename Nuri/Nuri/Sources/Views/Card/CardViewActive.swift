@@ -785,12 +785,12 @@ private struct StrigaCardPreview: View {
                         .foregroundColor(.white.opacity(0.7))
                         .tracking(0.5)
                     Text(holder.uppercased())
-                        .font(.custom("Inter", size: 16).weight(.medium))
+                        .font(.custom("Inter", size: 18).weight(.medium))
                         .foregroundColor(.white)
                 }
                 .padding(.top, 24)
-                .padding(.leading, 16)
-                .padding(.trailing, 24)
+                .padding(.leading, 21)
+                .padding(.trailing, 40)
                 
                 // Card Number section in middle
                 VStack(alignment: .leading, spacing: 4) {
@@ -799,13 +799,13 @@ private struct StrigaCardPreview: View {
                         .foregroundColor(.white.opacity(0.7))
                         .tracking(0.5)
                     Text(maskedNumber)
-                        .font(.custom("Inter", size: 20).weight(.medium))
+                        .font(.system(size: 18, weight: .medium, design: .monospaced))
                         .foregroundColor(.white)
-                        .tracking(2)
+                        .tracking(1.5)
                 }
                 .padding(.top, 24)
-                .padding(.leading, 16)
-                .padding(.trailing, 24)
+                .padding(.leading, 21)
+                .padding(.trailing, 40)
                 
                 Spacer()
                 
@@ -817,7 +817,7 @@ private struct StrigaCardPreview: View {
                             .foregroundColor(.white.opacity(0.7))
                             .tracking(0.5)
                         Text(expiry)
-                            .font(.custom("Inter", size: 16).weight(.medium))
+                            .font(.custom("Inter", size: 18).weight(.medium))
                             .foregroundColor(.white)
                     }
                     
@@ -827,14 +827,15 @@ private struct StrigaCardPreview: View {
                             .foregroundColor(.white.opacity(0.7))
                             .tracking(0.5)
                         Text("***")
-                            .font(.custom("Inter", size: 16).weight(.medium))
+                            .font(.system(size: 18, weight: .medium, design: .monospaced))
                             .foregroundColor(.white)
                     }
                 }
-                .padding(.leading, 16)
-                .padding(.trailing, 24)
+                .padding(.leading, 21)
+                .padding(.trailing, 40)
                 .padding(.bottom, 24)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .aspectRatio(1.586, contentMode: .fit)
         .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
