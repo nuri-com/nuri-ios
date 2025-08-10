@@ -17,6 +17,7 @@ public struct CreateWalletResponse: Codable {
         public let btc: Account?
         public let eth: Account?
         public let usdt: Account?
+        public let sol: Account?
 
         private enum CodingKeys: String, CodingKey {
             case eur = "EUR"
@@ -26,6 +27,7 @@ public struct CreateWalletResponse: Codable {
             case btc = "BTC"
             case eth = "ETH"
             case usdt = "USDT"
+            case sol = "SOL"
         }
     }
 

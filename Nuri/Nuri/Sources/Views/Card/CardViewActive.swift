@@ -22,6 +22,9 @@ struct CardViewActive: View {
     @State private var maskedCardNumber = "**** **** **** ****"
     @State private var isRefreshing = false
     @State private var refreshTimer: Timer?
+    @State private var iban = ""
+    @State private var bic = ""
+    @State private var accountHolderName = ""
     
     private let striga = StrigaService.shared
     
@@ -62,34 +65,67 @@ struct CardViewActive: View {
 
             VStack {
                 Spacer()
-                HStack {
-                    NuriTitleWithSubtitle(title: "€ \(walletBalance)", subtitle: "Available Balance")
-                    
-                    if isRefreshing {
-                        ProgressView()
-                            .scaleEffect(0.8)
-                            .padding(.leading, 8)
-                    }
-                }
-                .padding(.bottom, 15)
-
-                let cardOpacity = isCardFrozen ? 0.4 : 1.0
-
-                // Always show the Striga card preview with masked details
-                VStack(spacing: 20) {
-                    // Card preview with proper aspect ratio and full width
-                    StrigaCardPreview(
-                        holder: cardHolderName,
-                        maskedNumber: maskedCardNumber,
-                        expiry: cardExpiry
-                    )
-                    .opacity(cardOpacity)
-                    
-                    // Bitcoin address with consistent Inter font
+                
+                // EUR amount at top with IBAN and Bitcoin address below
+                VStack(spacing: 12) {
+                    // Amount - same design as before
                     HStack {
+                        Text("€ \(walletBalance)")
+                            .font(.system(size: 34, weight: .semibold))
+                            .foregroundColor(.black)
+                        
+                        if isRefreshing {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                                .padding(.leading, 8)
+                        }
+                    }
+                    
+                    // IBAN with bank icon as subtitle
+                    if !iban.isEmpty {
+                        HStack(spacing: 8) {
+                            Image("vector-icon-card")
+                                .resizable()
+                                .renderingMode(.template)
+                                .foregroundColor(.black.opacity(0.6))
+                                .frame(width: 40, height: 40)
+                            
+                            Text(iban)
+                                .font(.custom("Inter", size: 16))
+                                .foregroundColor(.black.opacity(0.6))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            
+                            Spacer()
+                            
+                            Button(action: {
+                                // Copy IBAN + Name + BIC
+                                let copyText = """
+                                IBAN: \(iban)
+                                Name: \(accountHolderName)
+                                BIC: \(bic)
+                                """
+                                UIPasteboard.general.string = copyText
+                                print("📋 IBAN details copied:\n\(copyText)")
+                            }) {
+                                Image(systemName: "doc.on.doc")
+                                    .foregroundColor(.black.opacity(0.6))
+                                    .font(.system(size: 20))
+                            }
+                        }
+                    }
+                    
+                    // Bitcoin address with bitcoin icon
+                    HStack(spacing: 8) {
+                        Image("bitcoin-icon")
+                            .resizable()
+                            .renderingMode(.template)
+                            .foregroundColor(.black.opacity(0.6))
+                            .frame(width: 40, height: 40)
+                        
                         Text(btcAddress)
                             .font(.custom("Inter", size: 16))
-                            .foregroundColor(.black)
+                            .foregroundColor(.black.opacity(0.6))
                             .lineLimit(1)
                             .truncationMode(.middle)
                         
@@ -101,11 +137,22 @@ struct CardViewActive: View {
                         }) {
                             Image(systemName: "doc.on.doc")
                                 .foregroundColor(.black.opacity(0.6))
-                                .font(.system(size: 16))
+                                .font(.system(size: 20))
                         }
                     }
-                    .padding(.horizontal, 24)
                 }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 15)
+
+                let cardOpacity = isCardFrozen ? 0.4 : 1.0
+
+                // Always show the Striga card preview with masked details
+                StrigaCardPreview(
+                    holder: cardHolderName,
+                    maskedNumber: maskedCardNumber,
+                    expiry: cardExpiry
+                )
+                .opacity(cardOpacity)
                 .transition(.opacity)
                 .padding(.bottom, 20)
 
@@ -186,7 +233,7 @@ struct CardViewActive: View {
         }
         .sheet(isPresented: $isTopUpPresented) {
             NavigationStack {
-                TopUpCardView(isPresented: $isTopUpPresented)
+                WalletListView()
             }
         }
         .onAppear {
@@ -387,6 +434,17 @@ struct CardViewActive: View {
                                     self.walletBalance = String(format: "%.2f", euros)
                                     print("✅ [CardViewActive] Converted cents to euros: \(self.walletBalance)")
                                 }
+                            }
+                            
+                            // Extract IBAN details if available
+                            if let bankingDetails = eurAccount.bankingDetails {
+                                self.iban = bankingDetails.iban
+                                self.bic = bankingDetails.bic
+                                self.accountHolderName = bankingDetails.accountHolderName
+                                print("🏦 [CardViewActive] IBAN details loaded:")
+                                print("  - IBAN: \(self.iban)")
+                                print("  - BIC: \(self.bic)")
+                                print("  - Name: \(self.accountHolderName)")
                             }
                         } else {
                             print("⚠️ [CardViewActive] No EUR account found in wallet")
