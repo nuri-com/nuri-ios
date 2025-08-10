@@ -87,7 +87,7 @@ public final class StrigaService {
     
     @discardableResult
     public func enrichAccount(_ input: EnrichAccount) async throws -> EnrichAccountResponse {
-        let url = try url(for: "v1/account/enrich")
+        let url = try url(for: "v1/wallets/account/enrich")
         return try await httpClient.post(url: url, input: input)
     }
 

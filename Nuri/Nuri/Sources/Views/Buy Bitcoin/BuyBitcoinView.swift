@@ -505,48 +505,29 @@ struct BuyBitcoinView: View {
                     // Enrich the account
                     print("🏦 Enriching account with IBAN...")
                     let enrichResponse = try await striga.enrichAccount(
-                        EnrichAccount(accountId: existingAccount.accountId)
+                        EnrichAccount(accountId: existingAccount.accountId, userId: userId)
                     )
                     print("🏦 Account enriched successfully")
                     await MainActor.run {
                         self.ibanDetails = IBANDetails(
-                            iban: enrichResponse.iban,
-                            bic: enrichResponse.bic,
-                            accountHolderName: enrichResponse.accountHolderName,
+                            iban: enrichResponse.iban ?? "",
+                            bic: enrichResponse.bic ?? "",
+                            accountHolderName: enrichResponse.accountHolderName ?? "",
                             accountId: enrichResponse.accountId
                         )
                         self.isLoadingAccount = false
                     }
                 }
             } else {
-                // Create new EUR wallet
-                print("🏦 Creating new EUR wallet...")
-                let createWalletResponse = try await striga.createWallet(
-                    CreateWallet(userId: userId, currency: "EUR")
-                )
+                // No EUR account found - this means the wallet wasn't created with EUR support
+                // This should not happen in normal flow since CardCreationService creates a multi-currency wallet
+                print("⚠️ No EUR account found in any wallet")
+                print("⚠️ This indicates the wallet was not created with EUR support")
+                print("⚠️ User should have a wallet created during card creation that includes EUR")
                 
-                if let newEurAccount = createWalletResponse.accounts.eur {
-                    print("🏦 Created new EUR account: \(newEurAccount.accountId)")
-                    
-                    // Enrich the new account
-                    print("🏦 Enriching new account with IBAN...")
-                    let enrichResponse = try await striga.enrichAccount(
-                        EnrichAccount(accountId: newEurAccount.accountId)
-                    )
-                    print("🏦 New account enriched successfully")
-                    await MainActor.run {
-                        self.ibanDetails = IBANDetails(
-                            iban: enrichResponse.iban,
-                            bic: enrichResponse.bic,
-                            accountHolderName: enrichResponse.accountHolderName,
-                            accountId: enrichResponse.accountId
-                        )
-                        self.isLoadingAccount = false
-                    }
-                } else {
-                    throw NSError(domain: "BuyBitcoin", code: 1, userInfo: [
-                        NSLocalizedDescriptionKey: "Failed to create EUR account"
-                    ])
+                await MainActor.run {
+                    self.isLoadingAccount = false
+                    self.accountError = "No EUR account found. Please contact support."
                 }
             }
         } catch {
