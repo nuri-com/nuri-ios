@@ -138,7 +138,7 @@ struct CardViewActive: View {
                         showCardDetailsFlow = true
                     }
                     SmallIconButton(icon: isCardFrozen ? "lock" : "lock_open", title: isCardFrozen ? "Unfreeze" : "Freeze") {
-                        isCardFrozen.toggle()
+                        toggleCardFreeze()
                     }
                     SmallIconButton(icon: "money_topup", title: "Top-Up") {
                         isTopUpPresented = true
@@ -287,7 +287,7 @@ struct CardViewActive: View {
         }
         
         // Don't set default balance here - let fetchCardAndWalletDetails handle it
-        isCardFrozen = false
+        // Card frozen state will be set from API response
     }
     
     private func fetchCardAndWalletDetails(showRefreshIndicator: Bool = false) {
@@ -323,6 +323,10 @@ struct CardViewActive: View {
                     self.cardHolderName = cardResponse.name
                     self.maskedCardNumber = formatMaskedCardNumber(cardResponse.maskedCardNumber)
                     self.cardExpiry = String(format: "%02d/%02d", cardResponse.expiryMonth, cardResponse.expiryYear % 100)
+                    
+                    // Update card frozen state based on API response
+                    self.isCardFrozen = (cardResponse.status != "ACTIVE")
+                    print("📊 [CardViewActive] Card status: \(cardResponse.status), frozen: \(self.isCardFrozen)")
                     
                     // Store the linked wallet ID
                     self.linkedWalletId = cardResponse.parentWalletId
@@ -538,6 +542,52 @@ struct CardViewActive: View {
         refreshTimer?.invalidate()
         refreshTimer = nil
         print("⏰ [CardViewActive] Auto-refresh timer stopped")
+    }
+    
+    private func toggleCardFreeze() {
+        Task {
+            do {
+                guard let cardId = StrigaSession.shared.cardId ?? UserSettings().strigaCardId else {
+                    print("❌ [CardViewActive] No card ID found")
+                    return
+                }
+                
+                print("🔄 [CardViewActive] Toggling card freeze state...")
+                
+                if isCardFrozen {
+                    // Unblock the card
+                    print("🔓 [CardViewActive] Unblocking card...")
+                    _ = try await striga.blockCard(UnblockCard(cardId: cardId))
+                    
+                    await MainActor.run {
+                        isCardFrozen = false
+                        print("✅ [CardViewActive] Card unblocked successfully")
+                    }
+                } else {
+                    // Block the card
+                    print("🔒 [CardViewActive] Blocking card...")
+                    _ = try await striga.blockCard(BlockCard(
+                        cardId: cardId,
+                        blockType: "FRAUD" // Options: FRAUD, LOST, STOLEN, ATM_RETENTION, OTHER
+                    ))
+                    
+                    await MainActor.run {
+                        isCardFrozen = true
+                        print("✅ [CardViewActive] Card blocked successfully")
+                    }
+                }
+                
+                // Refresh card details to get updated status
+                fetchCardAndWalletDetails(showRefreshIndicator: false)
+                
+            } catch {
+                print("❌ [CardViewActive] Error toggling card freeze: \(error)")
+                // Revert the state on error
+                await MainActor.run {
+                    isCardFrozen.toggle()
+                }
+            }
+        }
     }
     
     private func autoConvertBTCtoEUR(btcAmount: String, btcAccountId: String, eurAccountId: String) {
