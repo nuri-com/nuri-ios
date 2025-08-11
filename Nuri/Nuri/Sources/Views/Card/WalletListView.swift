@@ -6,8 +6,14 @@ struct WalletListView: View {
     @State private var wallets: [WalletItem] = []
     @State private var isLoading = true
     @State private var eurAccountId = ""
+    @State private var autoConversionTimer: Timer?
+    @State private var failedSwapAttempts: [String: Int] = [:] // Track failed attempts per account
+    @State private var lastSwapAttempt: [String: Date] = [:] // Track last attempt time per account
+    @State private var autoConversionEnabled = true // Enabled by default, user-controllable
     
     private let striga = StrigaService.shared
+    private let maxRetryAttempts = 3
+    private let retryDelayMinutes = 30.0 // Wait 30 minutes after max failures
     
     struct WalletItem {
         let currency: String
@@ -61,6 +67,62 @@ struct WalletListView: View {
                             }
                             .padding(.top, 40)
                         } else {
+                            // Auto-conversion status banner
+                            if !eurAccountId.isEmpty {
+                                VStack(spacing: 12) {
+                                    HStack {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text("Auto-conversion to EUR")
+                                                .font(.custom("Inter", size: 14).weight(.medium))
+                                                .foregroundColor(Color("PrimaryNuriBlack"))
+                                            Text(autoConversionEnabled ? "Active - checking every 60 seconds" : "Disabled")
+                                                .font(.custom("Inter", size: 12))
+                                                .foregroundColor(Color(hex: "#6D6D86"))
+                                        }
+                                        Spacer()
+                                        Toggle("", isOn: $autoConversionEnabled)
+                                            .labelsHidden()
+                                            .onChange(of: autoConversionEnabled) { newValue in
+                                                if newValue {
+                                                    startMonitoringForAutoConversion()
+                                                    print("✅ [WalletListView] Auto-conversion enabled")
+                                                } else {
+                                                    autoConversionTimer?.invalidate()
+                                                    autoConversionTimer = nil
+                                                    // Reset failure counters when disabled
+                                                    failedSwapAttempts.removeAll()
+                                                    lastSwapAttempt.removeAll()
+                                                    print("🔴 [WalletListView] Auto-conversion disabled")
+                                                }
+                                            }
+                                    }
+                                    
+                                    // Manual trigger button for testing
+                                    Button(action: {
+                                        print("🔄 [WalletListView] Manual swap trigger activated")
+                                        Task {
+                                            await checkAndConvertBalances()
+                                        }
+                                    }) {
+                                        HStack {
+                                            Image(systemName: "arrow.triangle.2.circlepath")
+                                            Text("Check & Convert Now")
+                                        }
+                                        .font(.custom("Inter", size: 13).weight(.medium))
+                                        .foregroundColor(.white)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 8)
+                                        .background(Color("PrimaryNuriPurple"))
+                                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                                    }
+                                }
+                                .padding()
+                                .background(Color.white)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .padding(.horizontal, 24)
+                                .padding(.vertical, 16)
+                            }
+                            
                             // Wallet list
                             ForEach(Array(wallets.enumerated()), id: \.offset) { index, wallet in
                                 WalletRow(wallet: wallet) {
@@ -250,8 +312,10 @@ struct WalletListView: View {
             
             print("✅ [WalletListView] Loaded \(loadedWallets.count) wallets")
             
-            // Start monitoring for incoming transactions
-            startMonitoringForAutoConversion()
+            // Start monitoring for auto-conversion if enabled (default is true)
+            if autoConversionEnabled {
+                startMonitoringForAutoConversion()
+            }
             
         } catch {
             print("❌ [WalletListView] Error loading wallets: \(error)")
@@ -324,16 +388,35 @@ struct WalletListView: View {
     }
     
     private func startMonitoringForAutoConversion() {
+        // Only start if enabled
+        guard autoConversionEnabled else {
+            print("⚠️ [WalletListView] Auto-conversion is disabled")
+            return
+        }
+        
+        // Cancel any existing timer
+        autoConversionTimer?.invalidate()
+        
         // Start a timer to check balances and auto-convert
-        Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { _ in
+        // Check every 60 seconds instead of 10 to avoid too frequent attempts
+        autoConversionTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
             Task {
                 await checkAndConvertBalances()
             }
+        }
+        
+        // Also check immediately when enabled
+        Task {
+            await checkAndConvertBalances()
         }
     }
     
     private func checkAndConvertBalances() async {
         guard !eurAccountId.isEmpty else { return }
+        guard autoConversionEnabled else {
+            print("🔴 [WalletListView] Auto-conversion is disabled, skipping balance check")
+            return
+        }
         
         do {
             guard let userId = StrigaSession.shared.userId ?? UserSettings().strigaUserId,
@@ -351,6 +434,12 @@ struct WalletListView: View {
             // Get fresh wallet details
             let walletResponse = try await striga.getWallet(cardResponse.parentWalletId, userId: userId)
             
+            // Minimum EUR value required for swap (€10 as per Striga requirements)
+            // This seems to be the actual minimum that Striga accepts
+            let minimumEURValue = 10.0
+            
+            print("💱 [WalletListView] Checking balances for auto-conversion (minimum: €\(minimumEURValue))")
+            
             // Check each crypto account for balances
             let accounts = [
                 ("BTC", walletResponse.accounts.btc),
@@ -365,12 +454,125 @@ struct WalletListView: View {
             for (currency, account) in accounts {
                 guard let account = account else { continue }
                 
+                // Log account details for debugging
+                print("🔍 [WalletListView] Checking \(currency) account:")
+                print("  - Account ID: \(account.accountId)")
+                print("  - Available Balance: \(account.availableBalance.amount) \(account.availableBalance.currency)")
+                print("  - Available Balance: \(account.availableBalance.amount) \(account.availableBalance.currency)")
+                print("  - Status: \(account.status)")
+                if let blockchainAddress = account.blockchainDepositAddress {
+                    print("  - Blockchain Address: \(blockchainAddress.prefix(10))...")
+                }
+                
                 let balance = account.availableBalance.amount
                 if balance != "0" && !balance.isEmpty {
-                    print("💱 [WalletListView] Found \(balance) \(currency) - converting to EUR")
+                    // Check if this account has too many failed attempts
+                    let failedAttempts = failedSwapAttempts[account.accountId] ?? 0
+                    if failedAttempts >= maxRetryAttempts {
+                        // Check if enough time has passed to retry
+                        if let lastAttempt = lastSwapAttempt[account.accountId] {
+                            let timeSinceLastAttempt = Date().timeIntervalSince(lastAttempt) / 60.0 // in minutes
+                            if timeSinceLastAttempt < retryDelayMinutes {
+                                print("⏸️ [WalletListView] \(currency) swap paused due to \(failedAttempts) failures. Waiting \(Int(retryDelayMinutes - timeSinceLastAttempt)) more minutes")
+                                continue
+                            } else {
+                                // Reset counters after waiting period
+                                print("🔄 [WalletListView] Resetting failure counter for \(currency) after waiting period")
+                                failedSwapAttempts[account.accountId] = 0
+                            }
+                        }
+                    }
+                    
+                    // First, get the exchange rate to check if balance meets €10 minimum
+                    let balanceDouble = Double(balance) ?? 0
+                    if balanceDouble <= 0 {
+                        continue
+                    }
+                    
+                    // Convert balance to proper format for exchange rate check
+                    let formattedAmount: String
+                    if currency == "BTC" {
+                        // Convert satoshis to BTC
+                        let btcAmount = balanceDouble / 100_000_000
+                        formattedAmount = String(format: "%.8f", btcAmount)
+                    } else if currency == "ETH" || currency == "BNB" || currency == "POL" {
+                        // Convert wei to ETH/BNB/POL
+                        let ethAmount = balanceDouble / 1_000_000_000_000_000_000
+                        formattedAmount = String(format: "%.18f", ethAmount)
+                    } else if currency == "SOL" {
+                        // Convert lamports to SOL
+                        let solAmount = balanceDouble / 1_000_000_000
+                        formattedAmount = String(format: "%.9f", solAmount)
+                    } else if currency == "USDC" || currency == "USDT" {
+                        // Convert cents to dollars
+                        let usdAmount = balanceDouble / 100
+                        formattedAmount = String(format: "%.2f", usdAmount)
+                    } else {
+                        formattedAmount = balance
+                    }
+                    
+                    // Try to get exchange rate to check EUR value
+                    do {
+                        print("📊 [WalletListView] Checking exchange rate for \(formattedAmount) \(currency)")
+                        let rateResponse = try await striga.getExchangeRate(
+                            from: currency,
+                            to: "EUR",
+                            amount: formattedAmount
+                        )
+                        
+                        let eurValue = Double(rateResponse.amount) ?? 0
+                        print("💶 [WalletListView] \(currency) balance worth €\(String(format: "%.2f", eurValue))")
+                        
+                        // Check if EUR value meets minimum requirement
+                        if eurValue < minimumEURValue {
+                            print("⚠️ [WalletListView] \(currency) value €\(String(format: "%.2f", eurValue)) below minimum €\(minimumEURValue), skipping swap")
+                            continue
+                        }
+                    } catch {
+                        print("⚠️ [WalletListView] Could not get exchange rate for \(currency), using fallback minimum check")
+                        // Fallback to conservative minimums if rate check fails
+                        let fallbackMinimums: [String: Double] = [
+                            "BTC": 20000,      // 20k sats ≈ €18
+                            "ETH": 5_000_000_000_000_000, // 0.005 ETH ≈ €15
+                            "USDC": 1000,      // 10 USDC ≈ €9.2
+                            "USDT": 1000,      // 10 USDT ≈ €9.2
+                            "BNB": 20_000_000_000_000_000, // 0.02 BNB ≈ €12
+                            "POL": 10_000_000_000_000_000_000, // 10 POL ≈ €10
+                            "SOL": 50_000_000  // 0.05 SOL ≈ €10
+                        ]
+                        
+                        if let minAmount = fallbackMinimums[currency], balanceDouble < minAmount {
+                            print("⚠️ [WalletListView] \(currency) balance \(balance) below fallback minimum \(minAmount), skipping swap")
+                            continue
+                        }
+                    }
+                    
+                    print("💱 [WalletListView] Found \(balance) \(currency) - converting to EUR (attempt \(failedAttempts + 1)/\(maxRetryAttempts))")
+                    print("  - Account ID: \(account.accountId)")
+                    print("  - EUR Account ID: \(eurAccountId)")
                     
                     // Execute swap to EUR
                     do {
+                        print("🔄 [WalletListView] ===== ATTEMPTING SWAP =====")
+                        print("📊 Swap Request Parameters:")
+                        print("  - userId: \(userId)")
+                        print("  - sourceAccountId: \(account.accountId)")
+                        print("  - destinationAccountId: \(eurAccountId)")
+                        print("  - amount: \(balance)")
+                        print("  - currency: \(currency)")
+                        print("  - Account status: \(account.status)")
+                        print("  - Available balance: \(account.availableBalance.amount) \(account.availableBalance.currency)")
+                        print("  - Available balance: \(account.availableBalance.amount) \(account.availableBalance.currency)")
+                        
+                        // Log the actual amount in human-readable format
+                        if currency == "ETH" {
+                            let ethAmount = (Double(balance) ?? 0) / 1_000_000_000_000_000_000
+                            print("  - Amount (ETH): \(String(format: "%.18f", ethAmount))")
+                        } else if currency == "BTC" {
+                            let btcAmount = (Double(balance) ?? 0) / 100_000_000
+                            print("  - Amount (BTC): \(String(format: "%.8f", btcAmount))")
+                        }
+                        
                         let swapResponse = try await striga.swapCurrencies(.init(
                             userId: userId,
                             sourceAccountId: account.accountId,
@@ -378,12 +580,102 @@ struct WalletListView: View {
                             amount: balance
                         ))
                         
-                        print("✅ [WalletListView] Converted \(currency) to EUR successfully")
-                        print("  - Transaction ID: \(swapResponse.id)")
-                        print("  - Source: \(swapResponse.sourceAmount) \(currency)")
-                        print("  - Destination: \(swapResponse.destinationAmount) EUR")
+                        print("✅ [WalletListView] ===== SWAP SUCCESSFUL =====")
+                        print("👍 Transaction ID: \(swapResponse.id)")
+                        print("👍 Status: \(swapResponse.status)")
+                        print("👍 Source: \(swapResponse.sourceAmount) \(currency)")
+                        print("👍 Destination: \(swapResponse.destinationAmount) EUR")
+                        print("👍 Exchange Rate: \(swapResponse.exchangeRate)")
+                        if let fee = swapResponse.fee {
+                            print("👍 Fee: \(fee)")
+                        }
+                        print("====================================")
+                        
+                        // Reset failure counter on success
+                        failedSwapAttempts[account.accountId] = 0
+                        lastSwapAttempt.removeValue(forKey: account.accountId)
+                        
                     } catch {
-                        print("❌ [WalletListView] Error converting \(currency): \(error)")
+                        print("❌ [WalletListView] ===== SWAP FAILED =====")
+                        print("🔴 Error Type: \(type(of: error))")
+                        print("🔴 Error Description: \(error)")
+                        print("📝 Context:")
+                        print("  - Currency: \(currency)")
+                        print("  - Balance attempted: \(balance) (smallest unit)")
+                        print("  - Source account: \(account.accountId)")
+                        print("  - Destination account: \(eurAccountId)")
+                        
+                        // Log more details about the error
+                        if let validationError = error as? StrigaAPI.ValidationErrorResponse {
+                            print("🚨 [WalletListView] Validation Error:")
+                            print("  - Message: \(validationError.message)")
+                            print("  - Error Code: \(validationError.errorCode)")
+                            print("  - Field Errors:")
+                            for field in validationError.errorDetails {
+                                print("    - \(field.param): \(field.msg)")
+                                
+                                // Check if it's an amount-related error
+                                if field.param == "amount" && 
+                                   (field.msg.lowercased().contains("minimum") || 
+                                    field.msg.lowercased().contains("insufficient") ||
+                                    field.msg.lowercased().contains("below")) {
+                                    print("🛑 [WalletListView] Swap failed due to minimum amount requirements: \(field.msg)")
+                                    // Don't retry if it's a minimum amount issue
+                                    failedSwapAttempts[account.accountId] = maxRetryAttempts
+                                }
+                            }
+                        } else if let strigaError = error as? StrigaAPI.ErrorResponse {
+                            print("🚨 [WalletListView] ===== STRIGA API ERROR =====")
+                            print("📍 Error Message: \(strigaError.message)")
+                            print("📍 Error Code: \(strigaError.errorCode)")
+                            print("📍 Error Details: \(strigaError.errorDetails)")
+                            print("=================================")
+                            
+                            // Check for specific error codes that indicate permanent failures
+                            if strigaError.errorCode.contains("INSUFFICIENT") || 
+                               strigaError.errorCode.contains("MINIMUM") ||
+                               strigaError.message.lowercased().contains("minimum") ||
+                               strigaError.message.lowercased().contains("insufficient") ||
+                               strigaError.message.lowercased().contains("below") ||
+                               strigaError.errorDetails.lowercased().contains("minimum") {
+                                print("🛑 [WalletListView] Swap failed due to minimum amount requirements")
+                                // Don't retry if it's a minimum amount issue
+                                failedSwapAttempts[account.accountId] = maxRetryAttempts
+                            }
+                        } else if let urlError = error as? URLError {
+                            print("  - URL Error: \(urlError.localizedDescription)")
+                        } else if let decodingError = error as? DecodingError {
+                            print("  - Decoding Error: \(decodingError)")
+                        } else {
+                            print("🔴 [WalletListView] Unknown Error Type")
+                            print("  - Error type: \(type(of: error))")
+                            print("  - Error details: \(String(describing: error))")
+                            print("  - Error localized: \(error.localizedDescription)")
+                            
+                            // Try to extract any additional info from NSError
+                            let nsError = error as NSError
+                            print("  - NSError domain: \(nsError.domain)")
+                            print("  - NSError code: \(nsError.code)")
+                            print("  - NSError userInfo: \(nsError.userInfo)")
+                        }
+                        print("====================================")
+                        
+                        // Increment failure counter
+                        let currentFailures = failedSwapAttempts[account.accountId] ?? 0
+                        failedSwapAttempts[account.accountId] = currentFailures + 1
+                        lastSwapAttempt[account.accountId] = Date()
+                        
+                        print("⚠️ [WalletListView] Failed swap attempt \(currentFailures + 1)/\(maxRetryAttempts) for \(currency)")
+                        
+                        // Stop timer if we've hit too many total failures
+                        let totalFailures = failedSwapAttempts.values.reduce(0, +)
+                        if totalFailures >= accounts.count * maxRetryAttempts {
+                            print("🛑 [WalletListView] Stopping auto-conversion timer due to excessive failures")
+                            await MainActor.run {
+                                autoConversionTimer?.invalidate()
+                                autoConversionTimer = nil
+                            }
+                        }
                     }
                 }
             }

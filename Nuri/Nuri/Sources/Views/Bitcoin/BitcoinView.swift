@@ -5,6 +5,7 @@ final class BitcoinViewNavigation: ObservableObject {
     @Published var isReceiveViewPresented = false
     @Published var isTransactionsPresented = false
     @Published var isBuyBitcoinPresented = false
+    @Published var isBuyViewPresented = false // For Buy Bitcoin flow
 }
 
 struct BitcoinView: View {
@@ -17,6 +18,7 @@ struct BitcoinView: View {
     @State private var showWalletRecoveryAlert = false
     @State private var exchangeRate: Double = 0.0
     @State private var exchangeRateTimer: Timer?
+    @State private var showStrigaDebug = false
     
     // Cache key for exchange rate
     private let exchangeRateCacheKey = "nuri.exchangeRate.eur"
@@ -36,7 +38,7 @@ struct BitcoinView: View {
                 NuriHeader<AnyView, AnyView>.logoAndCTA(
                     title: "",
                     cta: "+ Buy Bitcoin",
-                    onCTA: { navigation.isBuyBitcoinPresented = true }
+                    onCTA: { navigation.isBuyViewPresented = true }
                 )
 
                 VStack {
@@ -70,12 +72,23 @@ struct BitcoinView: View {
                         .padding(.bottom, 24)
                     }
                     Spacer()
-                    Button(action: {
-                        navigation.isTransactionsPresented = true
-                    }) {
-                        Image("link-icon-to-transactions")
-                            .resizable()
-                            .frame(width: 24, height: 13)
+                    HStack(spacing: 20) {
+                        // Debug button removed - all transactions in unified view
+                        // Button(action: {
+                        //     showStrigaDebug = true
+                        // }) {
+                        //     Text("Debug Striga")
+                        //         .font(.custom("Inter", size: 12).weight(.medium))
+                        //         .foregroundColor(.blue)
+                        // }
+                        
+                        Button(action: {
+                            navigation.isTransactionsPresented = true
+                        }) {
+                            Image("link-icon-to-transactions")
+                                .resizable()
+                                .frame(width: 24, height: 13)
+                        }
                     }
                 }
                 .padding(.horizontal, 24)
@@ -122,15 +135,20 @@ struct BitcoinView: View {
                 ReceiveView()
             }
         }
-        .sheet(isPresented: $navigation.isBuyBitcoinPresented) {
+        .sheet(isPresented: $navigation.isBuyViewPresented) {
             NavigationStack {
-                BuyBitcoinView(isPresented: $navigation.isBuyBitcoinPresented)
+                BuyBitcoinFlowView()
             }
         }
         .environmentObject(navigation)
         .fullScreenCover(isPresented: $navigation.isTransactionsPresented) {
-            TransactionsView()
+            // Use the main UnifiedTransactionsView that shows both Bitcoin and Striga transactions
+            UnifiedTransactionsView()
         }
+        // Debug view disabled - all transactions are in UnifiedTransactionsView now
+        // .fullScreenCover(isPresented: $showStrigaDebug) {
+        //     StrigaTransactionsDebugView()
+        // }
         .onAppear {
             // Initialize wallet on first appear
             let walletService = BitcoinWalletService.shared
