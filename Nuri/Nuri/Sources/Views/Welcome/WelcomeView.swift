@@ -416,49 +416,13 @@ struct WelcomeView: View {
     
     @MainActor
     private func fetchAndUpdateCardInfo(userId: String) async {
-        do {
-            // Get user's wallets from Striga
-            let walletsResponse = try await StrigaService.shared.getWallets(userId: userId)
-            
-            // Check if user has any wallets
-            if let firstWallet = walletsResponse.wallets.first {
-                let walletId = firstWallet.walletId
-                
-                // Try to get card for this wallet
-                // We need to check if there's already a card ID stored
-                let settings = UserSettings()
-                if let existingCardId = settings.strigaCardId {
-                    // Verify the card still exists
-                    do {
-                        let cardResponse = try await StrigaService.shared.getCard(.init(
-                            userId: userId,
-                            cardId: existingCardId,
-                            authToken: nil
-                        ))
-                        
-                        print("[WelcomeView] Found existing card in Striga - Card ID: \(existingCardId), Status: \(cardResponse.status)")
-                        
-                        // Update StrigaSession
-                        StrigaSession.shared.userId = userId
-                        StrigaSession.shared.cardId = existingCardId
-                    } catch {
-                        // Card doesn't exist anymore, clear it
-                        var settings = UserSettings()
-                        settings.strigaCardId = nil
-                        print("[WelcomeView] Previously stored card no longer exists: \(existingCardId)")
-                    }
-                } else {
-                    // No card ID stored locally
-                    // In a full implementation, we would query for cards here
-                    // For now, just update the user ID
-                    StrigaSession.shared.userId = userId
-                    print("[WelcomeView] User has wallet but no card found locally - Wallet ID: \(walletId)")
-                }
-            } else {
-                print("[WelcomeView] User has no wallets in Striga")
-            }
-        } catch {
-            print("[WelcomeView] Failed to fetch wallet/card info from Striga: \(error)")
+        // Use the new sync service to properly fetch and validate all IDs
+        let syncSuccess = await StrigaSyncService.shared.syncUserData(userId: userId)
+        
+        if syncSuccess {
+            print("[WelcomeView] Successfully synced Striga data for user: \(userId)")
+        } else {
+            print("[WelcomeView] Failed to sync Striga data - user may need to complete setup")
         }
     }
     

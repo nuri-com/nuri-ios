@@ -1788,59 +1788,16 @@ struct SecurityView: View {
     }
     
     private func fetchAndUpdateCardInfo(userId: String) async {
-        do {
-            // Get user's wallets from Striga
-            let walletsResponse = try await striga.getWallets(userId: userId)
+        // Use the new sync service to properly fetch and validate all IDs
+        let syncSuccess = await StrigaSyncService.shared.syncUserData(userId: userId)
+        
+        if syncSuccess {
+            Log.ui.success("Successfully synced Striga data", metadata: ["userId": userId])
             
-            // Check if user has any wallets
-            if let firstWallet = walletsResponse.wallets.first {
-                let walletId = firstWallet.walletId
-                
-                // Try to get card for this wallet
-                // We need to check if there's already a card ID stored
-                let settings = UserSettings()
-                if let existingCardId = settings.strigaCardId {
-                    // Verify the card still exists
-                    do {
-                        let cardResponse = try await striga.getCard(.init(
-                            userId: userId,
-                            cardId: existingCardId,
-                            authToken: nil
-                        ))
-                        
-                        Log.ui.success("Found existing card in Striga", metadata: [
-                            "userId": userId,
-                            "cardId": existingCardId,
-                            "cardStatus": cardResponse.status
-                        ])
-                        
-                        // Update StrigaSession
-                        StrigaSession.shared.userId = userId
-                        StrigaSession.shared.cardId = existingCardId
-                        
-                        // Fetch the user data for display
-                        await fetchStrigaUser(userId: userId)
-                    } catch {
-                        // Card doesn't exist anymore, clear it
-                        var settings = UserSettings()
-                        settings.strigaCardId = nil
-                        Log.ui.warning("Previously stored card no longer exists", metadata: ["cardId": existingCardId])
-                    }
-                } else {
-                    // No card ID stored locally
-                    // In a full implementation, we would query for cards here
-                    // For now, just update the user ID
-                    StrigaSession.shared.userId = userId
-                    Log.ui.info("User has wallet but no card found locally", metadata: ["userId": userId, "walletId": walletId])
-                    
-                    // Fetch the user data for display
-                    await fetchStrigaUser(userId: userId)
-                }
-            } else {
-                Log.ui.info("User has no wallets in Striga", metadata: ["userId": userId])
-            }
-        } catch {
-            Log.ui.error("Failed to fetch wallet/card info from Striga", error: error)
+            // Fetch the user data for display
+            await fetchStrigaUser(userId: userId)
+        } else {
+            Log.ui.warning("Failed to sync Striga data - user may need to complete setup", metadata: ["userId": userId])
         }
     }
     
