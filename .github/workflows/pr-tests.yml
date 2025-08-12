@@ -1,0 +1,129 @@
+name: PR Tests
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+
+jobs:
+  quick-test:
+    name: Quick Test Suite
+    runs-on: macos-latest
+    timeout-minutes: 15
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch all history for better diff analysis
+        
+    - name: Setup Environment
+      run: |
+        sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+        echo "📱 Xcode Version:"
+        xcodebuild -version
+        echo "🔤 Swift Version:"
+        swift --version
+        
+    - name: Cache Dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/Library/Developer/Xcode/DerivedData
+          ~/.swiftpm
+          Nuri/.build
+        key: ${{ runner.os }}-test-${{ hashFiles('**/Package.resolved', '**/*.swift') }}
+        restore-keys: |
+          ${{ runner.os }}-test-
+          
+    - name: Check Changed Files
+      id: changes
+      run: |
+        echo "Changed Swift files:"
+        git diff --name-only ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} | grep -E '\.swift$' || true
+        
+        # Check if only tests changed
+        ONLY_TESTS=$(git diff --name-only ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} | grep -v -E 'Tests?/' | grep -E '\.swift$' | wc -l)
+        echo "only_tests=$([[ $ONLY_TESTS -eq 0 ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+        
+    - name: Run Tests
+      run: |
+        cd Nuri
+        
+        # Use a faster simulator for PR tests
+        DESTINATION="platform=iOS Simulator,name=iPhone 15,OS=latest"
+        
+        echo "🏗️ Building and testing..."
+        set -o pipefail
+        
+        xcodebuild test \
+          -scheme Nuri \
+          -destination "$DESTINATION" \
+          -parallel-testing-enabled YES \
+          -quiet \
+          -resultBundlePath TestResults.xcresult \
+          | tee xcodebuild.log | xcpretty --test --color
+          
+        TEST_RESULT=${PIPESTATUS[0]}
+        
+        if [ $TEST_RESULT -ne 0 ]; then
+          echo "❌ Tests failed!"
+          echo "### Failed Tests:"
+          grep -E "^Test Case.*failed" xcodebuild.log || true
+          exit $TEST_RESULT
+        else
+          echo "✅ All tests passed!"
+        fi
+        
+    - name: Generate Test Summary
+      if: always()
+      run: |
+        cd Nuri
+        
+        if [ -f "TestResults.xcresult" ]; then
+          # Create summary for GitHub
+          echo "## Test Results Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Parse test results
+          xcrun xcresulttool get --format json --path TestResults.xcresult > results.json
+          
+          python3 -c "
+import json
+import sys
+
+with open('results.json', 'r') as f:
+    data = json.load(f)
+    
+metrics = data.get('metrics', {})
+test_metrics = metrics.get('testsMetrics', {})
+
+passed = test_metrics.get('testsPassedCount', 0)
+failed = test_metrics.get('testsFailedCount', 0)
+skipped = test_metrics.get('testsSkippedCount', 0)
+duration = metrics.get('duration', 0)
+
+print(f'| Metric | Value |')
+print(f'|--------|-------|')
+print(f'| ✅ Passed | {passed} |')
+print(f'| ❌ Failed | {failed} |')
+print(f'| ⏭️ Skipped | {skipped} |')
+print(f'| ⏱️ Duration | {duration:.2f}s |')
+
+# Exit with error if tests failed
+if failed > 0:
+    sys.exit(1)
+" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+    - name: Upload Failed Test Artifacts
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: failed-test-results
+        path: |
+          Nuri/TestResults.xcresult
+          Nuri/xcodebuild.log
+        retention-days: 7
