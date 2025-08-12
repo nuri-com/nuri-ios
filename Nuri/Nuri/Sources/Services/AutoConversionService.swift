@@ -232,15 +232,15 @@ class AutoConversionService: ObservableObject {
         } catch {
             print("[AutoConversionService] Could not get rate for \(currency), using fallback")
             
-            // Fallback minimum amounts
+            // Fallback minimum amounts - increased to avoid API minimum trade errors
             let fallbackMinimums: [String: Double] = [
-                "BTC": 20000,      // 20k sats ≈ €18
-                "ETH": 5_000_000_000_000_000, // 0.005 ETH ≈ €15
-                "USDC": 1000,      // 10 USDC ≈ €9.2
-                "USDT": 1000,      // 10 USDT ≈ €9.2
-                "BNB": 20_000_000_000_000_000, // 0.02 BNB ≈ €12
-                "POL": 10_000_000_000_000_000_000, // 10 POL ≈ €10
-                "SOL": 50_000_000  // 0.05 SOL ≈ €10
+                "BTC": 50000,      // 50k sats ≈ €45 (Striga minimum seems to be higher)
+                "ETH": 10_000_000_000_000_000, // 0.01 ETH ≈ €30
+                "USDC": 2000,      // 20 USDC ≈ €18.4
+                "USDT": 2000,      // 20 USDT ≈ €18.4
+                "BNB": 40_000_000_000_000_000, // 0.04 BNB ≈ €24
+                "POL": 20_000_000_000_000_000_000, // 20 POL ≈ €20
+                "SOL": 100_000_000  // 0.1 SOL ≈ €20
             ]
             
             if let minAmount = fallbackMinimums[currency] {
@@ -287,6 +287,24 @@ class AutoConversionService: ObservableObject {
         } catch {
             print("[AutoConversionService] ❌ Swap failed: \(error)")
             
+            // Check for specific error codes
+            let errorString = "\(error)"
+            let isMinimumTradeError = errorString.contains("31088") || 
+                                      errorString.lowercased().contains("belowminimumtradevalue") ||
+                                      errorString.lowercased().contains("below minimum")
+            
+            if isMinimumTradeError {
+                print("[AutoConversionService] ⚠️ Amount below minimum trade value - stopping retries for \(currency)")
+                // Set to max retries to prevent further attempts
+                failedSwapAttempts[account.accountId] = maxRetryAttempts
+                lastSwapAttempt[account.accountId] = Date()
+            } else {
+                // Regular failure handling for other errors
+                let currentFailures = failedSwapAttempts[account.accountId] ?? 0
+                failedSwapAttempts[account.accountId] = currentFailures + 1
+                lastSwapAttempt[account.accountId] = Date()
+            }
+            
             // Record failure
             conversionHistory.append(ConversionRecord(
                 date: Date(),
@@ -297,12 +315,7 @@ class AutoConversionService: ObservableObject {
                 error: error.localizedDescription
             ))
             
-            // Increment failure counter
-            let currentFailures = failedSwapAttempts[account.accountId] ?? 0
-            failedSwapAttempts[account.accountId] = currentFailures + 1
-            lastSwapAttempt[account.accountId] = Date()
-            
-            // Check if error is due to minimum amount
+            // Check if error is due to minimum amount (legacy check)
             if let strigaError = error as? StrigaAPI.ErrorResponse {
                 if strigaError.message.lowercased().contains("minimum") {
                     // Don't retry minimum amount errors

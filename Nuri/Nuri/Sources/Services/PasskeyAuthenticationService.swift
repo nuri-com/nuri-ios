@@ -1253,7 +1253,7 @@ final class PasskeyAuthenticationService: NSObject {
             let credentialId: String
             let deviceName: String?
             let lastUsed: String?
-            let createdAt: String
+            let createdAt: String?  // Made optional as server might not always send it
         }
     }
     
