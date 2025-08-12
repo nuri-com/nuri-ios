@@ -1,9 +1,9 @@
 public struct CreateWallet: Encodable {
     public let userId: String
-    public let currency: String?
+    public let accountCurrency: [String]?
 
-    public init(userId: String, currency: String? = nil) {
+    public init(userId: String, accountCurrency: [String]? = nil) {
         self.userId = userId
-        self.currency = currency
+        self.accountCurrency = accountCurrency
     }
 }

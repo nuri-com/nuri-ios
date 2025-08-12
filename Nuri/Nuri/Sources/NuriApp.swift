@@ -6,6 +6,7 @@ struct NuriApp: App {
 
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @AppStorage("isUserLoggedIn") var isUserLoggedIn: Bool = false
+    @State private var hasSyncedOnLaunch = false
 
     init() {
         // Don't initialize wallet on app start to avoid creating keychain entries
@@ -52,6 +53,14 @@ struct NuriApp: App {
                         .onAppear {
                             print("📱 [NuriApp] Showing MainTabBar (user logged in)")
                             print("📊 [NuriApp] Current login state: \(isUserLoggedIn)")
+                            
+                            // Sync Striga data for logged-in users on app launch (only once)
+                            if !hasSyncedOnLaunch {
+                                hasSyncedOnLaunch = true
+                                Task {
+                                    await syncStrigaDataForLoggedInUser()
+                                }
+                            }
                         }
                 } else {
                     WelcomeView()
@@ -66,6 +75,88 @@ struct NuriApp: App {
                 print("🔍 [NuriApp] View appeared - isUserLoggedIn = \(isUserLoggedIn)")
                 print("📝 [NuriApp] UserDefaults value = \(UserDefaults.standard.bool(forKey: "isUserLoggedIn"))")
             }
+        }
+    }
+    
+    @MainActor
+    private func syncStrigaDataForLoggedInUser() async {
+        // Check if we have a Striga user ID to sync
+        guard let userId = UserSettings().strigaUserId else {
+            print("[NuriApp] No Striga user ID found, skipping sync")
+            return
+        }
+        
+        print("[NuriApp:syncStrigaDataForLoggedInUser:84] Syncing Striga data for logged-in user: \(userId)")
+        
+        // Validate cached data first
+        let isValid = await StrigaSyncService.shared.validateCachedData()
+        
+        if !isValid {
+            print("[NuriApp:syncStrigaDataForLoggedInUser:90] Cached data invalid, performing full sync")
+            let syncSuccess = await StrigaSyncService.shared.syncUserData(userId: userId)
+            
+            if syncSuccess {
+                print("[NuriApp] ✅ Successfully synced Striga data")
+            } else {
+                print("[NuriApp:syncStrigaDataForLoggedInUser:96] ⚠️ Failed to sync Striga data - user may need to complete setup")
+                
+                // Check if user needs card/wallet creation
+                await checkAndCreateCardIfNeeded(userId: userId)
+            }
+        } else {
+            print("[NuriApp] ✅ Cached data is valid, no sync needed")
+        }
+    }
+    
+    @MainActor
+    private func checkAndCreateCardIfNeeded(userId: String) async {
+        print("[NuriApp:checkAndCreateCardIfNeeded:108] Checking if user needs card/wallet creation")
+        
+        var userResponse: GetUserResponse? = nil
+        var userName = "Nuri User"
+        var kycApproved = false
+        
+        // Try to get user details, but proceed even if it fails
+        do {
+            let getUserInput = GetUser(userId: userId)
+            userResponse = try await StrigaService.shared.getUser(getUserInput)
+            userName = "\(userResponse!.firstName) \(userResponse!.lastName)"
+            kycApproved = userResponse!.KYC.status == "APPROVED"
+            
+            print("[NuriApp] User details:")
+            print("  - Name: \(userName)")
+            print("  - Email: \(userResponse!.email)")
+            print("  - KYC Status: \(userResponse!.KYC.status)")
+            print("  - Mobile verified: \(userResponse!.mobile != nil)")
+            
+            guard kycApproved else {
+                print("[NuriApp] KYC not approved (\(userResponse!.KYC.status)), skipping auto-creation")
+                if let reasons = userResponse!.KYC.rejectionReasons, !reasons.isEmpty {
+                    print("[NuriApp] KYC rejection reasons: \(reasons.joined(separator: ", "))")
+                }
+                return
+            }
+        } catch {
+            print("[NuriApp:checkAndCreateCardIfNeeded:133] Failed to get user details: \(error)")
+            print("[NuriApp:checkAndCreateCardIfNeeded:134] Will proceed with card creation anyway...")
+            // If the user endpoint fails, we'll still try to create cards
+            // This handles cases where the user exists but the endpoint is problematic
+            kycApproved = true
+        }
+        
+        print("[NuriApp] ✅ User has approved KYC")
+        
+        // We no longer create wallets or cards here
+        // CardView will handle wallet+card creation atomically when needed
+        print("[NuriApp] Skipping automatic wallet/card creation - will be handled by CardView")
+        
+        // Just perform a sync to ensure user data is cached
+        await StrigaSyncService.shared.syncUserData(userId: userId)
+        
+        // Start auto-conversion monitoring for approved users with cards
+        if StrigaSession.shared.cardId != nil {
+            print("[NuriApp] Starting auto-conversion monitoring")
+            await AutoConversionService.shared.startMonitoring()
         }
     }
 }

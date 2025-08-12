@@ -15,9 +15,19 @@ final class BitcoinWalletService {
     private var currentUserID: String?
     private var esploraClient: EsploraClient?
     private enum Keys {
-        static let mnemonic = "bitcoin.wallet.mnemonic"
-        static let currentAddress = "bitcoin.wallet.currentAddress"
-        static let encryptedMnemonicBackup = "bitcoin.wallet.encryptedMnemonicBackup"
+        static func mnemonic(for user: String) -> String {
+            return "bitcoin.wallet.mnemonic.\(user)"
+        }
+        static func currentAddress(for user: String) -> String {
+            return "bitcoin.wallet.currentAddress.\(user)"
+        }
+        static func encryptedMnemonicBackup(for user: String) -> String {
+            return "bitcoin.wallet.encryptedMnemonicBackup.\(user)"
+        }
+        // Legacy keys for migration
+        static let legacyMnemonic = "bitcoin.wallet.mnemonic"
+        static let legacyCurrentAddress = "bitcoin.wallet.currentAddress"
+        static let legacyEncryptedMnemonicBackup = "bitcoin.wallet.encryptedMnemonicBackup"
     }
     
     // MARK: - Error Types
@@ -31,12 +41,19 @@ final class BitcoinWalletService {
     private var wallet: Wallet?
     private var connection: Connection?
     private var currentBitcoinAddress: String?
+    private var isInitializing = false
+    private var lastInitializationTime: Date?
 
     private init() {
         print("🔑 [BitcoinWalletService] Initializing wallet service...")
-        // Initialize Esplora client for mainnet
-        self.esploraClient = EsploraClient(url: "https://blockstream.info/api")
+        // Initialize Esplora client - using authenticated client if available
+        self.esploraClient = AuthenticatedEsploraClient.createClient()
         // Wallet initialization will happen when user ID is available
+    }
+    
+    /// Get the current user identifier for key storage
+    private func getCurrentUserID() -> String {
+        return currentUserID ?? UserDefaults.standard.string(forKey: "passkeyUsername") ?? "default-user"
     }
 
     // MARK: - Public API
@@ -77,7 +94,17 @@ final class BitcoinWalletService {
         }
         print("🔐 [BitcoinWalletService] 🚨 FACE ID TRIGGER #2 - seedPhrase() method called...")
         do {
-            let phrase = try keychain.get(Keys.mnemonic)
+            let userID = getCurrentUserID()
+            // Try user-specific key first, then legacy key for migration
+            var phrase = try keychain.get(Keys.mnemonic(for: userID))
+            
+            // If not found, check legacy key and migrate if found
+            if phrase == nil, let legacyPhrase = try keychain.get(Keys.legacyMnemonic) {
+                print("🔄 [BitcoinWalletService] Migrating legacy mnemonic to user-specific key")
+                // Migrate the legacy key to user-specific key
+                try keychain.set(legacyPhrase, key: Keys.mnemonic(for: userID))
+                phrase = legacyPhrase
+            }
             if let phrase = phrase {
                 print("✅ [BitcoinWalletService] Retrieved mnemonic from keychain (length: \(phrase.count))")
             } else {
@@ -219,21 +246,63 @@ final class BitcoinWalletService {
     func initializeWalletOnAppStart() {
         print("🔑 [BitcoinWalletService] 🚨 initializeWalletOnAppStart() called")
         
-        // DISABLED: Force cleanup - only use manual cleanup button for testing
-        // print("🧹 [BitcoinWalletService] FORCE CLEARING ALL KEYCHAIN SERVICES...")
-        // forceCleanAllKeychainServices()
-        
-        // Check if we're already initialized
-        if wallet != nil {
-            print("✅ [BitcoinWalletService] Wallet already initialized, skipping...")
+        // Check if already initializing
+        guard !isInitializing else {
+            print("🔑 [BitcoinWalletService] Already initializing, skipping duplicate call...")
             return
         }
         
-        // Use a default user ID for wallet initialization
-        let defaultUserID = "default-user"
-        print("🔄 [BitcoinWalletService] Proceeding with initialization for default user...")
-        currentUserID = defaultUserID
-        setupKeychain(for: defaultUserID)
+        // Check if recently initialized (within 5 seconds)
+        if let lastInit = lastInitializationTime,
+           Date().timeIntervalSince(lastInit) < 5 {
+            print("🔑 [BitcoinWalletService] Recently initialized (\(Date().timeIntervalSince(lastInit))s ago), skipping...")
+            return
+        }
+        
+        // Get the passkey username to use as wallet identifier
+        let passkeyUsername = UserDefaults.standard.string(forKey: "passkeyUsername") ?? "default-user"
+        print("🔑 [BitcoinWalletService] Using wallet identifier: \(passkeyUsername)")
+        
+        // Check if we need to switch users (clear cache if different user)
+        if let currentUser = currentUserID, currentUser != passkeyUsername {
+            print("🔄 [BitcoinWalletService] User changed from \(currentUser) to \(passkeyUsername)")
+            print("   🧹 Clearing wallet cache for user switch...")
+            
+            // Clear in-memory state
+            wallet = nil
+            currentBitcoinAddress = nil
+            connection = nil
+            
+            // Clear cached data directory for old user
+            do {
+                let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                let oldUserDir = docs.appendingPathComponent("wallet_data_\(currentUser)")
+                if FileManager.default.fileExists(atPath: oldUserDir.path) {
+                    try FileManager.default.removeItem(at: oldUserDir)
+                    print("   ✅ Cleared wallet data for previous user: \(currentUser)")
+                }
+            } catch {
+                print("   ⚠️ Failed to clear old user data: \(error)")
+            }
+        }
+        
+        // Check if we're already initialized for this user
+        if wallet != nil && currentUserID == passkeyUsername {
+            print("✅ [BitcoinWalletService] Wallet already initialized for user \(passkeyUsername), skipping...")
+            lastInitializationTime = Date()
+            return
+        }
+        
+        // Mark as initializing
+        isInitializing = true
+        defer {
+            isInitializing = false
+            lastInitializationTime = Date()
+        }
+        
+        print("🔄 [BitcoinWalletService] Proceeding with initialization for user: \(passkeyUsername)")
+        currentUserID = passkeyUsername
+        setupKeychain(for: passkeyUsername)
         
         // Try to load address without Face ID first
         if let cachedAddress = loadAddressFromKeychain() {
@@ -243,7 +312,7 @@ final class BitcoinWalletService {
         
         // Initialize wallet in background
         Task {
-            initialiseWallet()
+            await initialiseWallet()
         }
     }
     
@@ -305,9 +374,11 @@ final class BitcoinWalletService {
         }
         
         do {
-            // Check if encrypted backup exists in iCloud
-            guard let encryptedBackup = try backupKeychain.get(Keys.encryptedMnemonicBackup) else {
-                print("   ℹ️ No encrypted backup found in iCloud keychain")
+            let userID = getCurrentUserID()
+            // Check if encrypted backup exists in iCloud - try user-specific first, then legacy
+            let encryptedBackup = try backupKeychain.get(Keys.encryptedMnemonicBackup(for: userID)) ?? backupKeychain.get(Keys.legacyEncryptedMnemonicBackup)
+            guard let encryptedBackup = encryptedBackup else {
+                print("   ℹ️ No encrypted backup found in iCloud keychain for user: \(userID)")
                 return nil
             }
             
@@ -456,7 +527,8 @@ final class BitcoinWalletService {
         print("🔐 [BitcoinWalletService] About to request mnemonic from keychain (will trigger Face ID)...")
         var mnemonicStr: String?
         do {
-            mnemonicStr = try keychain.get(Keys.mnemonic)
+            let userID = getCurrentUserID()
+            mnemonicStr = try keychain.get(Keys.mnemonic(for: userID))
             if let mnemonic = mnemonicStr {
                 print("✅ [BitcoinWalletService] Found mnemonic in keychain after biometric auth (length: \(mnemonic.count))")
             } else {
@@ -531,7 +603,9 @@ final class BitcoinWalletService {
 
     private func walletDBPath() throws -> String {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let dir = docs.appendingPathComponent("wallet_data")
+        let userID = getCurrentUserID()
+        // User-specific wallet data directory
+        let dir = docs.appendingPathComponent("wallet_data_\(userID)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("wallet.sqlite").path
     }
@@ -565,9 +639,10 @@ final class BitcoinWalletService {
         
         for service in keychainServices {
             let keychain = Keychain(service: service)
-            let mnemonicExists = (try? keychain.contains(Keys.mnemonic)) ?? false
-            let backupExists = (try? keychain.contains(Keys.encryptedMnemonicBackup)) ?? false
-            let addressExists = (try? keychain.contains(Keys.currentAddress)) ?? false
+            let userID = getCurrentUserID()
+            let mnemonicExists = (try? keychain.contains(Keys.mnemonic(for: userID))) ?? false
+            let backupExists = (try? keychain.contains(Keys.encryptedMnemonicBackup(for: userID))) ?? false
+            let addressExists = (try? keychain.contains(Keys.currentAddress(for: userID))) ?? false
             
             let serviceHeader = "   📦 \(service):"
             let mnemonicStatus = "      🌱 Mnemonic: \(mnemonicExists ? "❌ EXISTS" : "✅ Clean")"
@@ -686,17 +761,20 @@ final class BitcoinWalletService {
             // Check keychain entries
             results.append("\n🔑 KEYCHAIN STATUS:")
             if let keychain = keychain {
-                let hasSeeedPhrase = (try? keychain.get(Keys.mnemonic)) != nil
+                let userID = getCurrentUserID()
+                let hasSeeedPhrase = (try? keychain.get(Keys.mnemonic(for: userID))) != nil
                 results.append("   🌱 Has seed phrase: \(hasSeeedPhrase)")
             }
             
             if let addressKeychain = addressKeychain {
-                let hasAddress = (try? addressKeychain.get(Keys.currentAddress)) != nil
+                let userID = getCurrentUserID()
+                let hasAddress = (try? addressKeychain.get(Keys.currentAddress(for: userID))) != nil
                 results.append("   📍 Has cached address: \(hasAddress)")
             }
             
             if let backupKeychain = backupKeychain {
-                let hasBackup = (try? backupKeychain.get(Keys.encryptedMnemonicBackup)) != nil
+                let userID = getCurrentUserID()
+                let hasBackup = (try? backupKeychain.get(Keys.encryptedMnemonicBackup(for: userID))) != nil
                 results.append("   💾 Has encrypted backup: \(hasBackup)")
             }
             
@@ -822,7 +900,8 @@ final class BitcoinWalletService {
                     // Clear cached address since we have a new wallet
                     currentBitcoinAddress = nil
                     if let addressKeychain = addressKeychain {
-                        try? addressKeychain.remove(Keys.currentAddress)
+                        let userID = getCurrentUserID()
+                        try? addressKeychain.remove(Keys.currentAddress(for: userID))
                         print("   🗑️ Cleared cached address from keychain")
                     }
                 } catch {
@@ -851,7 +930,10 @@ final class BitcoinWalletService {
         
         // CRITICAL: Check if seed already exists - NEVER overwrite
         do {
-            if let existingSeed = try keychain.get(Keys.mnemonic) {
+            let userID = getCurrentUserID()
+            // Check user-specific key first, then legacy for migration
+            let existingSeed = try keychain.get(Keys.mnemonic(for: userID)) ?? keychain.get(Keys.legacyMnemonic)
+            if let existingSeed = existingSeed {
                 print("🚫 [BitcoinWalletService] SEED ALREADY EXISTS - WILL NOT CREATE NEW WALLET")
                 print("🔄 [BitcoinWalletService] Recovering from existing seed instead...")
                 
@@ -892,7 +974,8 @@ final class BitcoinWalletService {
                 
                 // Store recovered seed in local keychain
                 do {
-                    try keychain.set(recoveredSeed, key: Keys.mnemonic)
+                    let userID = getCurrentUserID()
+                    try keychain.set(recoveredSeed, key: Keys.mnemonic(for: userID))
                     print("   ✅ Recovered seed stored in local keychain")
                     
                     // Continue with wallet creation using recovered seed
@@ -933,15 +1016,17 @@ final class BitcoinWalletService {
 
             print("🔐 [BitcoinWalletService] Storing NEW mnemonic to keychain...")
             
+            let userID = getCurrentUserID()
+            
             // Double-check we're not overwriting
-            if try keychain.contains(Keys.mnemonic) {
-                print("🚫 [BitcoinWalletService] CRITICAL: Seed already exists! Aborting creation.")
+            if try keychain.contains(Keys.mnemonic(for: userID)) {
+                print("🚫 [BitcoinWalletService] CRITICAL: Seed already exists for user \(userID)! Aborting creation.")
                 throw WalletError.walletCorrupted
             }
             
-            // Store ONLY the mnemonic to keychain
-            print("🔐 [BitcoinWalletService] Storing mnemonic to LOCAL keychain...")
-            try keychain.set(mnemonic.description, key: Keys.mnemonic)
+            // Store ONLY the mnemonic to keychain with user-specific key
+            print("🔐 [BitcoinWalletService] Storing mnemonic to LOCAL keychain for user: \(userID)...")
+            try keychain.set(mnemonic.description, key: Keys.mnemonic(for: userID))
             print("   ✅ NEW mnemonic stored successfully to LOCAL keychain.")
 
             // Create encrypted backup immediately using device encryption
@@ -955,11 +1040,11 @@ final class BitcoinWalletService {
                     print("   ❌ Backup keychain not available")
                     throw WalletError.keychainAccessFailed
                 }
-                try backupKeychain.set(encryptedBackup, key: Keys.encryptedMnemonicBackup)
-                print("   ✅ Encrypted backup stored in iCloud keychain")
+                try backupKeychain.set(encryptedBackup, key: Keys.encryptedMnemonicBackup(for: userID))
+                print("   ✅ Encrypted backup stored in iCloud keychain for user: \(userID)")
                 
                 // Verify it was stored
-                if let stored = try? backupKeychain.get(Keys.encryptedMnemonicBackup) {
+                if let stored = try? backupKeychain.get(Keys.encryptedMnemonicBackup(for: userID)) {
                     print("   ✅ Backup verified: \(stored.count) chars stored")
                 } else {
                     print("   ⚠️ Could not verify backup was stored")
@@ -1012,7 +1097,8 @@ final class BitcoinWalletService {
                 
                 // Store the new address
                 if let newAddress = currentBitcoinAddress {
-                    try? addressKeychain.set(newAddress, key: Keys.currentAddress)
+                    let userID = getCurrentUserID()
+                    try? addressKeychain.set(newAddress, key: Keys.currentAddress(for: userID))
                     print("💾 [BitcoinWalletService] Stored new address in cache")
                 }
             }
@@ -1039,7 +1125,8 @@ final class BitcoinWalletService {
         
         print("💾 [BitcoinWalletService] Saving address to keychain (NO Face ID required)...")
         do {
-            try addressKeychain.set(address, key: Keys.currentAddress)
+            let userID = getCurrentUserID()
+            try addressKeychain.set(address, key: Keys.currentAddress(for: userID))
             print("✅ [BitcoinWalletService] Address saved to keychain WITHOUT biometric protection: \(address)")
         } catch let error as NSError {
             print("❌ [BitcoinWalletService] Failed to save address to keychain: \(error)")
@@ -1060,7 +1147,9 @@ final class BitcoinWalletService {
         
         print("📖 [BitcoinWalletService] Loading address from keychain (NO Face ID required)...")
         do {
-            let address = try addressKeychain.get(Keys.currentAddress)
+            let userID = getCurrentUserID()
+            // Try user-specific key first, then legacy
+            let address = try addressKeychain.get(Keys.currentAddress(for: userID)) ?? addressKeychain.get(Keys.legacyCurrentAddress)
             if let address = address {
                 print("✅ [BitcoinWalletService] Address loaded from keychain WITHOUT biometric auth: \(address)")
             } else {
@@ -1092,7 +1181,8 @@ final class BitcoinWalletService {
         }
         print("🔐 [BitcoinWalletService] 🚨 FACE ID TRIGGER #5 - verifyMnemonicStored() called...")
         do {
-            let value = try keychain.get(Keys.mnemonic)
+            let userID = getCurrentUserID()
+            let value = try keychain.get(Keys.mnemonic(for: userID))
             if let value = value {
                 print("✅ [BitcoinWalletService] Mnemonic verified in keychain (length: \(value.count))")
             } else {
@@ -1328,7 +1418,8 @@ final class BitcoinWalletService {
         do {
             // Get mnemonic from secure keychain (requires Face ID)
             print("🔐 [BitcoinWalletService] Requesting mnemonic from keychain (biometrics required)...")
-            mnemonic = try keychain.get(Keys.mnemonic)
+            let userID = getCurrentUserID()
+            mnemonic = try keychain.get(Keys.mnemonic(for: userID))
             
             print("✅ [BitcoinWalletService] Retrieved mnemonic from keychain")
             print("   📝 Mnemonic: \(mnemonic != nil ? "Found (\(mnemonic!.count) chars)" : "Not found")")
@@ -1336,7 +1427,8 @@ final class BitcoinWalletService {
             // Get cached address from address keychain (NO Face ID required)
             if let addressKeychain = addressKeychain {
                 print("📖 [BitcoinWalletService] Loading cached address (no biometrics)...")
-                cachedAddress = try? addressKeychain.get(Keys.currentAddress)
+                let userID = getCurrentUserID()
+                cachedAddress = try? addressKeychain.get(Keys.currentAddress(for: userID))
                 print("   📝 Cached address: \(cachedAddress ?? "Not found")")
             }
             
@@ -1417,7 +1509,8 @@ final class BitcoinWalletService {
         }
 
         do {
-            guard let encryptedBackup = try backupKeychain.get(Keys.encryptedMnemonicBackup) else {
+            let userID = getCurrentUserID()
+            guard let encryptedBackup = try backupKeychain.get(Keys.encryptedMnemonicBackup(for: userID)) else {
                 let message = "   ℹ️ No encrypted backup found in iCloud Keychain."
                 print(message)
                 return message
@@ -1476,7 +1569,8 @@ final class BitcoinWalletService {
         
         do {
             // 3. Get current seed phrase
-            guard let seedPhrase = try keychain.get(Keys.mnemonic) else {
+            let userID = getCurrentUserID()
+            guard let seedPhrase = try keychain.get(Keys.mnemonic(for: userID)) else {
                 let msg = "❌ No seed phrase found in local keychain"
                 debugInfo.append("\n" + msg)
                 print(msg)
@@ -1504,16 +1598,16 @@ final class BitcoinWalletService {
             // 5. CRITICAL: Detailed keychain storage attempt
             debugInfo.append("\n💾 KEYCHAIN STORAGE ATTEMPT:")
             debugInfo.append("   Target service: com.nuri.bitcoin-wallet.backup")
-            debugInfo.append("   Target key: \(Keys.encryptedMnemonicBackup)")
+            debugInfo.append("   Target key: \(Keys.encryptedMnemonicBackup(for: userID))")
             debugInfo.append("   Data to store: \(encryptedBackup.count) chars")
             print("💾 Attempting keychain storage...")
             print("   Service: com.nuri.bitcoin-wallet.backup")
-            print("   Key: \(Keys.encryptedMnemonicBackup)")
+            print("   Key: \(Keys.encryptedMnemonicBackup(for: userID))")
             print("   Data length: \(encryptedBackup.count)")
             
             // Try to store with detailed error handling
             do {
-                try backupKeychain.set(encryptedBackup, key: Keys.encryptedMnemonicBackup)
+                try backupKeychain.set(encryptedBackup, key: Keys.encryptedMnemonicBackup(for: userID))
                 debugInfo.append("   ✅ backupKeychain.set() call completed without error")
                 print("   ✅ backupKeychain.set() completed")
             } catch let error as NSError {
@@ -1533,7 +1627,7 @@ final class BitcoinWalletService {
             print("🔍 Immediate verification...")
             
             do {
-                if let storedData = try backupKeychain.get(Keys.encryptedMnemonicBackup) {
+                if let storedData = try backupKeychain.get(Keys.encryptedMnemonicBackup(for: userID)) {
                     debugInfo.append("   ✅ Data found in keychain!")
                     debugInfo.append("   📝 Stored length: \(storedData.count) characters")
                     debugInfo.append("   📝 Stored preview: \(storedData.prefix(50))...")
@@ -1597,14 +1691,15 @@ final class BitcoinWalletService {
             
             // Store the resulting encrypted string in our separate, iCloud backup keychain.
             print("   💾 Storing encrypted backup to iCloud backup keychain...")
-            try backupKeychain.set(encryptedSeed, key: Keys.encryptedMnemonicBackup)
+            let userID = getCurrentUserID()
+            try backupKeychain.set(encryptedSeed, key: Keys.encryptedMnemonicBackup(for: userID))
             print("   ✅ Encrypted backup stored in iCloud backup keychain.")
-            print("      🔑 Item key: \(Keys.encryptedMnemonicBackup)")
+            print("      🔑 Item key: \(Keys.encryptedMnemonicBackup(for: userID))")
             print("      📍 Service: com.nuri.bitcoin-wallet.backup")
             print("      ☁️ Sync enabled: true (for backup/restore)")
             
             // Verify it was stored
-            if let stored = try? backupKeychain.get(Keys.encryptedMnemonicBackup) {
+            if let stored = try? backupKeychain.get(Keys.encryptedMnemonicBackup(for: userID)) {
                 print("   ✅ Verified: Backup successfully stored (\(stored.count) chars)")
             } else {
                 print("   ⚠️ Warning: Could not verify backup was stored")
@@ -1639,7 +1734,8 @@ final class BitcoinWalletService {
         }
         
         do {
-            if let _ = try backupKeychain.get(Keys.encryptedMnemonicBackup) {
+            let userID = getCurrentUserID()
+            if let _ = try backupKeychain.get(Keys.encryptedMnemonicBackup(for: userID)) {
                 print("   ✅ Encrypted backup found in iCloud Keychain.")
                 return
             }
@@ -1662,7 +1758,8 @@ final class BitcoinWalletService {
         }
         
         do {
-            if let _ = try backupKeychain.get(Keys.encryptedMnemonicBackup) {
+            let userID = getCurrentUserID()
+            if let _ = try backupKeychain.get(Keys.encryptedMnemonicBackup(for: userID)) {
                 print("   ✅ Encrypted backup found in iCloud Keychain.")
             } else {
                 print("   ℹ️ No encrypted backup found in iCloud Keychain.")
@@ -1733,16 +1830,17 @@ final class BitcoinWalletService {
         }
         
         do {
-            // Store new seed in local keychain
-            try keychain.set(newSeedPhrase, key: Keys.mnemonic)
-            results.append("   ✅ New seed stored in local keychain")
-            print("✅ [BitcoinWalletService] New seed stored in local keychain")
+            let userID = getCurrentUserID()
+            // Store new seed in local keychain with user-specific key
+            try keychain.set(newSeedPhrase, key: Keys.mnemonic(for: userID))
+            results.append("   ✅ New seed stored in local keychain for user: \(userID)")
+            print("✅ [BitcoinWalletService] New seed stored in local keychain for user: \(userID)")
             
             // Create encrypted backup immediately
             let encryptedBackup = try DeviceEncryptionService.shared.encrypt(data: newSeedPhrase)
             
             if let backupKeychain = backupKeychain {
-                try backupKeychain.set(encryptedBackup, key: Keys.encryptedMnemonicBackup)
+                try backupKeychain.set(encryptedBackup, key: Keys.encryptedMnemonicBackup(for: userID))
                 results.append("   ✅ Encrypted backup created in iCloud keychain")
                 print("✅ [BitcoinWalletService] Encrypted backup created")
             } else {
@@ -1849,7 +1947,8 @@ final class BitcoinWalletService {
             }
             
             do {
-                try keychain.set(recoveredSeed, key: Keys.mnemonic)
+                let userID = getCurrentUserID()
+                try keychain.set(recoveredSeed, key: Keys.mnemonic(for: userID))
                 results.append("   ✅ Restored seed stored in local keychain")
                 
                 // Create wallet from restored seed
@@ -1965,7 +2064,8 @@ final class BitcoinWalletService {
 
         do {
             // 1. Try to fetch the encrypted backup from iCloud Keychain.
-            guard let encryptedBackup = try backupKeychain.get(Keys.encryptedMnemonicBackup) else {
+            let userID = getCurrentUserID()
+            guard let encryptedBackup = try backupKeychain.get(Keys.encryptedMnemonicBackup(for: userID)) else {
                 print("   ℹ️ No encrypted backup found in iCloud Keychain.")
                 print("   🤔 This is normal for a wallet created before this feature was added.")
                 // If no backup exists, create one now for this existing wallet.
@@ -2025,7 +2125,8 @@ final class BitcoinWalletService {
         // 2. Check if encrypted wallet backup exists in iCloud
         if let backupKeychain = backupKeychain {
             do {
-                if let _ = try backupKeychain.get(Keys.encryptedMnemonicBackup) {
+                let userID = getCurrentUserID()
+                if let _ = try backupKeychain.get(Keys.encryptedMnemonicBackup(for: userID)) {
                     hasWalletBackup = true
                 }
             } catch {
@@ -2067,8 +2168,9 @@ final class BitcoinWalletService {
         // 4. Verify we can decrypt the wallet backup
         if hasLocalKey && hasWalletBackup {
             do {
+                let userID = getCurrentUserID()
                 if let backupKeychain = backupKeychain,
-                   let encryptedBackup = try backupKeychain.get(Keys.encryptedMnemonicBackup) {
+                   let encryptedBackup = try backupKeychain.get(Keys.encryptedMnemonicBackup(for: userID)) {
                     // Try to decrypt
                     let _ = try DeviceEncryptionService.shared.decrypt(encryptedBase64: encryptedBackup)
                     canDecrypt = true

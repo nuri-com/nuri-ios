@@ -150,6 +150,12 @@ public struct AmountEntryScreen: View {
     // MARK: Helpers
     private func secondaryDisplayText() -> String {
         guard !amountText.isEmpty else { return "" }
+        
+        // Guard against invalid exchange rate
+        guard exchangeRate > 0 else {
+            return isPrimaryCrypto ? "€ --" : "₿ --"
+        }
+        
         if isPrimaryCrypto {
             // When crypto is primary, we need to check which symbol we're actually showing
             if secondarySymbol == "₿" {
@@ -167,10 +173,17 @@ public struct AmountEntryScreen: View {
             // Showing EUR, convert to sats
             if secondarySymbol == "₿" {
                 let sats = (amountValue / exchangeRate) * 100_000_000
+                // Protect against NaN/Infinity before converting to Int
+                if sats.isNaN || sats.isInfinite {
+                    return "₿ --"
+                }
                 return "₿ " + String(Int(round(sats)))
             } else {
                 // EUR to BTC
                 let btcValue = amountValue / exchangeRate
+                if btcValue.isNaN || btcValue.isInfinite {
+                    return secondarySymbol + " --"
+                }
                 return secondarySymbol + " " + String(format: "%.8f", btcValue)
             }
         }
@@ -179,27 +192,41 @@ public struct AmountEntryScreen: View {
     private func toggleCurrency() {
         let current = amountValue
         
+        // Guard against invalid exchange rate
+        guard exchangeRate > 0 else {
+            // Can't toggle without valid exchange rate
+            return
+        }
+        
         if isPrimaryCrypto { // Switching from Crypto to Fiat
             if secondarySymbol == "₿" {
                 // We're showing ₿ as primary, so current is in SATOSHIS
                 // Converting from sats to EUR
                 let btcValue = current / 100_000_000
                 let eurValue = btcValue * exchangeRate
-                amountText = String(Int(round(eurValue)))
+                if !eurValue.isNaN && !eurValue.isInfinite {
+                    amountText = String(Int(round(eurValue)))
+                }
             } else {
                 // Converting from BTC to EUR
                 let eurValue = current * exchangeRate
-                amountText = String(Int(round(eurValue)))
+                if !eurValue.isNaN && !eurValue.isInfinite {
+                    amountText = String(Int(round(eurValue)))
+                }
             }
         } else { // Switching from Fiat (EUR) to Crypto (sats)
             if secondarySymbol == "₿" {
                 // Converting from EUR to sats
                 let satsValue = (current / exchangeRate) * 100_000_000
-                amountText = String(Int(round(satsValue)))
+                if !satsValue.isNaN && !satsValue.isInfinite {
+                    amountText = String(Int(round(satsValue)))
+                }
             } else {
                 // Converting from EUR to BTC
                 let btcValue = current / exchangeRate
-                amountText = String(Int(round(btcValue)))
+                if !btcValue.isNaN && !btcValue.isInfinite {
+                    amountText = String(Int(round(btcValue)))
+                }
             }
         }
         isPrimaryCrypto.toggle()

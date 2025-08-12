@@ -71,12 +71,173 @@ class StrigaCardCreationService: CardCreationServiceProtocol {
     func createCard(name: String, userId: String) async throws -> CardCreationResult {
         print("[StrigaCardCreation] Creating card for user: \(userId)")
         
-        // Create ONE wallet for the user (this is the ONLY place we create a wallet)
-        let walletResponse = try await striga.createWallet(.init(
-            userId: userId
-        ))
+        var walletId: String = ""
+        var linkedAccountId: String = ""
         
-        print("[StrigaCardCreation] Wallet created: \(walletResponse.walletId)")
+        // Try to get existing wallets first
+        do {
+            print("[StrigaCardCreation] Checking for existing wallets...")
+            let walletsResponse = try await striga.getWallets(userId: userId)
+            print("[StrigaCardCreation] Found \(walletsResponse.wallets.count) wallet(s)")
+            
+            // Check if any wallet already has a valid card
+            for wallet in walletsResponse.wallets {
+                let hasValidCard = [
+                    wallet.accounts.eur?.linkedCardId,
+                    wallet.accounts.btc?.linkedCardId,
+                    wallet.accounts.eth?.linkedCardId,
+                    wallet.accounts.usdc?.linkedCardId,
+                    wallet.accounts.usdt?.linkedCardId
+                ].contains { cardId in
+                    cardId != nil && cardId != "UNLINKED" && !cardId!.isEmpty
+                }
+                
+                if hasValidCard {
+                    print("[StrigaCardCreation] ⚠️ Wallet \(wallet.walletId) already has a card - skipping card creation")
+                    // Don't create another card - just return the existing one
+                    if let eurCardId = wallet.accounts.eur?.linkedCardId,
+                       eurCardId != "UNLINKED" && !eurCardId.isEmpty {
+                        return CardCreationResult(id: eurCardId, parentWalletId: wallet.walletId)
+                    }
+                }
+            }
+            
+            // Find a wallet without a card, or use the first wallet
+            let walletWithoutCard = walletsResponse.wallets.first { wallet in
+                let cardIds = [
+                    wallet.accounts.eur?.linkedCardId,
+                    wallet.accounts.btc?.linkedCardId,
+                    wallet.accounts.eth?.linkedCardId,
+                    wallet.accounts.usdc?.linkedCardId,
+                    wallet.accounts.usdt?.linkedCardId
+                ].compactMap { $0 }
+                
+                // Check if all card IDs are either empty or "UNLINKED"
+                return cardIds.allSatisfy { $0 == "UNLINKED" || $0.isEmpty }
+            }
+            
+            if let existingWallet = walletWithoutCard ?? walletsResponse.wallets.first {
+                // Use existing wallet (preferring one without a card)
+                print("[StrigaCardCreation] Using wallet: \(existingWallet.walletId)")
+                walletId = existingWallet.walletId
+                
+                // Get full wallet details to access accounts
+                let walletDetails = try await striga.getWallet(
+                    walletId,
+                    userId: userId
+                )
+                
+                // Enrich BTC account if not already enriched
+                if let btcAccount = walletDetails.accounts.btc {
+                    if !btcAccount.enriched {
+                        print("[StrigaCardCreation] BTC account needs enrichment for blockchain address")
+                        do {
+                            let btcEnrichResult = try await striga.enrichAccount(.init(
+                                accountId: btcAccount.accountId,
+                                userId: userId
+                            ))
+                            if let btcAddress = btcEnrichResult.blockchainDepositAddress {
+                                print("[StrigaCardCreation] ✅ BTC address generated: \(btcAddress.prefix(10))...")
+                            }
+                        } catch {
+                            print("[StrigaCardCreation] ⚠️ Failed to enrich BTC account: \(error)")
+                            // Not critical for card creation, but important for receiving BTC
+                        }
+                    } else {
+                        print("[StrigaCardCreation] BTC account already enriched")
+                    }
+                }
+                
+                // Check if EUR account needs enrichment
+                if let eurAccount = walletDetails.accounts.eur {
+                    if !eurAccount.enriched {
+                        print("[StrigaCardCreation] EUR account needs enrichment (no IBAN yet)")
+                        print("[StrigaCardCreation] Enriching EUR account: \(eurAccount.accountId)")
+                        do {
+                            let enrichResult = try await striga.enrichAccount(.init(
+                                accountId: eurAccount.accountId,
+                                userId: userId
+                            ))
+                            print("[StrigaCardCreation] ✅ EUR account enriched successfully")
+                            if let iban = enrichResult.iban {
+                                print("[StrigaCardCreation] IBAN: \(iban)")
+                            }
+                        } catch {
+                            print("[StrigaCardCreation] ❌ Failed to enrich EUR account: \(error)")
+                            // This is critical - without IBAN, user can't receive EUR
+                            throw NSError(domain: "StrigaCardCreation", code: 3,
+                                        userInfo: [NSLocalizedDescriptionKey: "Failed to enrich EUR account with IBAN: \(error)"])
+                        }
+                    } else {
+                        print("[StrigaCardCreation] EUR account already enriched")
+                    }
+                    linkedAccountId = eurAccount.accountId
+                } else {
+                    throw NSError(domain: "StrigaCardCreation", code: 1, 
+                                userInfo: [NSLocalizedDescriptionKey: "Existing wallet has no EUR account"])
+                }
+            } else {
+                // No wallets found, create a new one
+                print("[StrigaCardCreation] No wallets found, creating new wallet...")
+                throw NSError(domain: "StrigaCardCreation", code: 2, 
+                            userInfo: [NSLocalizedDescriptionKey: "No wallets - will create"])
+            }
+        } catch {
+            // If getWallets fails or no wallets exist, create a new wallet
+            print("[StrigaCardCreation] Error or no wallets: \(error)")
+            print("[StrigaCardCreation] Creating new wallet...")
+            
+            let walletResponse = try await striga.createWallet(.init(
+                userId: userId,
+                accountCurrency: ["EUR", "BTC"]
+            ))
+            walletId = walletResponse.walletId
+            print("[StrigaCardCreation] Wallet created: \(walletId)")
+            
+            // Enrich BTC account first to get blockchain address
+            if let btcAccount = walletResponse.accounts.btc {
+                print("[StrigaCardCreation] Enriching BTC account for blockchain address...")
+                do {
+                    let btcEnrichResult = try await striga.enrichAccount(.init(
+                        accountId: btcAccount.accountId,
+                        userId: userId
+                    ))
+                    if let btcAddress = btcEnrichResult.blockchainDepositAddress {
+                        print("[StrigaCardCreation] ✅ BTC address generated: \(btcAddress.prefix(10))...")
+                    }
+                } catch {
+                    print("[StrigaCardCreation] ⚠️ Failed to enrich BTC account: \(error)")
+                    // Not critical - BTC enrichment can be retried later
+                }
+            }
+            
+            // Enrich EUR account for new wallet - CRITICAL for receiving EUR from swaps
+            if let eurAccount = walletResponse.accounts.eur {
+                print("[StrigaCardCreation] New wallet created - EUR account needs enrichment for IBAN")
+                print("[StrigaCardCreation] Enriching EUR account: \(eurAccount.accountId)")
+                do {
+                    let enrichResult = try await striga.enrichAccount(.init(
+                        accountId: eurAccount.accountId,
+                        userId: userId
+                    ))
+                    print("[StrigaCardCreation] ✅ EUR account enriched successfully")
+                    if let iban = enrichResult.iban {
+                        print("[StrigaCardCreation] IBAN generated: \(iban)")
+                    } else {
+                        print("[StrigaCardCreation] ⚠️ Enrichment succeeded but no IBAN returned")
+                    }
+                    linkedAccountId = eurAccount.accountId
+                } catch {
+                    print("[StrigaCardCreation] ❌ Failed to enrich EUR account: \(error)")
+                    // This is critical - without IBAN, user can't receive EUR from BTC swaps
+                    throw NSError(domain: "StrigaCardCreation", code: 4,
+                                userInfo: [NSLocalizedDescriptionKey: "Failed to enrich EUR account with IBAN for new wallet: \(error)"])
+                }
+            } else {
+                throw NSError(domain: "StrigaCardCreation", code: 5,
+                            userInfo: [NSLocalizedDescriptionKey: "New wallet has no EUR account - critical error"])
+            }
+        }
         
         // Generate a secure password for 3D Secure
         let password = generateSecurePassword()
@@ -85,13 +246,16 @@ class StrigaCardCreationService: CardCreationServiceProtocol {
         print("[StrigaCardCreation] Creating card with:")
         print("[StrigaCardCreation] - Name: \(name)")
         print("[StrigaCardCreation] - User ID: \(userId)")
-        print("[StrigaCardCreation] - Parent Wallet ID: \(walletResponse.walletId)")
+        print("[StrigaCardCreation] - Parent Wallet ID: \(walletId)")
+        print("[StrigaCardCreation] - Linked Account ID: \(linkedAccountId)")
         print("[StrigaCardCreation] - Type: VIRTUAL")
         
         let cardResponse = try await striga.createCard(.init(
-            nameOnCard: name,
             userId: userId,
-            parentWalletId: walletResponse.walletId,
+            linkedAccountId: linkedAccountId,
+            name: name,
+            nameOnCard: name,
+            parentWalletId: walletId,
             type: "VIRTUAL",
             threeDSecurePassword: password
         ))
@@ -100,7 +264,7 @@ class StrigaCardCreationService: CardCreationServiceProtocol {
         
         return CardCreationResult(
             id: cardResponse.id,
-            parentWalletId: walletResponse.walletId
+            parentWalletId: walletId
         )
     }
     

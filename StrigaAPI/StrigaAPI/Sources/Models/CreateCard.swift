@@ -1,14 +1,18 @@
 public struct CreateCard: Encodable {
-    public let nameOnCard: String
     public let userId: String
-    public let parentWalletId: String
+    public let linkedAccountId: String
+    public let name: String?
+    public let nameOnCard: String?
+    public let parentWalletId: String?
     public let address: Address?
     public let type: String
-    public let threeDSecurePassword: String
+    public let threeDSecurePassword: String?
 
-    public init(nameOnCard: String, userId: String, parentWalletId: String, address: CreateCard.Address? = nil, type: String, threeDSecurePassword: String) {
-        self.nameOnCard = nameOnCard
+    public init(userId: String, linkedAccountId: String, name: String? = nil, nameOnCard: String? = nil, parentWalletId: String? = nil, address: CreateCard.Address? = nil, type: String, threeDSecurePassword: String? = nil) {
         self.userId = userId
+        self.linkedAccountId = linkedAccountId
+        self.name = name ?? nameOnCard
+        self.nameOnCard = nameOnCard ?? name
         self.parentWalletId = parentWalletId
         self.address = address
         self.type = type

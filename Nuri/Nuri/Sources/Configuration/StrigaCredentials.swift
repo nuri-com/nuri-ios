@@ -5,7 +5,7 @@ import StrigaAPI
 enum StrigaCredentials {
     /// Sandbox configuration with all necessary credentials
     static let sandbox = StrigaConfiguration(
-        url: "https://www.sandbox.striga.com/api/",
+        url: "https://www.sandbox.striga.com/api",
         key: "_TbS1cXGStMmYBJtcoYSA7we2lQUky_6TMo-aGLvWJM=",
         secret: "43jBa65VEoLC5O4O48pDruayz5Q43IlhgyGbkYPcMHE=",
         uiSecret: "N8UziFzjqP616Rk3+6uRGe1nDJ3TOxnUZzWrqadQalw=",

@@ -8,18 +8,39 @@ public struct CardResponse: Decodable {
     public let maskedCardNumber: String
     public let expiryData: String
     public let status: String
-    public let address: Address
+    public let address: Address?
     public let isEnrolledFor3dSecure: Bool
-    public let isCard3dSecureActivated: Bool
-    public let security: Security
-    public let activatedAt: String
+    public let isCard3dSecureActivated: Bool?
+    public let security: Security?
+    public let activatedAt: String?
     public let linkedAccountId: String
     public let parentWalletId: String
     public let linkedAccountCurrency: String
-    public let lastLinkedAccountId: String
+    public let lastLinkedAccountId: String?
     public let createdAt: String
-    public let limits: Limits
-    public let blockType: String
+    public let limits: Limits?
+    public let blockType: String?
+    
+    // Computed properties to extract month/year from expiryData
+    public var expiryMonth: Int {
+        // Parse "2027-08-31T23:59:59Z" to get month
+        let dateFormatter = ISO8601DateFormatter()
+        if let date = dateFormatter.date(from: expiryData) {
+            let calendar = Calendar.current
+            return calendar.component(.month, from: date)
+        }
+        return 1  // Default January if parsing fails
+    }
+    
+    public var expiryYear: Int {
+        // Parse "2027-08-31T23:59:59Z" to get year
+        let dateFormatter = ISO8601DateFormatter()
+        if let date = dateFormatter.date(from: expiryData) {
+            let calendar = Calendar.current
+            return calendar.component(.year, from: date)
+        }
+        return 2027  // Default if parsing fails
+    }
 
     public struct Address: Decodable {
         public let addressLine1: String

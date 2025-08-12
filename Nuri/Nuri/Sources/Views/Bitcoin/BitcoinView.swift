@@ -19,6 +19,8 @@ struct BitcoinView: View {
     @State private var exchangeRate: Double = 0.0
     @State private var exchangeRateTimer: Timer?
     @State private var showStrigaDebug = false
+    @State private var refreshTask: Task<Void, Never>?
+    @State private var isRefreshingPrice = false
     
     // Cache key for exchange rate
     private let exchangeRateCacheKey = "nuri.exchangeRate.eur"
@@ -109,10 +111,17 @@ struct BitcoinView: View {
             print("⏰ [BitcoinView] Exchange rate timer stopped")
         }
         .task {
-            print("🔄 [BitcoinView] Starting refresh task...")
-            // The WalletStateManager already handles initial balance fetch
-            // Just refresh exchange rate here
-            await refreshExchangeRate()
+            // Cancel any existing refresh task
+            refreshTask?.cancel()
+            
+            // Start new refresh task
+            refreshTask = Task {
+                print("🔄 [BitcoinView] Starting refresh task...")
+                // Only refresh if not already refreshing
+                if !isRefreshingPrice {
+                    await refreshExchangeRate()
+                }
+            }
         }
         .alert("Wallet Recovery", isPresented: $showWalletRecoveryAlert) {
             Button("Retry") {
@@ -363,6 +372,22 @@ struct BitcoinView: View {
 
     // MARK: - Exchange Rate
     private func refreshExchangeRate() async {
+        // Prevent concurrent refreshes
+        guard !isRefreshingPrice else {
+            print("💱 [BitcoinView] Already refreshing price, skipping...")
+            return
+        }
+        
+        await MainActor.run {
+            isRefreshingPrice = true
+        }
+        
+        defer {
+            Task { @MainActor in
+                isRefreshingPrice = false
+            }
+        }
+        
         print("💱 [BitcoinView] Refreshing exchange rate...")
         if let price = await fetchPrice() {
             await MainActor.run {

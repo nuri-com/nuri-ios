@@ -308,30 +308,55 @@ struct CardViewActive: View {
     }
     
     private func loadCardData() {
+        print("\n" + String(repeating: "=", count: 60))
+        print("🚀 [CardViewActive] LOADING CARD DATA")
+        print(String(repeating: "-", count: 60))
+        
         // Load basic card info (non-sensitive)
         if let name = StrigaSession.shared.name {
             cardHolderName = name
+            print("✅ Loaded name from session: \(name)")
+        } else {
+            print("⚠️ No name in session")
         }
         
+        // Check UserSettings
+        let settings = UserSettings()
+        print("\n📊 UserSettings state:")
+        print("  • userId: \(settings.strigaUserId ?? "nil")")
+        print("  • cardId: \(settings.strigaCardId ?? "nil")")
+        print("  • walletId: \(settings.strigaWalletId ?? "nil")")
+        
         // Store IDs in session for later use
-        if let userId = UserSettings().strigaUserId {
+        if let userId = settings.strigaUserId {
             StrigaSession.shared.userId = userId
-            print("[CardView] Loaded userId: \(userId)")
+            print("✅ Set session userId: \(userId)")
+        } else {
+            print("❌ No userId in UserSettings!")
         }
-        if let cardId = UserSettings().strigaCardId {
-            StrigaSession.shared.cardId = cardId
-            print("[CardView] Loaded cardId: \(cardId)")
-            
-            // Check if we have a mock card ID and need to create a real card
-            if cardId == "mock-card-id" {
-                print("[CardView] WARNING: Found mock card ID, clearing it to trigger real card creation")
-                UserSettings().strigaCardId = nil
+        
+        if let cardId = settings.strigaCardId {
+            // Check for invalid card IDs before setting them
+            if cardId == "UNLINKED" || cardId == "mock-card-id" || cardId.isEmpty {
+                print("❌ Found invalid card ID '\(cardId)', clearing it")
+                var mutableSettings = UserSettings()
+                mutableSettings.strigaCardId = nil
                 StrigaSession.shared.cardId = nil
                 // This will trigger the NoCardView which can create a real card
+            } else {
+                StrigaSession.shared.cardId = cardId
+                print("✅ Set session cardId: \(cardId)")
             }
         } else {
-            print("[CardView] WARNING: No card ID found in UserSettings")
+            print("⚠️ No card ID in UserSettings - user needs to create card")
+            StrigaSession.shared.cardId = nil
         }
+        
+        print("\n🔐 Final StrigaSession state:")
+        print("  • userId: \(StrigaSession.shared.userId ?? "nil")")
+        print("  • cardId: \(StrigaSession.shared.cardId ?? "nil")")
+        print("  • name: \(StrigaSession.shared.name ?? "nil")")
+        print(String(repeating: "=", count: 60) + "\n")
         
         // Don't set default balance here - let fetchCardAndWalletDetails handle it
         // Card frozen state will be set from API response
@@ -346,17 +371,48 @@ struct CardViewActive: View {
             }
             
             do {
-                // Get user and card IDs
-                guard let userId = StrigaSession.shared.userId ?? UserSettings().strigaUserId,
-                      let cardId = StrigaSession.shared.cardId ?? UserSettings().strigaCardId else {
-                    print("❌ [CardViewActive] Missing user or card ID")
+                // Get user and card IDs with detailed logging
+                let sessionUserId = StrigaSession.shared.userId
+                let settingsUserId = UserSettings().strigaUserId
+                let sessionCardId = StrigaSession.shared.cardId
+                let settingsCardId = UserSettings().strigaCardId
+                
+                print("\n🔍 [CardViewActive] Checking IDs:")
+                print("  Session userId: \(sessionUserId ?? "nil")")
+                print("  Settings userId: \(settingsUserId ?? "nil")")
+                print("  Session cardId: \(sessionCardId ?? "nil")")
+                print("  Settings cardId: \(settingsCardId ?? "nil")")
+                
+                guard let userId = sessionUserId ?? settingsUserId,
+                      let cardId = sessionCardId ?? settingsCardId else {
+                    print("❌ [CardViewActive] Missing required IDs:")
+                    print("  Final userId: \(sessionUserId ?? settingsUserId ?? "nil")")
+                    print("  Final cardId: \(sessionCardId ?? settingsCardId ?? "nil")")
+                    DebugLogger.shared.logDataState(.cardViewActive)
                     await MainActor.run {
                         isRefreshing = false
                     }
                     return
                 }
                 
-                print("🔄 [CardViewActive] Fetching card and wallet details...")
+                // Check for invalid card IDs
+                if cardId == "UNLINKED" || cardId == "mock-card-id" || cardId.isEmpty {
+                    print("❌ [CardViewActive] Invalid card ID: '\(cardId)' - clearing it")
+                    await MainActor.run {
+                        var settings = UserSettings()
+                        settings.strigaCardId = nil
+                        StrigaSession.shared.cardId = nil
+                        isRefreshing = false
+                        
+                        // Stop the auto-refresh timer to prevent endless loop
+                        self.refreshTimer?.invalidate()
+                        self.refreshTimer = nil
+                        print("⏰ [CardViewActive] Auto-refresh timer stopped due to invalid card ID")
+                    }
+                    return
+                }
+                
+                print("🔄 [CardViewActive:fetchCardAndWalletDetails:359] Fetching card and wallet details...")
                 
                 // Fetch card details to get masked number and expiry
                 let cardResponse = try await striga.getCard(.init(
@@ -413,12 +469,12 @@ struct CardViewActive: View {
                             let walletResponse = try await striga.getWallet(cardResponse.parentWalletId, userId: userId)
                             await processWalletResponseFromCreateWallet(walletResponse, userId: userId)
                         } catch {
-                            print("❌ [CardViewActive] Failed to fetch wallet details: \(error)")
+                            print("❌ [CardViewActive:fetchCardAndWalletDetails:416] Failed to fetch wallet details: \(error)")
                         }
                     }
                 }
             } catch {
-                print("❌ [CardViewActive] Error loading card data: \(error)")
+                print("❌ [CardViewActive:fetchCardAndWalletDetails:421] Error loading card data: \(error)")
                 await MainActor.run {
                     isRefreshing = false
                 }
@@ -641,6 +697,19 @@ struct CardViewActive: View {
     private func startAutoRefresh() {
         // Stop any existing timer
         stopAutoRefresh()
+        
+        // Only start auto-refresh if we have both user ID and card ID
+        let userId = StrigaSession.shared.userId ?? UserSettings().strigaUserId
+        let cardId = StrigaSession.shared.cardId ?? UserSettings().strigaCardId
+        
+        guard let userId = userId, !userId.isEmpty,
+              let cardId = cardId, !cardId.isEmpty,
+              cardId != "UNLINKED" else {
+            print("⏰ [CardViewActive] Not starting auto-refresh - missing or invalid IDs")
+            print("   userId: \(userId ?? "nil")")
+            print("   cardId: \(cardId ?? "nil")")
+            return
+        }
         
         // Start new timer - refresh every 5 seconds for faster BTC detection
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { _ in

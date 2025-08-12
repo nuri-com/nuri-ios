@@ -209,7 +209,7 @@ struct WelcomeView: View {
                 
                 Spacer()
                 
-                // Login button using NuriButton component
+                // Create Bitcoin Wallet button using NuriButton component
                 Button(action: {
                     Task {
                         await loginOrCreateAccount()
@@ -222,7 +222,7 @@ struct WelcomeView: View {
                     } else {
                         NuriButton(
                             icon: "passkey",
-                            title: "Login",
+                            title: "Create Bitcoin Wallet",
                             style: .primary
                         )
                     }
@@ -260,21 +260,58 @@ struct WelcomeView: View {
                 throw NSError(domain: "PasskeyError", code: 3, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
             }
             
-            // First check if a passkey exists for this email
             let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
-            print("[WelcomeView] Checking for existing passkeys for email: \(trimmedEmail)")
-            let passkeys = try await PasskeyAuthenticationService.shared.getUserPasskeys(for: trimmedEmail)
-            print("[WelcomeView] Found \(passkeys.count) passkeys for this email")
+            print("[WelcomeView] Create Bitcoin Wallet clicked for email: \(trimmedEmail)")
             
-            if !passkeys.isEmpty {
+            // The passkey server doesn't have a getUserPasskeys endpoint
+            // Instead, we check if registration options returns excludeCredentials
+            // If it does, the user already exists
+            var passkeysExist = false
+            do {
+                print("[WelcomeView] ============================================")
+                print("[WelcomeView] CHECKING FOR EXISTING USER")
+                print("[WelcomeView] Email to check: \(trimmedEmail)")
+                print("[WelcomeView] ============================================")
+                
+                // Try to get registration options - this will tell us if user exists
+                let registrationOptions = try await PasskeyAuthenticationService.shared.checkUserExists(username: trimmedEmail)
+                
+                print("[WelcomeView] Registration options response:")
+                print("[WelcomeView]   - Has exclude credentials: \(registrationOptions.hasExistingCredentials)")
+                print("[WelcomeView]   - Existing credential count: \(registrationOptions.existingCredentialCount)")
+                
+                passkeysExist = registrationOptions.hasExistingCredentials
+                print("[WelcomeView] Decision: \(passkeysExist ? "USER EXISTS - will LOGIN" : "NEW USER - will CREATE")")
+                print("[WelcomeView] ============================================")
+                
+            } catch {
+                // If the API call fails, we need to understand why
+                print("[WelcomeView] ============================================")
+                print("[WelcomeView] ERROR CHECKING FOR EXISTING USER")
+                print("[WelcomeView] Error type: \(type(of: error))")
+                print("[WelcomeView] Error: \(error)")
+                print("[WelcomeView] Error localized: \(error.localizedDescription)")
+                
+                // Check if it's a 404 (user doesn't exist) vs actual error
+                if let urlError = error as? URLError {
+                    print("[WelcomeView] URL Error code: \(urlError.code)")
+                }
+                
+                print("[WelcomeView] ASSUMING NEW USER - will attempt CREATE")
+                print("[WelcomeView] ============================================")
+                passkeysExist = false
+            }
+            
+            if passkeysExist {
                 // Passkey exists, authenticate with it
-                print("[WelcomeView] Authenticating with existing passkey...")
+                print("[WelcomeView] Passkeys exist, authenticating with existing passkey...")
                 let result = try await PasskeyAuthenticationService.shared.authenticateWithPasskey(
                     username: trimmedEmail,
                     presentationAnchor: window
                 )
                 
                 if result.verified {
+                    print("[WelcomeView] Successfully authenticated with existing passkey")
                     // Store the email
                     UserDefaults.standard.set(trimmedEmail, forKey: "passkeyUserEmail")
                     
@@ -290,26 +327,69 @@ struct WelcomeView: View {
                 }
             } else {
                 // No passkey exists, create new account
-                print("[WelcomeView] No passkey found, creating new account...")
-                let result = try await PasskeyAuthenticationService.shared.createPasskey(
-                    username: trimmedEmail,
-                    presentationAnchor: window
-                )
+                print("[WelcomeView] No passkey found, attempting to create new account...")
+                print("[WelcomeView] ============================================")
+                print("[WelcomeView] ATTEMPTING PASSKEY CREATION")
+                print("[WelcomeView] Username: \(trimmedEmail)")
                 
-                if result.verified {
-                    // Store email in UserDefaults
-                    UserDefaults.standard.set(trimmedEmail, forKey: "passkeyUserEmail")
+                do {
+                    let result = try await PasskeyAuthenticationService.shared.createPasskey(
+                        username: trimmedEmail,
+                        presentationAnchor: window
+                    )
                     
-                    // Successfully created and authenticated
-                    self.isUserLoggedIn = true
+                    print("[WelcomeView] Create passkey result:")
+                    print("[WelcomeView]   - Verified: \(result.verified)")
+                    print("[WelcomeView]   - Username: \(result.username ?? "nil")")
                     
-                    // For new accounts, no Striga ID will exist yet
-                    // but we still check in case this email was used before
-                    Task {
-                        await syncStrigaIdFromPasskeyServer(username: result.username ?? trimmedEmail)
+                    if result.verified {
+                        print("[WelcomeView] ✅ Successfully created new passkey and user")
+                        // Store email in UserDefaults
+                        UserDefaults.standard.set(trimmedEmail, forKey: "passkeyUserEmail")
+                        
+                        // Successfully created and authenticated
+                        self.isUserLoggedIn = true
+                        
+                        // For new accounts, no Striga ID will exist yet
+                        // but we still check in case this email was used before
+                        Task {
+                            await syncStrigaIdFromPasskeyServer(username: result.username ?? trimmedEmail)
+                        }
+                    } else {
+                        print("[WelcomeView] ❌ Passkey creation failed - not verified")
+                        throw NSError(domain: "PasskeyError", code: 4, userInfo: [NSLocalizedDescriptionKey: "Server error"])
                     }
-                } else {
-                    throw NSError(domain: "PasskeyError", code: 4, userInfo: [NSLocalizedDescriptionKey: "Server error"])
+                } catch {
+                    print("[WelcomeView] ❌ PASSKEY CREATION FAILED")
+                    print("[WelcomeView] Error: \(error)")
+                    print("[WelcomeView] This might mean the username already exists!")
+                    print("[WelcomeView] ============================================")
+                    
+                    // If creation fails, it might be because the user already exists
+                    // Let's try to authenticate instead
+                    print("[WelcomeView] Attempting fallback authentication...")
+                    do {
+                        let authResult = try await PasskeyAuthenticationService.shared.authenticateWithPasskey(
+                            username: trimmedEmail,
+                            presentationAnchor: window
+                        )
+                        
+                        if authResult.verified {
+                            print("[WelcomeView] ✅ Fallback authentication successful!")
+                            UserDefaults.standard.set(trimmedEmail, forKey: "passkeyUserEmail")
+                            self.isUserLoggedIn = true
+                            
+                            Task {
+                                await syncStrigaIdFromPasskeyServer(username: authResult.username ?? trimmedEmail)
+                            }
+                        } else {
+                            throw error
+                        }
+                    } catch {
+                        // Both creation and authentication failed
+                        print("[WelcomeView] ❌ Both creation and authentication failed")
+                        throw error
+                    }
                 }
             }
         } catch {

@@ -14,12 +14,54 @@ class StrigaSyncService {
     /// - Parameter userId: The Striga user ID to sync data for
     /// - Returns: True if sync was successful, false otherwise
     func syncUserData(userId: String) async -> Bool {
-        print("[StrigaSyncService] Starting sync for user: \(userId)")
+        print("[StrigaSyncService:syncUserData:17] Starting sync for user: \(userId)")
         
         // Clear any old cached data first to prevent conflicts
         clearCachedData()
         
         do {
+            // Try to get user details, but don't fail if it doesn't work
+            var userResponse: GetUserResponse? = nil
+            do {
+                let getUserInput = GetUser(userId: userId)
+                userResponse = try await StrigaService.shared.getUser(getUserInput)
+                print("[StrigaSyncService] User KYC Status: \(userResponse!.KYC.status)")
+                
+                // IMPORTANT: Do NOT overwrite names after KYC
+                // In sandbox, KYC returns test names that would override the user's actual input
+                // We only set names if they're not already in the session
+                
+                if StrigaSession.shared.firstName == nil || StrigaSession.shared.firstName?.isEmpty == true {
+                    StrigaSession.shared.firstName = userResponse!.firstName
+                    print("[StrigaSyncService] Set firstName from API: \(userResponse!.firstName)")
+                } else {
+                    print("[StrigaSyncService] Keeping existing firstName: \(StrigaSession.shared.firstName ?? "")")
+                    if userResponse!.firstName != StrigaSession.shared.firstName {
+                        print("[StrigaSyncService] WARNING: API returned different firstName: '\(userResponse!.firstName)' vs stored: '\(StrigaSession.shared.firstName ?? "")'")
+                    }
+                }
+                
+                if StrigaSession.shared.lastName == nil || StrigaSession.shared.lastName?.isEmpty == true {
+                    StrigaSession.shared.lastName = userResponse!.lastName
+                    print("[StrigaSyncService] Set lastName from API: \(userResponse!.lastName)")
+                } else {
+                    print("[StrigaSyncService] Keeping existing lastName: \(StrigaSession.shared.lastName ?? "")")
+                    if userResponse!.lastName != StrigaSession.shared.lastName {
+                        print("[StrigaSyncService] WARNING: API returned different lastName: '\(userResponse!.lastName)' vs stored: '\(StrigaSession.shared.lastName ?? "")'")
+                    }
+                }
+                
+                // Update combined name only if needed
+                if StrigaSession.shared.name == nil || StrigaSession.shared.name?.isEmpty == true {
+                    let firstName = StrigaSession.shared.firstName ?? userResponse!.firstName
+                    let lastName = StrigaSession.shared.lastName ?? userResponse!.lastName
+                    StrigaSession.shared.name = "\(firstName) \(lastName)"
+                    print("[StrigaSyncService] Set combined name: \(StrigaSession.shared.name ?? "")")
+                }
+            } catch {
+                print("[StrigaSyncService:syncUserData:31] Failed to get user details: \(error)")
+                print("[StrigaSyncService:syncUserData:32] Continuing with sync anyway...")
+            }
             // Store the user ID
             var settings = UserSettings()
             settings.strigaUserId = userId
@@ -27,10 +69,20 @@ class StrigaSyncService {
             
             // Fetch user's wallets
             let walletsResponse = try await StrigaService.shared.getWallets(userId: userId)
-            print("[StrigaSyncService] Found \(walletsResponse.wallets.count) wallet(s) for user")
+            print("[StrigaSyncService:syncUserData:42] Found \(walletsResponse.wallets.count) wallet(s) for user")
             
             guard let firstWallet = walletsResponse.wallets.first else {
-                print("[StrigaSyncService] No wallets found for user")
+                print("[StrigaSyncService:syncUserData:45] No wallets found for user")
+                
+                // If user has approved KYC but no wallets, this is an error state
+                // The NuriApp should handle creating wallets/cards
+                if userResponse?.KYC.status == "APPROVED" {
+                    print("[StrigaSyncService] WARNING: KYC approved user has no wallets!")
+                    print("[StrigaSyncService] This should be handled by automatic creation flow")
+                } else if userResponse == nil {
+                    print("[StrigaSyncService] Could not verify KYC status, but user has no wallets")
+                }
+                
                 return false
             }
             
@@ -110,7 +162,7 @@ class StrigaSyncService {
             return true
             
         } catch {
-            print("[StrigaSyncService] ❌ Sync failed: \(error)")
+            print("[StrigaSyncService:syncUserData:124] ❌ Sync failed: \(error)")
             return false
         }
     }

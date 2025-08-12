@@ -37,10 +37,13 @@ final class WalletStateManager: ObservableObject {
     private let walletService = BitcoinWalletService.shared
     private var syncTimer: Timer?
     private var pendingTransactions: Set<String> = []
+    private var lastBalanceSyncTime: Date?
+    private var isSyncInProgress = false
     
     // MARK: - Configuration
     private let backgroundSyncInterval: TimeInterval = 300 // 5 minutes (was 30 seconds)
     private let maxCacheAge: TimeInterval = 900 // 15 minutes
+    private let minimumSyncInterval: TimeInterval = 10 // Minimum 10 seconds between syncs
     
     // MARK: - Persistent Cache Keys
     private enum CacheKeys {
@@ -336,6 +339,25 @@ final class WalletStateManager: ObservableObject {
     // MARK: - Private Methods
     
     private func syncBalance() async {
+        // Check if we're already syncing
+        guard !isSyncInProgress else {
+            print("🔄 [WalletStateManager] Sync already in progress, skipping balance sync")
+            return
+        }
+        
+        // Check minimum sync interval
+        if let lastSync = lastBalanceSyncTime,
+           Date().timeIntervalSince(lastSync) < minimumSyncInterval {
+            print("🔄 [WalletStateManager] Too soon since last sync (\(Date().timeIntervalSince(lastSync))s), skipping")
+            return
+        }
+        
+        isSyncInProgress = true
+        defer {
+            isSyncInProgress = false
+            lastBalanceSyncTime = Date()
+        }
+        
         print("🔄 [WalletStateManager] Starting balance sync...")
         print("🔄 [WalletStateManager] Current balance: \(balance.confirmed) confirmed, \(balance.pending) pending")
         print("🔄 [WalletStateManager] Pending transactions: \(pendingTransactions.count)")
@@ -540,6 +562,38 @@ final class WalletStateManager: ObservableObject {
         }
         
         do {
+            // Try Blockstream authenticated API first
+            if BlockstreamAPIClient.useAuthentication {
+                do {
+                    let blockstreamFees = try await BlockstreamAPIClient.shared.getFeeEstimates()
+                    print("📡 [WalletStateManager] Received fee rates from Blockstream (authenticated):")
+                    
+                    var newFeeRates = FeeRates()
+                    newFeeRates.fastestFee = UInt64(blockstreamFees.fastestFee)
+                    newFeeRates.halfHourFee = UInt64(blockstreamFees.halfHourFee)
+                    newFeeRates.hourFee = UInt64(blockstreamFees.hourFee)
+                    newFeeRates.economyFee = UInt64(blockstreamFees.economyFee)
+                    newFeeRates.minimumFee = 1
+                    newFeeRates.lastUpdated = Date()
+                    
+                    print("⚡ [WalletStateManager] ✅ Fee rates from Blockstream:")
+                    print("⚡ [WalletStateManager]   Fastest: \(newFeeRates.fastestFee) sat/vB")
+                    print("⚡ [WalletStateManager]   Half-hour: \(newFeeRates.halfHourFee) sat/vB")
+                    
+                    DispatchQueue.main.async {
+                        self.feeRates = newFeeRates
+                        self.syncError = nil
+                        self.isSyncing = false
+                    }
+                    
+                    persistFeeRates(newFeeRates)
+                    return
+                } catch {
+                    print("⚠️ [WalletStateManager] Blockstream API failed, falling back to mempool.space: \(error)")
+                }
+            }
+            
+            // Fallback to mempool.space
             let url = URL(string: "https://mempool.space/api/v1/fees/recommended")!
             let (data, _) = try await URLSession.shared.data(from: url)
             

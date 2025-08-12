@@ -36,14 +36,21 @@ struct NoCardView: View {
             VStack(spacing: 0) {
                 NuriCardIllustration()
                     .padding(.bottom, 24)
-                NuriTitleWithSubtitle(title: "Nuri Card for Apple Pay", subtitle: "")
+                NuriTitleWithSubtitle(
+                    title: "Nuri Card for Apple Pay",
+                    subtitle: UserSettings().strigaUserId == nil ? "Create your account to get started" : ""
+                )
                 featureList()
                     .padding(.top, -6)
                     .padding(.bottom, 24)
                 Button(action: {
                     navigation.isPresented = true
                 }) {
-                    NuriButton(icon: "card_contactless", title: "Get Card", style: .primary)
+                    NuriButton(
+                        icon: "card_contactless",
+                        title: UserSettings().strigaUserId == nil ? "Create Account" : "Get Card",
+                        style: .primary
+                    )
                 }
             }
             .padding(.top, 30)

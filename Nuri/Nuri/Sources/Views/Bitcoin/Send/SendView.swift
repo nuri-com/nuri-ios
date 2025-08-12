@@ -101,24 +101,37 @@ private struct QRScannerView: UIViewControllerRepresentable {
 
         override func viewDidLoad() {
             super.viewDidLoad()
-            guard let device = AVCaptureDevice.default(for: .video),
-                  let input = try? AVCaptureDeviceInput(device: device) else {
-                onScan?(.failure(NSError(domain: "camera", code: -1, userInfo: [NSLocalizedDescriptionKey: "Camera not available"])))
-                return
+            
+            // Configure session on background queue to avoid blocking main thread
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                guard let self = self else { return }
+                
+                guard let device = AVCaptureDevice.default(for: .video),
+                      let input = try? AVCaptureDeviceInput(device: device) else {
+                    DispatchQueue.main.async {
+                        self.onScan?(.failure(NSError(domain: "camera", code: -1, userInfo: [NSLocalizedDescriptionKey: "Camera not available"])))
+                    }
+                    return
+                }
+                
+                self.session.addInput(input)
+                
+                let output = AVCaptureMetadataOutput()
+                self.session.addOutput(output)
+                output.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
+                output.metadataObjectTypes = [.qr]
+                
+                // UI updates must be on main thread
+                DispatchQueue.main.async {
+                    let preview = AVCaptureVideoPreviewLayer(session: self.session)
+                    preview.videoGravity = .resizeAspectFill
+                    preview.frame = self.view.bounds
+                    self.view.layer.addSublayer(preview)
+                }
+                
+                // Start session on background thread
+                self.session.startRunning()
             }
-            session.addInput(input)
-
-            let output = AVCaptureMetadataOutput()
-            session.addOutput(output)
-            output.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
-            output.metadataObjectTypes = [.qr]
-
-            let preview = AVCaptureVideoPreviewLayer(session: session)
-            preview.videoGravity = .resizeAspectFill
-            preview.frame = view.bounds
-            view.layer.addSublayer(preview)
-
-            session.startRunning()
         }
 
         func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {

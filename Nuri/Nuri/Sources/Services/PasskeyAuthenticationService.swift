@@ -1303,6 +1303,82 @@ final class PasskeyAuthenticationService: NSObject {
         }
     }
     
+    // MARK: - Check User Exists
+    
+    struct UserExistsResult {
+        let hasExistingCredentials: Bool
+        let existingCredentialCount: Int
+    }
+    
+    func checkUserExists(username: String) async throws -> UserExistsResult {
+        // The passkey server doesn't have a direct getUserPasskeys endpoint
+        // But we can check if a user exists by looking at the registration options
+        // If excludeCredentials is not empty, the user exists
+        
+        guard var urlComponents = URLComponents(string: "\(baseURL)/generate-registration-options") else {
+            throw PasskeyError.invalidURL
+        }
+        
+        urlComponents.queryItems = [URLQueryItem(name: "username", value: username)]
+        
+        guard let url = urlComponents.url else {
+            throw PasskeyError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        Log.passkey.info("Checking if user exists via registration options", metadata: ["username": username])
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            Log.passkey.error("Failed to check user existence", metadata: [
+                "status": (response as? HTTPURLResponse)?.statusCode ?? -1
+            ])
+            throw PasskeyError.serverError
+        }
+        
+        // Parse just the excludeCredentials field
+        if let json = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any],
+           let excludeCredentials = json["excludeCredentials"] as? [[String: Any]] {
+            
+            let credentialCount = excludeCredentials.count
+            let hasCredentials = credentialCount > 0
+            
+            Log.passkey.info("User existence check result", metadata: [
+                "username": username,
+                "hasCredentials": hasCredentials,
+                "credentialCount": credentialCount
+            ])
+            
+            if hasCredentials {
+                // Log the credential IDs for debugging
+                for (index, cred) in excludeCredentials.enumerated() {
+                    if let credId = cred["id"] as? String {
+                        Log.passkey.debug("Excluded credential \(index + 1)", metadata: [
+                            "id": String(credId.prefix(20)) + "..."
+                        ])
+                    }
+                }
+            }
+            
+            return UserExistsResult(
+                hasExistingCredentials: hasCredentials,
+                existingCredentialCount: credentialCount
+            )
+        } else {
+            // If we can't parse, assume no credentials
+            Log.passkey.warning("Could not parse excludeCredentials from registration options")
+            return UserExistsResult(
+                hasExistingCredentials: false,
+                existingCredentialCount: 0
+            )
+        }
+    }
+    
     // MARK: - Helper Methods
     
     private func performAuthorization(controller: ASAuthorizationController) async throws -> ASAuthorization {

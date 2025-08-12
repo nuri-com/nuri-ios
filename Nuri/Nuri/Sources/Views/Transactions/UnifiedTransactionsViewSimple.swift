@@ -107,13 +107,17 @@ struct UnifiedTransactionsViewSimple: View {
     
     private func loadStrigaTransactions() async {
         do {
-            guard let userId = StrigaSession.shared.userId ?? UserSettings().strigaUserId,
-                  let cardId = StrigaSession.shared.cardId ?? UserSettings().strigaCardId else {
-                print("❌ ERROR [UnifiedTransactions] Missing user or card ID")
+            guard let userId = StrigaSession.shared.userId ?? UserSettings().strigaUserId else {
+                print("ℹ️ [UnifiedTransactions] No Striga user ID - showing Bitcoin transactions only")
                 return
             }
             
-            print("🔄 Loading Striga transactions...")
+            guard let cardId = StrigaSession.shared.cardId ?? UserSettings().strigaCardId else {
+                print("ℹ️ [UnifiedTransactions] No Striga card ID - showing Bitcoin transactions only")
+                return
+            }
+            
+            print("🔄 Loading Striga transactions for user: \(userId), card: \(cardId)")
             
             var strigaTx: [UnifiedTransaction] = []
             
@@ -161,7 +165,7 @@ struct UnifiedTransactionsViewSimple: View {
                         strigaTx.append(unifiedTx)
                     }
                 } catch {
-                    print("❌ ERROR [UnifiedTransactions] Failed fetching \(currency) transactions:")
+                    print("⚠️ [UnifiedTransactions] Could not fetch \(currency) transactions:")
                     print("   Account: \(account.accountId)")
                     print("   Error: \(error.localizedDescription)")
                     // Continue silently - don't break the whole view
@@ -178,7 +182,8 @@ struct UnifiedTransactionsViewSimple: View {
             }
             
         } catch {
-            print("❌ ERROR [UnifiedTransactions] Failed loading Striga transactions: \(error)")
+            print("⚠️ [UnifiedTransactions] Could not load Striga transactions: \(error.localizedDescription)")
+            // Not a critical error - user can still see Bitcoin transactions
         }
     }
     
@@ -268,7 +273,7 @@ private struct TransactionRowSimple: View {
                 
                 Text(transaction.displayDate)
                     .foregroundColor(Color(hex: "#6D6D86"))
-                    .font(.custom("Inter", size: 14).weight(.medium))
+                    .font(.custom("Inter", size: 15).weight(.regular))
                     .tracking(-0.25)
             }
             
