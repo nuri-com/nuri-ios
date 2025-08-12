@@ -1,8 +1,12 @@
 name: Test
 
 on:
+  push:
+    branches:
+      - develop
   pull_request:
-    branches: [ main, develop ]
+    branches:
+      - "**"
 
 env:
   DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
