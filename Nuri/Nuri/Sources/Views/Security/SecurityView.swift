@@ -188,7 +188,7 @@ struct SecurityView: View {
                     
                     // Debug actions
                     Button(action: resetStrigaState) {
-                        Label("Reset Striga Card State", systemImage: "creditcard.slash")
+                        Label("Reset Striga Card State", systemImage: "xmark.circle")
                             .foregroundColor(.orange)
                     }
                     .padding(.top, 8)

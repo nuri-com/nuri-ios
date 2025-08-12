@@ -388,179 +388,237 @@ struct CardViewActive: View {
                         print("🔍 [CardViewActive] Fetching user's wallets...")
                         let walletsResponse = try await striga.getWallets(userId: userId)
                         print("📊 [CardViewActive] Found \(walletsResponse.wallets.count) wallet(s)")
-                        for (index, wallet) in walletsResponse.wallets.enumerated() {
-                            print("  Wallet \(index + 1): \(wallet.walletId)")
-                            print("    - Created: \(wallet.createdAt)")
-                            print("    - Balance: \(wallet.walletBalance)")
-                            print("    - EUR account: \(wallet.accounts.eur?.accountId ?? "none")")
-                            print("    - BTC account: \(wallet.accounts.btc?.accountId ?? "none")")
+                        
+                        // Find the wallet that matches the card's parent wallet ID
+                        guard let walletResponse = walletsResponse.wallets.first(where: { $0.walletId == cardResponse.parentWalletId }) else {
+                            print("❌ [CardViewActive] Card's parent wallet not found in user's wallets")
+                            // Try to get the specific wallet details as fallback
+                            let walletResponse = try await striga.getWallet(cardResponse.parentWalletId, userId: userId)
+                            await processWalletResponseFromCreateWallet(walletResponse, userId: userId)
+                            return
                         }
+                        
+                        print("✅ [CardViewActive] Found matching wallet: \(walletResponse.walletId)")
+                        print("    - Created: \(walletResponse.createdAt)")
+                        print("    - Balance: \(walletResponse.walletBalance)")
+                        print("    - EUR account: \(walletResponse.accounts.eur?.accountId ?? "none")")
+                        print("    - BTC account: \(walletResponse.accounts.btc?.accountId ?? "none")")
+                        
+                        // Process the wallet response
+                        await processWalletResponse(walletResponse, userId: userId)
                     } catch {
-                        print("⚠️ [CardViewActive] Could not fetch all wallets: \(error)")
-                    }
-                    
-                    let walletResponse = try await striga.getWallet(cardResponse.parentWalletId, userId: userId)
-                    
-                    // Debug: Print the entire wallet response to see what fields are available
-                    print("📊 [CardViewActive] Card's wallet response:")
-                    if let jsonData = try? JSONEncoder().encode(walletResponse),
-                       let jsonString = String(data: jsonData, encoding: .utf8) {
-                        print(jsonString)
-                    }
-                    
-                    await MainActor.run {
-                        // Update wallet balance from EUR account
-                        if let eurAccount = walletResponse.accounts.eur {
-                            // Log all balance fields for debugging
-                            print("💰 [CardViewActive] EUR Account Balance Details:")
-                            print("  - amount (smallest unit): \(eurAccount.availableBalance.amount)")
-                            print("  - hAmount (human readable): \(eurAccount.availableBalance.hAmount)")
-                            print("  - currency: \(eurAccount.availableBalance.currency)")
-                            
-                            // Use hAmount if available (human-readable format)
-                            if !eurAccount.availableBalance.hAmount.isEmpty {
-                                // Remove any currency symbol if present in hAmount
-                                let cleanAmount = eurAccount.availableBalance.hAmount
-                                    .replacingOccurrences(of: "€", with: "")
-                                    .replacingOccurrences(of: "EUR", with: "")
-                                    .trimmingCharacters(in: .whitespaces)
-                                self.walletBalance = cleanAmount
-                                print("✅ [CardViewActive] Using hAmount for balance: \(self.walletBalance)")
-                            } else {
-                                // Fallback to parsing amount (in smallest unit - cents for EUR)
-                                let amount = eurAccount.availableBalance.amount
-                                if let cents = Double(amount) {
-                                    let euros = cents / 100.0
-                                    self.walletBalance = String(format: "%.2f", euros)
-                                    print("✅ [CardViewActive] Converted cents to euros: \(self.walletBalance)")
-                                }
-                            }
-                            
-                            // Extract IBAN details if available
-                            if let bankingDetails = eurAccount.bankingDetails {
-                                self.iban = bankingDetails.iban
-                                self.bic = bankingDetails.bic
-                                self.accountHolderName = bankingDetails.accountHolderName
-                                print("🏦 [CardViewActive] IBAN details loaded:")
-                                print("  - IBAN: \(self.iban)")
-                                print("  - BIC: \(self.bic)")
-                                print("  - Name: \(self.accountHolderName)")
-                            }
-                        } else {
-                            print("⚠️ [CardViewActive] No EUR account found in wallet")
-                            self.walletBalance = "0.00"
-                        }
-                        
-                        // Get Bitcoin account from the wallet
-                        print("🔍 [CardViewActive] Getting blockchain addresses from wallet response...")
-                        
-                        // Check BTC account
-                        if let btcAccount = walletResponse.accounts.btc {
-                            print("💰 [CardViewActive] Bitcoin account found:")
-                            print("  - Account ID: \(btcAccount.accountId)")
-                            print("  - Enriched: \(btcAccount.enriched)")
-                            print("  - BTC Balance: \(btcAccount.availableBalance.amount) \(btcAccount.availableBalance.currency)")
-                            
-                            // Check if address is already in the response
-                            if let btcAddress = btcAccount.blockchainDepositAddress {
-                                self.btcAddress = btcAddress
-                                print("✅ [CardViewActive] Bitcoin address from wallet: \(btcAddress)")
-                            } else if btcAccount.enriched {
-                                // Account says it's enriched but no address, try enriching again
-                                Task {
-                                    do {
-                                        print("🔄 [CardViewActive] Re-enriching BTC account ID: \(btcAccount.accountId)")
-                                        let enrichResponse = try await self.striga.enrichAccount(
-                                            EnrichAccount(accountId: btcAccount.accountId, userId: userId)
-                                        )
-                                        print("✅ [CardViewActive] BTC account enriched successfully")
-                                        
-                                        await MainActor.run {
-                                            if let btcAddress = enrichResponse.blockchainDepositAddress {
-                                                self.btcAddress = btcAddress
-                                                print("✅ [CardViewActive] Bitcoin address found: \(btcAddress)")
-                                            } else if let networks = enrichResponse.blockchainNetworks, !networks.isEmpty {
-                                                self.btcAddress = networks[0].blockchainDepositAddress
-                                                print("✅ [CardViewActive] Bitcoin address from network: \(self.btcAddress)")
-                                            } else {
-                                                print("⚠️ [CardViewActive] No BTC address in enrich response")
-                                                // Keep the default address instead of showing account ID
-                                            }
-                                        }
-                                    } catch {
-                                        print("❌ [CardViewActive] Error enriching BTC: \(error)")
-                                        // Keep the default address instead of showing account ID
-                                    }
-                                }
-                            } else {
-                                // Not enriched, need to enrich
-                                Task {
-                                    do {
-                                        print("🔄 [CardViewActive] Enriching BTC account ID: \(btcAccount.accountId)")
-                                        let enrichResponse = try await self.striga.enrichAccount(
-                                            EnrichAccount(accountId: btcAccount.accountId, userId: userId)
-                                        )
-                                        print("✅ [CardViewActive] BTC account enriched successfully")
-                                        
-                                        await MainActor.run {
-                                            if let btcAddress = enrichResponse.blockchainDepositAddress {
-                                                self.btcAddress = btcAddress
-                                                print("✅ [CardViewActive] Bitcoin address found: \(btcAddress)")
-                                            } else if let networks = enrichResponse.blockchainNetworks, !networks.isEmpty {
-                                                self.btcAddress = networks[0].blockchainDepositAddress
-                                                print("✅ [CardViewActive] Bitcoin address from network: \(self.btcAddress)")
-                                            } else {
-                                                print("⚠️ [CardViewActive] No BTC address in enrich response")
-                                                // Keep the default address instead of showing account ID
-                                            }
-                                        }
-                                    } catch {
-                                        print("❌ [CardViewActive] Error enriching BTC: \(error)")
-                                        // Keep the default address instead of showing account ID
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Check ETH account (optional - for debugging)
-                        if let ethAccount = walletResponse.accounts.eth {
-                            if let ethAddress = ethAccount.blockchainDepositAddress {
-                                print("💰 [CardViewActive] ETH address from wallet: \(ethAddress)")
-                            }
-                        }
-                        
-                        // Check BTC balance and auto-convert if needed
-                        if let btcAccount = walletResponse.accounts.btc {
-                            let btcAmount = btcAccount.availableBalance.amount
-                            if btcAmount != "0" && !btcAmount.isEmpty {
-                                print("💱 [CardViewActive] Found \(btcAmount) sats - initiating auto-conversion to EUR")
-                                self.autoConvertBTCtoEUR(
-                                    btcAmount: btcAmount,
-                                    btcAccountId: btcAccount.accountId,
-                                    eurAccountId: walletResponse.accounts.eur?.accountId ?? ""
-                                )
-                            }
-                        } else {
-                            // No BTC account
-                            print("⚠️ [CardViewActive] No Bitcoin account found in wallet")
-                            self.btcAddress = "No BTC wallet"
+                        print("⚠️ [CardViewActive] Could not fetch wallets: \(error)")
+                        // Fallback: try to get specific wallet
+                        do {
+                            let walletResponse = try await striga.getWallet(cardResponse.parentWalletId, userId: userId)
+                            await processWalletResponseFromCreateWallet(walletResponse, userId: userId)
+                        } catch {
+                            print("❌ [CardViewActive] Failed to fetch wallet details: \(error)")
                         }
                     }
                 }
-                
-                await MainActor.run {
-                    isRefreshing = false
-                }
-                
-                print("✅ [CardViewActive] Successfully fetched card and wallet details")
-                
             } catch {
-                print("❌ [CardViewActive] Error fetching card/wallet details: \(error)")
+                print("❌ [CardViewActive] Error loading card data: \(error)")
                 await MainActor.run {
                     isRefreshing = false
-                    // Keep existing balance on error
-                    if walletBalance.isEmpty {
-                        walletBalance = "0.00"
+                }
+            }
+        }
+    }
+    
+    private func processWalletResponse(_ walletResponse: GetWalletsResponse.Wallet, userId: String) async {
+        await MainActor.run {
+            // Update wallet balance from EUR account
+            if let eurAccount = walletResponse.accounts.eur {
+                // Log all balance fields for debugging
+                print("💰 [CardViewActive] EUR Account Balance Details:")
+                print("  - amount (smallest unit): \(eurAccount.availableBalance.amount)")
+                print("  - hAmount (human readable): \(eurAccount.availableBalance.hAmount)")
+                print("  - currency: \(eurAccount.availableBalance.currency)")
+                
+                // Use hAmount if available (human-readable format)
+                if !eurAccount.availableBalance.hAmount.isEmpty {
+                    // Remove any currency symbol if present in hAmount
+                    let cleanAmount = eurAccount.availableBalance.hAmount
+                        .replacingOccurrences(of: "€", with: "")
+                        .replacingOccurrences(of: "EUR", with: "")
+                        .trimmingCharacters(in: .whitespaces)
+                    self.walletBalance = cleanAmount
+                    print("✅ [CardViewActive] Using hAmount for balance: \(self.walletBalance)")
+                } else {
+                    // Fallback to parsing amount (in smallest unit - cents for EUR)
+                    let amount = eurAccount.availableBalance.amount
+                    if let cents = Double(amount) {
+                        let euros = cents / 100.0
+                        self.walletBalance = String(format: "%.2f", euros)
+                        print("✅ [CardViewActive] Converted cents to euros: \(self.walletBalance)")
+                    }
+                }
+                
+                // Extract IBAN details if available
+                if let bankingDetails = eurAccount.bankingDetails {
+                    self.iban = bankingDetails.iban
+                    self.bic = bankingDetails.bic
+                    self.accountHolderName = bankingDetails.accountHolderName
+                    print("🏦 [CardViewActive] IBAN details loaded:")
+                    print("  - IBAN: \(self.iban)")
+                    print("  - BIC: \(self.bic)")
+                    print("  - Name: \(self.accountHolderName)")
+                }
+            } else {
+                print("⚠️ [CardViewActive] No EUR account found in wallet")
+                self.walletBalance = "0.00"
+            }
+            
+            // Get Bitcoin account from the wallet
+            print("🔍 [CardViewActive] Getting blockchain addresses from wallet response...")
+            
+            // Check BTC account
+            if let btcAccount = walletResponse.accounts.btc {
+                print("💰 [CardViewActive] Bitcoin account found:")
+                print("  - Account ID: \(btcAccount.accountId)")
+                print("  - Enriched: \(btcAccount.enriched)")
+                print("  - BTC Balance: \(btcAccount.availableBalance.amount) \(btcAccount.availableBalance.currency)")
+                
+                // Check if address is already in the response
+                if let btcAddress = btcAccount.blockchainDepositAddress {
+                    self.btcAddress = btcAddress
+                    print("✅ [CardViewActive] Bitcoin address from wallet: \(btcAddress)")
+                } else if btcAccount.enriched {
+                    // Account says it's enriched but no address, try enriching again
+                    Task {
+                        do {
+                            print("🔄 [CardViewActive] Re-enriching BTC account ID: \(btcAccount.accountId)")
+                            let enrichResponse = try await self.striga.enrichAccount(
+                                EnrichAccount(accountId: btcAccount.accountId, userId: userId)
+                            )
+                            print("✅ [CardViewActive] BTC account enriched successfully")
+                            
+                            await MainActor.run {
+                                if let btcAddress = enrichResponse.blockchainDepositAddress {
+                                    self.btcAddress = btcAddress
+                                    print("✅ [CardViewActive] Bitcoin address found: \(btcAddress)")
+                                } else if let networks = enrichResponse.blockchainNetworks, !networks.isEmpty {
+                                    self.btcAddress = networks[0].blockchainDepositAddress
+                                    print("✅ [CardViewActive] Bitcoin address from network: \(self.btcAddress)")
+                                } else {
+                                    print("⚠️ [CardViewActive] No BTC address in enrich response")
+                                    // Keep the default address instead of showing account ID
+                                }
+                            }
+                        } catch {
+                            print("❌ [CardViewActive] Error enriching BTC: \(error)")
+                            // Keep the default address instead of showing account ID
+                        }
+                    }
+                } else {
+                    // Not enriched, need to enrich
+                    Task {
+                        do {
+                            print("🔄 [CardViewActive] Enriching BTC account ID: \(btcAccount.accountId)")
+                            let enrichResponse = try await self.striga.enrichAccount(
+                                EnrichAccount(accountId: btcAccount.accountId, userId: userId)
+                            )
+                            print("✅ [CardViewActive] BTC account enriched successfully")
+                            
+                            await MainActor.run {
+                                if let btcAddress = enrichResponse.blockchainDepositAddress {
+                                    self.btcAddress = btcAddress
+                                    print("✅ [CardViewActive] Bitcoin address found: \(btcAddress)")
+                                } else if let networks = enrichResponse.blockchainNetworks, !networks.isEmpty {
+                                    self.btcAddress = networks[0].blockchainDepositAddress
+                                    print("✅ [CardViewActive] Bitcoin address from network: \(self.btcAddress)")
+                                } else {
+                                    print("⚠️ [CardViewActive] No BTC address in enrich response")
+                                    // Keep the default address instead of showing account ID
+                                }
+                            }
+                        } catch {
+                            print("❌ [CardViewActive] Error enriching BTC: \(error)")
+                            // Keep the default address instead of showing account ID
+                        }
+                    }
+                }
+            }
+            
+            // Check ETH account (optional - for debugging)
+            if let ethAccount = walletResponse.accounts.eth {
+                if let ethAddress = ethAccount.blockchainDepositAddress {
+                    print("💰 [CardViewActive] ETH address from wallet: \(ethAddress)")
+                }
+            }
+            
+            // Check BTC balance and auto-convert if needed
+            if let btcAccount = walletResponse.accounts.btc {
+                let btcAmount = btcAccount.availableBalance.amount
+                if btcAmount != "0" && !btcAmount.isEmpty {
+                    print("💱 [CardViewActive] Found \(btcAmount) sats - initiating auto-conversion to EUR")
+                    self.autoConvertBTCtoEUR(
+                        btcAmount: btcAmount,
+                        btcAccountId: btcAccount.accountId,
+                        eurAccountId: walletResponse.accounts.eur?.accountId ?? ""
+                    )
+                }
+            } else {
+                // No BTC account
+                print("⚠️ [CardViewActive] No Bitcoin account found in wallet")
+                self.btcAddress = "No BTC wallet"
+            }
+        }
+    }
+    
+    // Handle CreateWalletResponse type from getWallet endpoint
+    private func processWalletResponseFromCreateWallet(_ walletResponse: CreateWalletResponse, userId: String) async {
+        await MainActor.run {
+            // Update wallet balance from EUR account
+            if let eurAccount = walletResponse.accounts.eur {
+                // Use hAmount if available (human-readable format)
+                if !eurAccount.availableBalance.hAmount.isEmpty {
+                    let cleanAmount = eurAccount.availableBalance.hAmount
+                        .replacingOccurrences(of: "€", with: "")
+                        .replacingOccurrences(of: "EUR", with: "")
+                        .trimmingCharacters(in: .whitespaces)
+                    self.walletBalance = cleanAmount
+                } else {
+                    // Fallback to parsing amount
+                    let amount = eurAccount.availableBalance.amount
+                    if let cents = Double(amount) {
+                        let euros = cents / 100.0
+                        self.walletBalance = String(format: "%.2f", euros)
+                    }
+                }
+                
+                // Extract IBAN details if available
+                if let bankingDetails = eurAccount.bankingDetails {
+                    self.iban = bankingDetails.iban
+                    self.bic = bankingDetails.bic
+                    self.accountHolderName = bankingDetails.accountHolderName
+                }
+            } else {
+                self.walletBalance = "0.00"
+            }
+            
+            // Get Bitcoin address from BTC account
+            if let btcAccount = walletResponse.accounts.btc {
+                if let btcAddress = btcAccount.blockchainDepositAddress {
+                    self.btcAddress = btcAddress
+                } else if btcAccount.enriched {
+                    // Re-enrich if needed
+                    Task {
+                        do {
+                            let enrichResponse = try await self.striga.enrichAccount(
+                                EnrichAccount(accountId: btcAccount.accountId, userId: userId)
+                            )
+                            await MainActor.run {
+                                if let btcAddress = enrichResponse.blockchainDepositAddress {
+                                    self.btcAddress = btcAddress
+                                } else if let networks = enrichResponse.blockchainNetworks, !networks.isEmpty {
+                                    self.btcAddress = networks[0].blockchainDepositAddress
+                                }
+                            }
+                        } catch {
+                            print("❌ [CardViewActive] Error enriching BTC: \(error)")
+                        }
                     }
                 }
             }

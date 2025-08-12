@@ -238,42 +238,73 @@ public struct AmountEntryScreen: View {
     private var isInsufficientFunds: Bool {
         guard let balance = availableBalance, !amountText.isEmpty else { return false }
         
-        // Get the amount in satoshis regardless of current input currency
-        let amountInSats: Double
-        if isPrimaryCrypto {
-            if secondarySymbol == "₿" {
-                // ₿ is primary, amountValue is already in satoshis
-                amountInSats = amountValue
+        // Check if this is a buy flow (EUR primary, BTC secondary)
+        let isBuyFlow = primarySymbol == "€" && secondarySymbol == "₿"
+        
+        if isBuyFlow {
+            // For buy flow, check EUR balance
+            let eurAmount: Double
+            if isPrimaryCrypto {
+                // User toggled to BTC (sats) input, convert to EUR
+                // When toggled, amountValue is in satoshis
+                let btcValue = amountValue / 100_000_000
+                eurAmount = btcValue * exchangeRate
             } else {
-                // BTC is primary, convert to sats
-                amountInSats = amountValue * 100_000_000
+                // User is entering EUR directly
+                eurAmount = amountValue
             }
+            
+            // Balance is passed as cents for buy flow
+            let eurBalance = Double(balance) / 100.0
+            let insufficient = eurAmount > eurBalance
+            
+            if insufficient {
+                print("⚠️ [AmountEntryScreen] Insufficient EUR funds detected:")
+                print("   💰 EUR amount needed: €\(eurAmount)")
+                print("   💰 EUR balance available: €\(eurBalance)")
+                print("   💰 Exceeds by: €\(eurAmount - eurBalance)")
+            }
+            
+            return insufficient
         } else {
-            // Primary is fiat (EUR)
-            amountInSats = (amountValue / exchangeRate) * 100_000_000
+            // Original logic for send flow (checking Bitcoin balance)
+            // Get the amount in satoshis regardless of current input currency
+            let amountInSats: Double
+            if isPrimaryCrypto {
+                if secondarySymbol == "₿" {
+                    // ₿ is primary, amountValue is already in satoshis
+                    amountInSats = amountValue
+                } else {
+                    // BTC is primary, convert to sats
+                    amountInSats = amountValue * 100_000_000
+                }
+            } else {
+                // Primary is fiat (EUR)
+                amountInSats = (amountValue / exchangeRate) * 100_000_000
+            }
+            
+            // For Bitcoin transactions, include fee in the check
+            let totalNeeded: UInt64
+            if (primarySymbol == "₿" || secondarySymbol == "₿") && walletState != nil {
+                totalNeeded = UInt64(amountInSats) + estimatedFee
+            } else {
+                totalNeeded = UInt64(amountInSats)
+            }
+            
+            let insufficient = totalNeeded > balance
+            
+            if insufficient {
+                print("⚠️ [AmountEntryScreen] Insufficient funds detected:")
+                print("   💰 Input amount: \(amountValue) (\(isPrimaryCrypto ? primarySymbol : secondarySymbol))")
+                print("   💰 Amount in sats: \(amountInSats)")
+                print("   ⚡ Estimated fee: \(estimatedFee) sats")
+                print("   💰 Total needed: \(totalNeeded) sats")
+                print("   💰 Available balance: \(balance) sats")
+                print("   💰 Exceeds by: \(totalNeeded - balance) sats")
+            }
+            
+            return insufficient
         }
-        
-        // For Bitcoin transactions, include fee in the check
-        let totalNeeded: UInt64
-        if (primarySymbol == "₿" || secondarySymbol == "₿") && walletState != nil {
-            totalNeeded = UInt64(amountInSats) + estimatedFee
-        } else {
-            totalNeeded = UInt64(amountInSats)
-        }
-        
-        let insufficient = totalNeeded > balance
-        
-        if insufficient {
-            print("⚠️ [AmountEntryScreen] Insufficient funds detected:")
-            print("   💰 Input amount: \(amountValue) (\(isPrimaryCrypto ? primarySymbol : secondarySymbol))")
-            print("   💰 Amount in sats: \(amountInSats)")
-            print("   ⚡ Estimated fee: \(estimatedFee) sats")
-            print("   💰 Total needed: \(totalNeeded) sats")
-            print("   💰 Available balance: \(balance) sats")
-            print("   💰 Exceeds by: \(totalNeeded - balance) sats")
-        }
-        
-        return insufficient
     }
 
     private func sanitizeInput(_ newValue: String) {

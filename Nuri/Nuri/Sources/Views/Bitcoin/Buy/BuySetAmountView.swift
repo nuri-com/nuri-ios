@@ -18,18 +18,43 @@ struct BuySetAmountView: View {
     
     var body: some View {
         ZStack {
-            BuyAmountEntryScreen(
+            AmountEntryScreen(
                 title: "€ \(String(format: "%.2f", eurBalance)) Balance",
-                eurBalance: eurBalance,
-                btcToEurRate: $btcToEurRate,
-                onSubmit: { btcAmount, eurAmount in
+                primarySymbol: "€",
+                secondarySymbol: "₿",
+                initialPrimaryIsCrypto: false,
+                exchangeRate: $btcToEurRate,
+                availableBalance: UInt64(eurBalance * 100), // Convert EUR to cents for comparison
+                walletState: nil, // No wallet state needed for buy flow
+                actionIcon: "money_topup",
+                actionTitle: "Confirm Amount",
+                onSubmit: { amount, isCrypto in
                     print("🚀 [BuySetAmountView] Amount submission:")
-                    print("   ₿ btcAmount: \(btcAmount)")
-                    print("   💶 eurAmount: \(eurAmount)")
+                    print("   💰 Raw amount: \(amount)")
+                    print("   🪙 isCrypto: \(isCrypto)")
+                    print("   📊 btcToEurRate: \(btcToEurRate)")
+                    
+                    let btc: Double
+                    let eur: Double
+                    if isCrypto {
+                        // amount is in BTC
+                        btc = amount
+                        eur = amount * btcToEurRate
+                        print("🪙 [BuySetAmountView] BTC PATH:")
+                        print("   ₿ BTC: \(btc)")
+                        print("   💶 EUR: \(eur)")
+                    } else {
+                        // amount is in EUR
+                        eur = amount
+                        btc = amount / btcToEurRate
+                        print("💶 [BuySetAmountView] EUR PATH:")
+                        print("   💶 EUR: \(eur)")
+                        print("   ₿ BTC: \(btc)")
+                    }
                     
                     // Store for confirmation screen
-                    self.btcAmount = btcAmount
-                    self.eurAmount = eurAmount
+                    self.btcAmount = btc
+                    self.eurAmount = eur
                     
                     navigateToConfirm = true
                 },
