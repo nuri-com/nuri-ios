@@ -83,6 +83,16 @@ let project = Project(
                 ],
                 defaultSettings: .recommended
             )
+        ),
+        .target(
+            name: "NuriTests",
+            destinations: .iOS,
+            product: .unitTests,
+            bundleId: "com.nuri.mobile-ios.unit-tests",
+            sources: ["NuriTests/**"],
+            dependencies: [
+                .target(name: "Nuri")
+            ]
         )
     ]
 )
