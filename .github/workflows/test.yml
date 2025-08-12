@@ -1,0 +1,90 @@
+name: Test
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: macos-latest
+    timeout-minutes: 20
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      
+    - name: Setup Xcode
+      run: |
+        sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+        xcodebuild -version
+        swift --version
+        
+    - name: Cache Dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/Library/Developer/Xcode/DerivedData
+          ~/.swiftpm
+        key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+        restore-keys: |
+          ${{ runner.os }}-spm-
+          
+    - name: Build and Test
+      run: |
+        cd Nuri
+        set -o pipefail
+        
+        xcodebuild test \
+          -scheme Nuri \
+          -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
+          -resultBundlePath TestResults.xcresult \
+          -quiet \
+          | xcpretty --test --color
+          
+    - name: Generate Test Summary
+      if: always()
+      run: |
+        cd Nuri
+        
+        if [ -d "TestResults.xcresult" ]; then
+          echo "## 📊 Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Extract test metrics
+          xcrun xcresulttool get --format json --path TestResults.xcresult 2>/dev/null | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    metrics = data.get('metrics', {})
+    tests = metrics.get('testsMetrics', {})
+    
+    passed = tests.get('testsPassedCount', 0)
+    failed = tests.get('testsFailedCount', 0)
+    skipped = tests.get('testsSkippedCount', 0)
+    duration = metrics.get('duration', 0)
+    
+    print('| Result | Count |')
+    print('|--------|-------|')
+    print(f'| ✅ Passed | {passed} |')
+    print(f'| ❌ Failed | {failed} |')
+    print(f'| ⏭️ Skipped | {skipped} |')
+    print(f'| ⏱️ Duration | {duration:.1f}s |')
+    
+    if failed > 0:
+        sys.exit(1)
+except:
+    print('Unable to parse test results')
+" >> $GITHUB_STEP_SUMMARY || true
+        fi
+        
+    - name: Upload Test Results
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: Nuri/TestResults.xcresult
+        retention-days: 7
