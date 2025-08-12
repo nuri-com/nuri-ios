@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 import AuthenticationServices
 import BitcoinDevKit
+import StrigaAPI
 
 struct WelcomeView: View {
 
@@ -279,6 +280,11 @@ struct WelcomeView: View {
                     
                     // Successfully authenticated
                     self.isUserLoggedIn = true
+                    
+                    // Sync Striga ID from passkey server if available
+                    Task {
+                        await syncStrigaIdFromPasskeyServer(username: result.username ?? trimmedEmail)
+                    }
                 } else {
                     throw NSError(domain: "PasskeyError", code: 2, userInfo: [NSLocalizedDescriptionKey: "Authentication failed"])
                 }
@@ -296,6 +302,12 @@ struct WelcomeView: View {
                     
                     // Successfully created and authenticated
                     self.isUserLoggedIn = true
+                    
+                    // For new accounts, no Striga ID will exist yet
+                    // but we still check in case this email was used before
+                    Task {
+                        await syncStrigaIdFromPasskeyServer(username: result.username ?? trimmedEmail)
+                    }
                 } else {
                     throw NSError(domain: "PasskeyError", code: 4, userInfo: [NSLocalizedDescriptionKey: "Server error"])
                 }
@@ -330,12 +342,123 @@ struct WelcomeView: View {
                 
                 // Successfully authenticated
                 self.isUserLoggedIn = true
+                
+                // Sync Striga ID from passkey server if available
+                Task {
+                    await syncStrigaIdFromPasskeyServer(username: result.username ?? email.trimmingCharacters(in: .whitespacesAndNewlines))
+                }
             } else {
                 throw NSError(domain: "PasskeyError", code: 4, userInfo: [NSLocalizedDescriptionKey: "Server error"])
             }
         } catch {
             errorMessage = error.localizedDescription
             showError = true
+        }
+    }
+    
+    // MARK: - Striga Sync
+    
+    @MainActor
+    private func syncStrigaIdFromPasskeyServer(username: String) async {
+        do {
+            // Try to retrieve user data from passkey server
+            let credentialId = UserDefaults.standard.string(forKey: "passkeyCredentialId")
+            let isAnonymous = UserDefaults.standard.bool(forKey: "passkeyIsAnonymous")
+            
+            let identifier = username
+            var urlString = "\(PasskeyAuthenticationService.shared.baseURL)/api/users/\(identifier)/data"
+            
+            if isAnonymous, let credentialId = credentialId {
+                urlString += "?credentialId=\(credentialId)"
+            }
+            
+            guard let url = URL(string: urlString) else {
+                print("[WelcomeView] Invalid URL for fetching user data")
+                return
+            }
+            
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200...299).contains(httpResponse.statusCode) else {
+                print("[WelcomeView] Failed to fetch user data from passkey server")
+                return
+            }
+            
+            if let userData = try? JSONDecoder().decode(PasskeyAuthenticationService.UserDataGetResponse.self, from: data),
+               let encryptedData = userData.encryptedData,
+               let strigaUserId = encryptedData.strigaUserId {
+                
+                print("[WelcomeView] Found Striga user ID from passkey server: \(strigaUserId)")
+                
+                // Update local Striga User ID
+                var settings = UserSettings()
+                let currentLocalStrigaId = settings.strigaUserId
+                
+                if currentLocalStrigaId != strigaUserId {
+                    print("[WelcomeView] Syncing Striga ID from passkey server to local storage")
+                    settings.strigaUserId = strigaUserId
+                    
+                    // Try to fetch card info from Striga
+                    await fetchAndUpdateCardInfo(userId: strigaUserId)
+                }
+            } else {
+                print("[WelcomeView] No Striga ID found on passkey server for user")
+            }
+        } catch {
+            print("[WelcomeView] Error syncing Striga ID from passkey server: \(error)")
+        }
+    }
+    
+    @MainActor
+    private func fetchAndUpdateCardInfo(userId: String) async {
+        do {
+            // Get user's wallets from Striga
+            let walletsResponse = try await StrigaService.shared.getWallets(userId: userId)
+            
+            // Check if user has any wallets
+            if let firstWallet = walletsResponse.wallets.first {
+                let walletId = firstWallet.walletId
+                
+                // Try to get card for this wallet
+                // We need to check if there's already a card ID stored
+                let settings = UserSettings()
+                if let existingCardId = settings.strigaCardId {
+                    // Verify the card still exists
+                    do {
+                        let cardResponse = try await StrigaService.shared.getCard(.init(
+                            userId: userId,
+                            cardId: existingCardId,
+                            authToken: nil
+                        ))
+                        
+                        print("[WelcomeView] Found existing card in Striga - Card ID: \(existingCardId), Status: \(cardResponse.status)")
+                        
+                        // Update StrigaSession
+                        StrigaSession.shared.userId = userId
+                        StrigaSession.shared.cardId = existingCardId
+                    } catch {
+                        // Card doesn't exist anymore, clear it
+                        var settings = UserSettings()
+                        settings.strigaCardId = nil
+                        print("[WelcomeView] Previously stored card no longer exists: \(existingCardId)")
+                    }
+                } else {
+                    // No card ID stored locally
+                    // In a full implementation, we would query for cards here
+                    // For now, just update the user ID
+                    StrigaSession.shared.userId = userId
+                    print("[WelcomeView] User has wallet but no card found locally - Wallet ID: \(walletId)")
+                }
+            } else {
+                print("[WelcomeView] User has no wallets in Striga")
+            }
+        } catch {
+            print("[WelcomeView] Failed to fetch wallet/card info from Striga: \(error)")
         }
     }
     

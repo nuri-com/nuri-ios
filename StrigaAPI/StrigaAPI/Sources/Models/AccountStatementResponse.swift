@@ -1,28 +1,25 @@
 import Foundation
 
 public struct AccountStatementResponse: Decodable {
-    public let walletId: String
-    public let accountId: String
-    public let from: String
-    public let to: String
-    public let transactions: [Transaction]
-    public let pageInfo: PageInfo?
+    public let walletId: String?
+    public let accountId: String?
+    public let startDate: String?
+    public let endDate: String?
+    public let transactions: [StrigaAccountTransaction]
+    public let count: Int?
+    public let total: Int?
+    
+    // Handle both field names
+    private enum CodingKeys: String, CodingKey {
+        case walletId
+        case accountId
+        case startDate
+        case endDate
+        case transactions
+        case count
+        case total
+    }
 }
 
-public struct Transaction: Decodable {
-    public let transactionId: String
-    public let timestamp: String
-    public let type: String
-    public let amount: Decimal
-    public let currency: String
-    public let description: String?
-    public let balanceBefore: Decimal?
-    public let balanceAfter: Decimal?
-}
-
-public struct PageInfo: Decodable {
-    public let page: Int
-    public let pageSize: Int
-    public let totalPages: Int
-    public let totalItems: Int
-}
+// Keep Transaction as a type alias for backward compatibility
+public typealias Transaction = StrigaAccountTransaction

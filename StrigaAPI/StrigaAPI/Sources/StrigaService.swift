@@ -90,6 +90,12 @@ public final class StrigaService {
         let url = try url(for: "v1/wallets/account/enrich")
         return try await httpClient.post(url: url, input: input)
     }
+    
+    @discardableResult
+    public func getAccount(_ input: GetAccount) async throws -> GetAccountResponse {
+        let url = try url(for: "v1/wallets/get/account")
+        return try await httpClient.post(url: url, input: input)
+    }
 
     // MARK: - Private
 

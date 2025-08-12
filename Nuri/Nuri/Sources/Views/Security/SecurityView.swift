@@ -131,10 +131,25 @@ struct SecurityView: View {
                         
                         // Passkey Server Striga ID
                         if let passkeyStrigaId = passkeyStrigaUserId {
-                            Text("Passkey Server Striga ID: \(passkeyStrigaId)")
-                                .font(.caption)
-                                .textSelection(.enabled)
-                                .foregroundColor(.blue)
+                            HStack {
+                                Text("Passkey Server Striga ID: \(passkeyStrigaId)")
+                                    .font(.caption)
+                                    .textSelection(.enabled)
+                                    .foregroundColor(.blue)
+                                
+                                // Show sync button if IDs don't match
+                                if UserSettings().strigaUserId != passkeyStrigaId {
+                                    Button(action: {
+                                        Task {
+                                            await syncStrigaIdFromPasskey()
+                                        }
+                                    }) {
+                                        Image(systemName: "arrow.triangle.2.circlepath")
+                                            .font(.caption)
+                                            .foregroundColor(.blue)
+                                    }
+                                }
+                            }
                         } else {
                             Text("Passkey Server Striga ID: Not synced")
                                 .font(.caption)
@@ -1730,10 +1745,102 @@ struct SecurityView: View {
                 await MainActor.run {
                     self.passkeyStrigaUserId = strigaUserId
                     Log.ui.info("Loaded Striga user ID from passkey server", metadata: ["strigaUserId": strigaUserId])
+                    
+                    // Check if we need to sync the Striga ID locally
+                    let currentLocalStrigaId = UserSettings().strigaUserId
+                    if currentLocalStrigaId != strigaUserId {
+                        Log.ui.info("Syncing Striga ID from passkey server to local storage", metadata: [
+                            "oldId": currentLocalStrigaId ?? "none",
+                            "newId": strigaUserId
+                        ])
+                        
+                        // Update local Striga User ID
+                        var settings = UserSettings()
+                        settings.strigaUserId = strigaUserId
+                        
+                        // Also check if we have a card ID stored on the server
+                        // For now, we'll need to fetch card details from Striga
+                        Task {
+                            await fetchAndUpdateCardInfo(userId: strigaUserId)
+                        }
+                    }
                 }
             }
         } catch {
             Log.ui.error("Failed to load Striga user ID from passkey server", error: error)
+        }
+    }
+    
+    private func syncStrigaIdFromPasskey() async {
+        guard let passkeyStrigaId = passkeyStrigaUserId else {
+            Log.ui.error("No Striga ID from passkey server to sync")
+            return
+        }
+        
+        Log.ui.info("Manually syncing Striga ID from passkey server", metadata: ["strigaUserId": passkeyStrigaId])
+        
+        // Update local Striga User ID
+        var settings = UserSettings()
+        settings.strigaUserId = passkeyStrigaId
+        
+        // Fetch and update card info
+        await fetchAndUpdateCardInfo(userId: passkeyStrigaId)
+    }
+    
+    private func fetchAndUpdateCardInfo(userId: String) async {
+        do {
+            // Get user's wallets from Striga
+            let walletsResponse = try await striga.getWallets(userId: userId)
+            
+            // Check if user has any wallets
+            if let firstWallet = walletsResponse.wallets.first {
+                let walletId = firstWallet.walletId
+                
+                // Try to get card for this wallet
+                // We need to check if there's already a card ID stored
+                let settings = UserSettings()
+                if let existingCardId = settings.strigaCardId {
+                    // Verify the card still exists
+                    do {
+                        let cardResponse = try await striga.getCard(.init(
+                            userId: userId,
+                            cardId: existingCardId,
+                            authToken: nil
+                        ))
+                        
+                        Log.ui.success("Found existing card in Striga", metadata: [
+                            "userId": userId,
+                            "cardId": existingCardId,
+                            "cardStatus": cardResponse.status
+                        ])
+                        
+                        // Update StrigaSession
+                        StrigaSession.shared.userId = userId
+                        StrigaSession.shared.cardId = existingCardId
+                        
+                        // Fetch the user data for display
+                        await fetchStrigaUser(userId: userId)
+                    } catch {
+                        // Card doesn't exist anymore, clear it
+                        var settings = UserSettings()
+                        settings.strigaCardId = nil
+                        Log.ui.warning("Previously stored card no longer exists", metadata: ["cardId": existingCardId])
+                    }
+                } else {
+                    // No card ID stored locally
+                    // In a full implementation, we would query for cards here
+                    // For now, just update the user ID
+                    StrigaSession.shared.userId = userId
+                    Log.ui.info("User has wallet but no card found locally", metadata: ["userId": userId, "walletId": walletId])
+                    
+                    // Fetch the user data for display
+                    await fetchStrigaUser(userId: userId)
+                }
+            } else {
+                Log.ui.info("User has no wallets in Striga", metadata: ["userId": userId])
+            }
+        } catch {
+            Log.ui.error("Failed to fetch wallet/card info from Striga", error: error)
         }
     }
     

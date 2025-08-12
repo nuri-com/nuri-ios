@@ -229,7 +229,7 @@ struct CardViewActive: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .fullScreenCover(isPresented: $isTransactionsPresented) {
-            TransactionsView()
+            UnifiedTransactionsView()
         }
         .sheet(isPresented: $isTopUpPresented) {
             NavigationStack {
