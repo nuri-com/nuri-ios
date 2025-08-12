@@ -27,11 +27,11 @@ struct BitcoinView: View {
                         VStack(spacing: 4) {
                             AmountAndCurrency(isPrimaryBTC: $viewModel.isPrimaryBTC,
                                              isBalanceHidden: $viewModel.isBalanceHidden,
-                                             sats: viewModel.walletState.balance.confirmed,
+                                             sats: viewModel.balance.confirmed,
                                              rate: viewModel.exchangeRate)
                             SecondaryCurrencyAndAmount(isPrimaryBTC: $viewModel.isPrimaryBTC,
                                                        isBalanceHidden: $viewModel.isBalanceHidden,
-                                                       sats: viewModel.walletState.balance.confirmed,
+                                                       sats: viewModel.balance.confirmed,
                                                        rate: viewModel.exchangeRate)
                         }
                         .onTapGesture {
@@ -43,7 +43,7 @@ struct BitcoinView: View {
                                 navigation.isReceiveViewPresented = true
                             }
                             SecondaryHalfButton(title: "Send", icon: "qr_scan") {
-                                viewModel.ensureWalletInitialized {
+                                viewModel.onSendButtonTapped {
                                     navigation.isSendViewPresented = true
                                 }
                             }
@@ -73,10 +73,10 @@ struct BitcoinView: View {
         }
         .alert("Wallet Recovery", isPresented: $viewModel.showWalletRecoveryAlert) {
             Button("Retry") {
-                viewModel.retryWalletLoad()
+                viewModel.onRetryWalletLoad()
             }
             Button("Create New Wallet") {
-                viewModel.createNewWallet()
+                viewModel.onCreateNewWallet()
             }
             Button("Cancel", role: .cancel) { }
         } message: {
