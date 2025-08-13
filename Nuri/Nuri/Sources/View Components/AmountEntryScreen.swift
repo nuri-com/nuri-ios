@@ -237,6 +237,9 @@ public struct AmountEntryScreen: View {
     }
     
     private var amountInSats: Double {
+        // Guard against invalid exchange rate
+        guard exchangeRate > 0 else { return 0 }
+        
         if isPrimaryCrypto {
             // When crypto is primary, check what type of crypto
             if secondarySymbol == "₿" {
@@ -248,7 +251,12 @@ public struct AmountEntryScreen: View {
             }
         } else {
             // EUR is primary, convert to sats
-            return (amountValue / exchangeRate) * 100_000_000
+            let sats = (amountValue / exchangeRate) * 100_000_000
+            // Protect against NaN/Infinity
+            if sats.isNaN || sats.isInfinite {
+                return 0
+            }
+            return sats
         }
     }
 
@@ -264,6 +272,9 @@ public struct AmountEntryScreen: View {
     
     private var isInsufficientFunds: Bool {
         guard let balance = availableBalance, !amountText.isEmpty else { return false }
+        
+        // Guard against invalid exchange rate to prevent calculation errors
+        guard exchangeRate > 0 else { return false }
         
         // Check if this is a buy flow (EUR primary, BTC secondary)
         let isBuyFlow = primarySymbol == "€" && secondarySymbol == "₿"
