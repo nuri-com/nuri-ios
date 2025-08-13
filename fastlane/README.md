@@ -15,21 +15,21 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 
 ## iOS
 
-### ios beta
+### ios deploy
 
 ```sh
-[bundle exec] fastlane ios beta
+[bundle exec] fastlane ios deploy
 ```
 
-Build and upload to TestFlight
+FULLY AUTOMATIC TestFlight deployment
 
-### ios build_only
+### ios auto
 
 ```sh
-[bundle exec] fastlane ios build_only
+[bundle exec] fastlane ios auto
 ```
 
-Build for TestFlight without uploading
+Archive and export IPA with provisioning profile
 
 ### ios archive
 
@@ -38,30 +38,6 @@ Build for TestFlight without uploading
 ```
 
 Build archive only (no export)
-
-### ios simple_archive
-
-```sh
-[bundle exec] fastlane ios simple_archive
-```
-
-Build a simple archive without signing complications
-
-### ios upload_ipa
-
-```sh
-[bundle exec] fastlane ios upload_ipa
-```
-
-Upload existing IPA to TestFlight
-
-### ios build_and_upload
-
-```sh
-[bundle exec] fastlane ios build_and_upload
-```
-
-Build and upload to TestFlight
 
 ----
 
