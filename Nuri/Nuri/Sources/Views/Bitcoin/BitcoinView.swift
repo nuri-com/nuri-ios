@@ -5,6 +5,7 @@ final class BitcoinViewNavigation: ObservableObject {
     @Published var isReceiveViewPresented = false
     @Published var isTransactionsPresented = false
     @Published var isBuyBitcoinPresented = false
+    @Published var isBuyViewPresented = false // For Buy Bitcoin flow
 }
 
 struct BitcoinView: View {
@@ -17,6 +18,9 @@ struct BitcoinView: View {
     @State private var showWalletRecoveryAlert = false
     @State private var exchangeRate: Double = 0.0
     @State private var exchangeRateTimer: Timer?
+    @State private var showStrigaDebug = false
+    @State private var refreshTask: Task<Void, Never>?
+    @State private var isRefreshingPrice = false
     
     // Cache key for exchange rate
     private let exchangeRateCacheKey = "nuri.exchangeRate.eur"
@@ -36,7 +40,7 @@ struct BitcoinView: View {
                 NuriHeader<AnyView, AnyView>.logoAndCTA(
                     title: "",
                     cta: "+ Buy Bitcoin",
-                    onCTA: { navigation.isBuyBitcoinPresented = true }
+                    onCTA: { navigation.isBuyViewPresented = true }
                 )
 
                 VStack {
@@ -70,12 +74,23 @@ struct BitcoinView: View {
                         .padding(.bottom, 24)
                     }
                     Spacer()
-                    Button(action: {
-                        navigation.isTransactionsPresented = true
-                    }) {
-                        Image("link-icon-to-transactions")
-                            .resizable()
-                            .frame(width: 24, height: 13)
+                    HStack(spacing: 20) {
+                        // Debug button removed - all transactions in unified view
+                        // Button(action: {
+                        //     showStrigaDebug = true
+                        // }) {
+                        //     Text("Debug Striga")
+                        //         .font(.custom("Inter", size: 12).weight(.medium))
+                        //         .foregroundColor(.blue)
+                        // }
+                        
+                        Button(action: {
+                            navigation.isTransactionsPresented = true
+                        }) {
+                            Image("link-icon-to-transactions")
+                                .resizable()
+                                .frame(width: 24, height: 13)
+                        }
                     }
                 }
                 .padding(.horizontal, 24)
@@ -96,10 +111,17 @@ struct BitcoinView: View {
             print("⏰ [BitcoinView] Exchange rate timer stopped")
         }
         .task {
-            print("🔄 [BitcoinView] Starting refresh task...")
-            // The WalletStateManager already handles initial balance fetch
-            // Just refresh exchange rate here
-            await refreshExchangeRate()
+            // Cancel any existing refresh task
+            refreshTask?.cancel()
+            
+            // Start new refresh task
+            refreshTask = Task {
+                print("🔄 [BitcoinView] Starting refresh task...")
+                // Only refresh if not already refreshing
+                if !isRefreshingPrice {
+                    await refreshExchangeRate()
+                }
+            }
         }
         .alert("Wallet Recovery", isPresented: $showWalletRecoveryAlert) {
             Button("Retry") {
@@ -122,15 +144,20 @@ struct BitcoinView: View {
                 ReceiveView()
             }
         }
-        .sheet(isPresented: $navigation.isBuyBitcoinPresented) {
+        .sheet(isPresented: $navigation.isBuyViewPresented) {
             NavigationStack {
-                BuyBitcoinView(isPresented: $navigation.isBuyBitcoinPresented)
+                BuyBitcoinFlowView()
             }
         }
         .environmentObject(navigation)
         .fullScreenCover(isPresented: $navigation.isTransactionsPresented) {
-            TransactionsView()
+            // Use the main UnifiedTransactionsView that shows both Bitcoin and Striga transactions
+            UnifiedTransactionsView()
         }
+        // Debug view disabled - all transactions are in UnifiedTransactionsView now
+        // .fullScreenCover(isPresented: $showStrigaDebug) {
+        //     StrigaTransactionsDebugView()
+        // }
         .onAppear {
             // Initialize wallet on first appear
             let walletService = BitcoinWalletService.shared
@@ -345,6 +372,22 @@ struct BitcoinView: View {
 
     // MARK: - Exchange Rate
     private func refreshExchangeRate() async {
+        // Prevent concurrent refreshes
+        guard !isRefreshingPrice else {
+            print("💱 [BitcoinView] Already refreshing price, skipping...")
+            return
+        }
+        
+        await MainActor.run {
+            isRefreshingPrice = true
+        }
+        
+        defer {
+            Task { @MainActor in
+                isRefreshingPrice = false
+            }
+        }
+        
         print("💱 [BitcoinView] Refreshing exchange rate...")
         if let price = await fetchPrice() {
             await MainActor.run {

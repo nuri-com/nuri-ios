@@ -3,6 +3,7 @@ import AuthenticationServices
 import UIKit
 import Photos
 import StrigaAPI
+import KeychainAccess
 
 struct SecurityView: View {
     @State private var resultText = "Press the button to test the encrypted iCloud backup."
@@ -16,11 +17,15 @@ struct SecurityView: View {
     @State private var importSeedPhrase = ""
     @State private var showingImportConfirmation = false
     @State private var showingLogoutConfirmation = false
+    @State private var showingFullWipeConfirmation = false
     @AppStorage("isUserLoggedIn") var isUserLoggedIn: Bool = false
     @State private var userPasskeys: [PasskeyAuthenticationService.UserPasskeysResponse.PasskeyInfo] = []
     @State private var passkeyStrigaUserId: String?
     @State private var strigaUserData: StrigaUserData?
     @State private var isLoadingStrigaUser = false
+    @State private var manualStrigaUserId = ""
+    @State private var overrideMessage = ""
+    @State private var overrideMessageIsError = false
     private let bitcoinWalletService = BitcoinWalletService.shared
     private let striga = StrigaService.shared
     
@@ -62,6 +67,21 @@ struct SecurityView: View {
                                 .foregroundColor(.red)
                             Text("Log Out")
                                 .foregroundColor(.red)
+                            Spacer()
+                        }
+                    }
+                    
+                    Button(action: { showingFullWipeConfirmation = true }) {
+                        HStack {
+                            Image(systemName: "trash.fill")
+                                .foregroundColor(.red)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Clear All Data & Logout")
+                                    .foregroundColor(.red)
+                                Text("Completely wipes all wallet data, caches, and user info")
+                                    .font(.caption2)
+                                    .foregroundColor(.gray)
+                            }
                             Spacer()
                         }
                     }
@@ -131,10 +151,25 @@ struct SecurityView: View {
                         
                         // Passkey Server Striga ID
                         if let passkeyStrigaId = passkeyStrigaUserId {
-                            Text("Passkey Server Striga ID: \(passkeyStrigaId)")
-                                .font(.caption)
-                                .textSelection(.enabled)
-                                .foregroundColor(.blue)
+                            HStack {
+                                Text("Passkey Server Striga ID: \(passkeyStrigaId)")
+                                    .font(.caption)
+                                    .textSelection(.enabled)
+                                    .foregroundColor(.blue)
+                                
+                                // Show sync button if IDs don't match
+                                if UserSettings().strigaUserId != passkeyStrigaId {
+                                    Button(action: {
+                                        Task {
+                                            await syncStrigaIdFromPasskey()
+                                        }
+                                    }) {
+                                        Image(systemName: "arrow.triangle.2.circlepath")
+                                            .font(.caption)
+                                            .foregroundColor(.blue)
+                                    }
+                                }
+                            }
                         } else {
                             Text("Passkey Server Striga ID: Not synced")
                                 .font(.caption)
@@ -172,9 +207,40 @@ struct SecurityView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
                     // Debug actions
-                    Button(action: resetStrigaState) {
-                        Label("Reset Striga Card State", systemImage: "creditcard.slash")
-                            .foregroundColor(.orange)
+                    VStack(alignment: .leading, spacing: 12) {
+                        // Manual Striga ID Override
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Override Striga User ID")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            HStack {
+                                TextField("Enter Striga User ID", text: $manualStrigaUserId)
+                                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                                    .autocapitalization(.none)
+                                    .disableAutocorrection(true)
+                                    .font(.system(.caption, design: .monospaced))
+                                
+                                Button("Set") {
+                                    setManualStrigaUserId()
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .disabled(manualStrigaUserId.isEmpty)
+                            }
+                            
+                            if !overrideMessage.isEmpty {
+                                Text(overrideMessage)
+                                    .font(.caption2)
+                                    .foregroundColor(overrideMessageIsError ? .red : .green)
+                            }
+                        }
+                        .padding(.vertical, 8)
+                        
+                        // Reset button
+                        Button(action: resetStrigaState) {
+                            Label("Reset Striga Card State", systemImage: "xmark.circle")
+                                .foregroundColor(.orange)
+                        }
                     }
                     .padding(.top, 8)
                 }
@@ -701,8 +767,23 @@ struct SecurityView: View {
         } message: {
             Text("Are you sure you want to log out? You'll need to authenticate with your passkey to log back in.")
         }
+        .alert("⚠️ Complete Data Wipe", isPresented: $showingFullWipeConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Wipe Everything", role: .destructive) {
+                Task {
+                    await performFullDataWipe()
+                }
+            }
+        } message: {
+            Text("This will PERMANENTLY DELETE:\n• All wallet data and seed phrases\n• All cached addresses and transactions\n• All Striga user and card data\n• All authentication data\n• All encrypted backups\n\nThis action CANNOT be undone! You will need to create a new wallet or restore from a backup.")
+        }
         .onAppear {
             loadUserPasskeys()
+            
+            // Pre-populate the manual override field with current ID (if any)
+            if let currentId = UserSettings().strigaUserId {
+                manualStrigaUserId = currentId
+            }
             
             // Run verification check on view load
             Task {
@@ -835,7 +916,7 @@ struct SecurityView: View {
         resultText = "Testing security cleanup (no files will be deleted)..."
         Task {
             let result = await Task.detached {
-                return bitcoinWalletService.testSecurityCleanup()
+                return await bitcoinWalletService.testSecurityCleanup()
             }.value
             await MainActor.run {
                 self.resultText = result
@@ -849,7 +930,7 @@ struct SecurityView: View {
         resultText = "Running comprehensive storage diagnostic..."
         Task {
             let result = await Task.detached {
-                return bitcoinWalletService.comprehensiveStorageDiagnostic()
+                return await bitcoinWalletService.comprehensiveStorageDiagnostic()
             }.value
             await MainActor.run {
                 self.resultText = result
@@ -863,7 +944,7 @@ struct SecurityView: View {
         resultText = "🧹 FORCE AGGRESSIVE CLEANUP\n\nThis will clear ALL wallet data from ALL keychain services and Documents directory.\n\nExecuting..."
         Task {
             await Task.detached {
-                bitcoinWalletService.forceCleanAllKeychainServices()
+                await bitcoinWalletService.forceCleanAllKeychainServices()
             }.value
             await MainActor.run {
                 self.resultText = "🧹 AGGRESSIVE CLEANUP COMPLETED!\n\n✅ All keychain services cleared\n✅ Documents directory cleared\n✅ All wallet data removed\n\n⚠️ Next wallet creation will be completely fresh!\n\n🔄 Restart the app to test fresh wallet creation."
@@ -877,7 +958,7 @@ struct SecurityView: View {
         resultText = "Creating manual iCloud backup...\n\nThis will encrypt current seed phrase and store in iCloud keychain."
         Task {
             let result = await Task.detached {
-                return self.bitcoinWalletService.createManualBackup()
+                return await self.bitcoinWalletService.createManualBackup()
             }.value
             await MainActor.run {
                 self.resultText = result
@@ -944,6 +1025,148 @@ struct SecurityView: View {
         isUserLoggedIn = false
         
         Log.ui.success("Logout completed - user will see welcome screen")
+    }
+    
+    @MainActor
+    private func performFullDataWipe() async {
+        Log.ui.warning("🗑️ Starting COMPLETE DATA WIPE...")
+        
+        // 1. Clear all Bitcoin wallet data
+        Log.ui.info("Clearing Bitcoin wallet data...")
+        await bitcoinWalletService.forceCleanAllKeychainServices()
+        
+        // 2. Clear all UserDefaults
+        Log.ui.info("Clearing UserDefaults...")
+        let domain = Bundle.main.bundleIdentifier!
+        UserDefaults.standard.removePersistentDomain(forName: domain)
+        UserDefaults.standard.synchronize()
+        
+        // 3. Clear all Striga session data
+        Log.ui.info("Clearing Striga session...")
+        StrigaSession.shared.userId = nil
+        StrigaSession.shared.cardId = nil
+        StrigaSession.shared.firstName = nil
+        StrigaSession.shared.lastName = nil
+        StrigaSession.shared.name = nil
+        StrigaSession.shared.email = nil
+        StrigaSession.shared.phoneNumber = nil
+        StrigaSession.shared.phoneCountryCode = nil
+        StrigaSession.shared.address = nil
+        StrigaSession.shared.dateOfBirth = nil
+        
+        // 4. Clear UserSettings (Striga IDs, etc)
+        Log.ui.info("Clearing UserSettings...")
+        let settings = UserSettings()
+        settings.strigaUserId = nil
+        settings.strigaCardId = nil
+        settings.strigaWalletId = nil
+        
+        // 5. Clear all keychain data for passkeys
+        Log.ui.info("Clearing passkey data...")
+        UserDefaults.standard.removeObject(forKey: "passkeyUsername")
+        UserDefaults.standard.removeObject(forKey: "passkeyUserEmail")
+        UserDefaults.standard.removeObject(forKey: "passkeyCredentialId")
+        UserDefaults.standard.removeObject(forKey: "passkeyIsAnonymous")
+        
+        // 6. Clear cached addresses and wallet state
+        Log.ui.info("Clearing cached wallet state...")
+        UserDefaults.standard.removeObject(forKey: "hasCreatedBitcoinWallet")
+        UserDefaults.standard.removeObject(forKey: "cachedBitcoinAddress")
+        UserDefaults.standard.removeObject(forKey: "cachedBitcoinBalance")
+        UserDefaults.standard.removeObject(forKey: "lastBalanceUpdate")
+        
+        // 7. Clear any cached Striga data
+        Log.ui.info("Clearing cached Striga data...")
+        UserDefaults.standard.removeObject(forKey: "cachedStrigaUser")
+        UserDefaults.standard.removeObject(forKey: "cachedStrigaCard")
+        UserDefaults.standard.removeObject(forKey: "cachedStrigaWallets")
+        UserDefaults.standard.removeObject(forKey: "strigaEnrichedAccounts")
+        
+        // 8. Clear app state flags
+        Log.ui.info("Clearing app state flags...")
+        UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
+        UserDefaults.standard.removeObject(forKey: "hasSeenWelcome")
+        UserDefaults.standard.removeObject(forKey: "shouldShowCardCreation")
+        
+        // 9. Clear any encrypted backups from iCloud keychain
+        Log.ui.info("Clearing iCloud backups...")
+        let backupKeychain = Keychain(service: "com.nuri.bitcoin-wallet.backup")
+            .synchronizable(true)
+            .accessibility(.whenUnlockedThisDeviceOnly)
+        do {
+            try backupKeychain.removeAll()
+        } catch {
+            Log.ui.error("Failed to clear backup keychain: \(error)")
+        }
+        
+        // 10. Finally, log out
+        isUserLoggedIn = false
+        
+        Log.ui.success("✅ COMPLETE DATA WIPE FINISHED - All data has been cleared")
+        Log.ui.info("User will be redirected to welcome screen")
+    }
+    
+    private func setManualStrigaUserId() {
+        guard !manualStrigaUserId.isEmpty else { return }
+        
+        // Trim whitespace
+        let trimmedId = manualStrigaUserId.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Validate format (UUID)
+        if UUID(uuidString: trimmedId) == nil {
+            overrideMessage = "Invalid format. Must be a valid UUID."
+            overrideMessageIsError = true
+            return
+        }
+        
+        // Set the Striga user ID
+        var settings = UserSettings()
+        let oldId = settings.strigaUserId
+        settings.strigaUserId = trimmedId
+        
+        // Also update session
+        StrigaSession.shared.userId = trimmedId
+        
+        // Clear any existing card/wallet IDs since they might not match the new user
+        settings.strigaCardId = nil
+        settings.strigaWalletId = nil
+        StrigaSession.shared.cardId = nil
+        
+        overrideMessage = "✅ Striga User ID set successfully!\nOld: \(oldId ?? "none")\nNew: \(trimmedId)"
+        overrideMessageIsError = false
+        
+        // Clear the input field
+        manualStrigaUserId = ""
+        
+        // Trigger sync with new ID
+        Task {
+            print("[SecurityView:setManualStrigaUserId] Syncing with new Striga ID: \(trimmedId)")
+            let syncSuccess = await StrigaSyncService.shared.syncUserData(userId: trimmedId)
+            
+            if syncSuccess {
+                await MainActor.run {
+                    overrideMessage += "\n✅ Sync completed successfully!"
+                }
+            } else {
+                await MainActor.run {
+                    overrideMessage += "\n⚠️ Sync failed - check if ID exists"
+                }
+            }
+            
+            // Refresh the displayed data
+            await MainActor.run {
+                loadStrigaUserData()
+            }
+        }
+    }
+    
+    private func loadStrigaUserData() {
+        // Reload the current Striga user ID from settings
+        let settings = UserSettings()
+        if let currentStrigaId = settings.strigaUserId {
+            // The ID is already loaded, no additional action needed
+            // The view will automatically update through @AppStorage
+        }
     }
     
     private func resetStrigaState() {
@@ -1730,10 +1953,59 @@ struct SecurityView: View {
                 await MainActor.run {
                     self.passkeyStrigaUserId = strigaUserId
                     Log.ui.info("Loaded Striga user ID from passkey server", metadata: ["strigaUserId": strigaUserId])
+                    
+                    // Check if we need to sync the Striga ID locally
+                    let currentLocalStrigaId = UserSettings().strigaUserId
+                    if currentLocalStrigaId != strigaUserId {
+                        Log.ui.info("Syncing Striga ID from passkey server to local storage", metadata: [
+                            "oldId": currentLocalStrigaId ?? "none",
+                            "newId": strigaUserId
+                        ])
+                        
+                        // Update local Striga User ID
+                        var settings = UserSettings()
+                        settings.strigaUserId = strigaUserId
+                        
+                        // Also check if we have a card ID stored on the server
+                        // For now, we'll need to fetch card details from Striga
+                        Task {
+                            await fetchAndUpdateCardInfo(userId: strigaUserId)
+                        }
+                    }
                 }
             }
         } catch {
             Log.ui.error("Failed to load Striga user ID from passkey server", error: error)
+        }
+    }
+    
+    private func syncStrigaIdFromPasskey() async {
+        guard let passkeyStrigaId = passkeyStrigaUserId else {
+            Log.ui.error("No Striga ID from passkey server to sync")
+            return
+        }
+        
+        Log.ui.info("Manually syncing Striga ID from passkey server", metadata: ["strigaUserId": passkeyStrigaId])
+        
+        // Update local Striga User ID
+        var settings = UserSettings()
+        settings.strigaUserId = passkeyStrigaId
+        
+        // Fetch and update card info
+        await fetchAndUpdateCardInfo(userId: passkeyStrigaId)
+    }
+    
+    private func fetchAndUpdateCardInfo(userId: String) async {
+        // Use the new sync service to properly fetch and validate all IDs
+        let syncSuccess = await StrigaSyncService.shared.syncUserData(userId: userId)
+        
+        if syncSuccess {
+            Log.ui.success("Successfully synced Striga data", metadata: ["userId": userId])
+            
+            // Fetch the user data for display
+            await fetchStrigaUser(userId: userId)
+        } else {
+            Log.ui.warning("Failed to sync Striga data - user may need to complete setup", metadata: ["userId": userId])
         }
     }
     

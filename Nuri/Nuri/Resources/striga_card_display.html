@@ -4,52 +4,129 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <title>Striga Card Display</title>
     <style>
-        body { 
-            margin: 0; 
-            background: #fff; 
-            font: 16px -apple-system;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-text-size-adjust: 100%;
+            -webkit-tap-highlight-color: transparent;
         }
         
-        #wrap { 
-            padding: 16px; 
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: white;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
         }
         
-        #cardNumber, #cvv { 
-            display: block; 
-            height: 44px; 
-            margin: 12px 0; 
-            border: 1px solid #1e90ff; 
-            border-radius: 12px;
-            background: #fff;
-            position: relative;
+        .card-container {
+            background: white;
+            padding: 24px 20px;
+            width: 100%;
+            height: 100%;
         }
         
-        /* Label styling */
         .label {
-            position: absolute;
-            top: -8px;
-            left: 12px;
-            background: #fff;
-            padding: 0 4px;
             font-size: 12px;
-            color: #1e90ff;
-            font-weight: 500;
+            color: #B794F4;  /* Lilac color */
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 10px;
+            display: block;
+            font-weight: 600;
+        }
+        
+        .field {
+            margin-bottom: 32px;
+        }
+        
+        #cardHolder {
+            color: #000;
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+        }
+        
+        #cardNumber {
+            background: transparent;
+            border: none;
+            height: 36px;
+            display: block;
+            width: 100%;
+        }
+        
+        #cardNumber iframe {
+            border: none !important;
+            background: transparent !important;
+            width: 100% !important;
+            overflow: hidden !important;
+        }
+        
+        .row {
+            display: flex;
+            gap: 50px;
+        }
+        
+        .row .field {
+            flex: 1;
+        }
+        
+        #expiry {
+            color: #000;
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: 2px;
+        }
+        
+        #cvv {
+            background: transparent;
+            border: none;
+            height: 36px;
+            display: block;
+            width: 100px;
+        }
+        
+        #cvv iframe {
+            border: none !important;
+            background: transparent !important;
+            overflow: hidden !important;
         }
         
         #status {
             display: none;
         }
+        
+        /* Prevent any zooming */
+        input, textarea, select {
+            font-size: 16px !important;
+        }
     </style>
 </head>
 <body>
-    <div id="wrap">
-        <div style="position: relative;">
-            <span class="label">Card Number</span>
+    <div class="card-container">
+        <div class="field">
+            <div class="label">Card Holder</div>
+            <div id="cardHolder"></div>
+        </div>
+        
+        <div class="field">
+            <div class="label">Card Number</div>
             <div id="cardNumber"></div>
         </div>
-        <div style="position: relative;">
-            <span class="label">CVV</span>
-            <div id="cvv"></div>
+        
+        <div class="row">
+            <div class="field">
+                <div class="label">Expires</div>
+                <div id="expiry"></div>
+            </div>
+            <div class="field">
+                <div class="label">CVV</div>
+                <div id="cvv"></div>
+            </div>
         </div>
     </div>
     <div id="status"></div>
@@ -61,6 +138,10 @@
         // Global state
         window.strigaReady = false;
         window.strigaInitialized = false;
+        window.cardData = {
+            number: '',
+            cvv: ''
+        };
         
         // Debug logging
         function log(msg) {
@@ -116,6 +197,13 @@
                 StrigaUXPlugin.create(uiSecret, { applicationId: applicationId });
                 window.strigaInitialized = true;
                 log('Striga initialized successfully');
+                
+                // Signal to Swift that we're ready
+                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.strigaNative) {
+                    window.webkit.messageHandlers.strigaNative.postMessage({
+                        type: 'ready'
+                    });
+                }
                 return true;
             } catch(e) {
                 log('ERROR: Failed to initialize Striga: ' + e);
@@ -160,7 +248,7 @@
             });
         };
         
-        // Render card - EXACTLY as specified in the guide
+        // Render card with ALL details
         window.renderCard = function(cardId, authToken) {
             log('renderCard called: ' + cardId);
             
@@ -174,44 +262,419 @@
                 return;
             }
             
-            // Render card number first with proper styling
+            // Card details (name, expiry) are set from Swift
+            
+            // Render FULL unmasked card number with auth token
             StrigaUXPlugin.render('cardNumber', { 
-                id: 'cardNumber',  // IMPORTANT: specify the target ID
+                id: 'cardNumber',
                 cardId: cardId, 
-                authToken: authToken,
-                hideData: false,
+                authToken: authToken,  // THIS IS CRITICAL for unmasked display
+                hideData: false,  // Show the data, not hidden
                 style: {
-                    color: '#111',
-                    'font-size': '20px',
-                    'letter-spacing': '1.5px',
-                    'padding': '12px',
-                    'font-weight': '500'
+                    color: '#000',
+                    'font-family': "'SF Mono', Monaco, 'Courier New', monospace",
+                    'font-size': '24px',
+                    'letter-spacing': '3px',
+                    'padding': '0',
+                    'font-weight': '700',
+                    'line-height': '36px',
+                    'background': 'transparent',
+                    'text-align': 'left'
                 }
             }).then(function() {
                 log('Card number rendered');
                 
-                // Then render CVV with proper styling
+                // Then render FULL unmasked CVV with auth token
                 return StrigaUXPlugin.render('cvv', { 
-                    id: 'cvv',  // IMPORTANT: specify the target ID
+                    id: 'cvv',
                     cardId: cardId, 
-                    authToken: authToken,
-                    hideData: false,
+                    authToken: authToken,  // THIS IS CRITICAL for unmasked display
+                    hideData: false,  // Show the data, not hidden
                     style: {
-                        color: '#111',
-                        'font-size': '20px',
-                        'letter-spacing': '1.5px',
-                        'padding': '12px',
-                        'font-weight': '500'
+                        color: '#000',
+                        'font-family': "'SF Mono', Monaco, 'Courier New', monospace",
+                        'font-size': '24px',
+                        'letter-spacing': '3px',
+                        'padding': '0',
+                        'font-weight': '700',
+                        'line-height': '36px',
+                        'background': 'transparent',
+                        'text-align': 'left'
                     }
                 });
             }).then(function() {
                 log('CVV rendered');
                 
-                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.strigaNative) {
-                    window.webkit.messageHandlers.strigaNative.postMessage({
-                        type: 'rendered'
+                // Try multiple methods to extract the rendered values
+                setTimeout(function() {
+                    log('Attempting to extract card data...');
+                    
+                    // Method 0: Try to get the actual rendered text from DOM
+                    try {
+                        // Check if the iframes have any accessible content
+                        var allIframes = document.querySelectorAll('iframe');
+                        log('Found ' + allIframes.length + ' iframes in the document');
+                        
+                        allIframes.forEach(function(iframe, index) {
+                            try {
+                                // Log iframe details
+                                log('Iframe ' + index + ' src: ' + (iframe.src || 'no src'));
+                                
+                                // Try different ways to access content
+                                if (iframe.contentDocument) {
+                                    var text = iframe.contentDocument.body.innerText || iframe.contentDocument.body.textContent;
+                                    if (text) {
+                                        log('🎉 IFRAME ' + index + ' CONTENT: ' + text);
+                                    }
+                                }
+                                
+                                // Try contentWindow
+                                if (iframe.contentWindow && iframe.contentWindow.document) {
+                                    var winText = iframe.contentWindow.document.body.innerText;
+                                    if (winText) {
+                                        log('🎉 IFRAME ' + index + ' WINDOW CONTENT: ' + winText);
+                                    }
+                                }
+                            } catch(e) {
+                                // Expected for cross-origin
+                            }
+                        });
+                    } catch(e) {
+                        log('Iframe iteration failed: ' + e.message);
+                    }
+                    
+                    // Method 0.5: Check computed styles and pseudo elements
+                    try {
+                        var cardNumEl = document.querySelector('#cardNumber');
+                        if (cardNumEl) {
+                            var computed = window.getComputedStyle(cardNumEl);
+                            var before = window.getComputedStyle(cardNumEl, ':before');
+                            var after = window.getComputedStyle(cardNumEl, ':after');
+                            
+                            if (before.content && before.content !== 'none') {
+                                log('Card number ::before content: ' + before.content);
+                            }
+                            if (after.content && after.content !== 'none') {
+                                log('Card number ::after content: ' + after.content);
+                            }
+                        }
+                    } catch(e) {
+                        log('Pseudo element check failed: ' + e.message);
+                    }
+                    
+                    var cardNumberFrame = document.querySelector('#cardNumber iframe');
+                    var cvvFrame = document.querySelector('#cvv iframe');
+                    
+                    // Method 1: Direct iframe access (usually blocked)
+                    try {
+                        if (cardNumberFrame && cardNumberFrame.contentWindow) {
+                            var doc = cardNumberFrame.contentWindow.document;
+                            var cardText = doc.body.innerText || doc.body.textContent;
+                            log('Method 1 - Card number extracted: ' + cardText);
+                        }
+                    } catch(e) {
+                        log('Method 1 failed: ' + e.message);
+                    }
+                    
+                    // Method 2: PostMessage interception
+                    try {
+                        window.addEventListener('message', function(event) {
+                            log('Received postMessage from: ' + event.origin);
+                            log('Message data: ' + JSON.stringify(event.data));
+                        });
+                    } catch(e) {
+                        log('Method 2 setup failed: ' + e.message);
+                    }
+                    
+                    // Method 3: MutationObserver on iframe
+                    try {
+                        if (cardNumberFrame) {
+                            var observer = new MutationObserver(function(mutations) {
+                                mutations.forEach(function(mutation) {
+                                    log('Iframe mutation detected: ' + mutation.type);
+                                    if (mutation.type === 'attributes') {
+                                        log('Attribute changed: ' + mutation.attributeName);
+                                    }
+                                });
+                            });
+                            observer.observe(cardNumberFrame, { attributes: true, childList: true, subtree: true });
+                            log('Method 3 - MutationObserver attached');
+                        }
+                    } catch(e) {
+                        log('Method 3 failed: ' + e.message);
+                    }
+                    
+                    // Method 4: Override iframe createElement
+                    try {
+                        var originalCreateElement = document.createElement;
+                        document.createElement = function(tagName) {
+                            var element = originalCreateElement.call(document, tagName);
+                            if (tagName.toLowerCase() === 'iframe') {
+                                log('Iframe created, attempting to hook onload');
+                                element.onload = function() {
+                                    log('Iframe loaded: ' + element.src);
+                                    setTimeout(function() {
+                                        try {
+                                            var content = element.contentWindow.document.body.innerText;
+                                            log('Iframe content: ' + content);
+                                        } catch(e) {
+                                            log('Cannot read iframe content: ' + e.message);
+                                        }
+                                    }, 100);
+                                };
+                            }
+                            return element;
+                        };
+                        log('Method 4 - createElement override installed');
+                    } catch(e) {
+                        log('Method 4 failed: ' + e.message);
+                    }
+                    
+                    // Method 5: Check for Striga plugin internals  
+                    try {
+                        // Deep dive into StrigaUXPlugin
+                        if (window.StrigaUXPlugin) {
+                            // Try to access any internal properties
+                            for (var prop in window.StrigaUXPlugin) {
+                                if (typeof window.StrigaUXPlugin[prop] === 'object') {
+                                    log('StrigaUXPlugin.' + prop + ' keys: ' + JSON.stringify(Object.keys(window.StrigaUXPlugin[prop] || {})));
+                                    
+                                    // Check for card data in nested objects
+                                    for (var subProp in window.StrigaUXPlugin[prop]) {
+                                        var value = window.StrigaUXPlugin[prop][subProp];
+                                        if (typeof value === 'string' && value.match(/\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}/)) {
+                                            log('🎯 FOUND CARD NUMBER in StrigaUXPlugin.' + prop + '.' + subProp + ': ' + value);
+                                        }
+                                        if (typeof value === 'string' && value.match(/^\d{3,4}$/)) {
+                                            log('🎯 POSSIBLE CVV in StrigaUXPlugin.' + prop + '.' + subProp + ': ' + value);
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Try to get the render state
+                            if (window.StrigaUXPlugin._state || window.StrigaUXPlugin.state) {
+                                log('Striga state found: ' + JSON.stringify(window.StrigaUXPlugin._state || window.StrigaUXPlugin.state));
+                            }
+                        }
+                        
+                        // Check sessionStorage and localStorage
+                        try {
+                            for (var i = 0; i < sessionStorage.length; i++) {
+                                var key = sessionStorage.key(i);
+                                var value = sessionStorage.getItem(key);
+                                if (value && value.match(/\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}/)) {
+                                    log('🎯 FOUND in sessionStorage[' + key + ']: ' + value);
+                                }
+                            }
+                            for (var i = 0; i < localStorage.length; i++) {
+                                var key = localStorage.key(i);
+                                var value = localStorage.getItem(key);
+                                if (value && value.match(/\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}/)) {
+                                    log('🎯 FOUND in localStorage[' + key + ']: ' + value);
+                                }
+                            }
+                        } catch(e) {
+                            log('Storage check failed: ' + e.message);
+                        }
+                        
+                        // Check all global variables
+                        for (var key in window) {
+                            try {
+                                var val = window[key];
+                                if (typeof val === 'string') {
+                                    if (val.match(/\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}/)) {
+                                        log('🎯 CARD NUMBER in window.' + key + ': ' + val);
+                                    }
+                                    if (val.match(/^\d{3,4}$/) && key.toLowerCase().includes('cvv')) {
+                                        log('🎯 CVV in window.' + key + ': ' + val);
+                                    }
+                                }
+                            } catch(e) {
+                                // Skip inaccessible properties
+                            }
+                        }
+                    } catch(e) {
+                        log('Method 5 failed: ' + e.message);
+                    }
+                    
+                    // Method 6: Try to intercept the render response
+                    try {
+                        // Override XMLHttpRequest to capture responses
+                        var originalOpen = XMLHttpRequest.prototype.open;
+                        var originalSend = XMLHttpRequest.prototype.send;
+                        
+                        XMLHttpRequest.prototype.open = function(method, url) {
+                            this._url = url;
+                            return originalOpen.apply(this, arguments);
+                        };
+                        
+                        XMLHttpRequest.prototype.send = function() {
+                            var xhr = this;
+                            var originalOnReadyStateChange = xhr.onreadystatechange;
+                            
+                            xhr.onreadystatechange = function() {
+                                if (xhr.readyState === 4) {
+                                    try {
+                                        var response = xhr.responseText;
+                                        if (response && response.match(/\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}/)) {
+                                            log('🎯 CARD DATA IN XHR RESPONSE from ' + xhr._url + ': ' + response.match(/\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}/)[0]);
+                                        }
+                                    } catch(e) {}
+                                }
+                                if (originalOnReadyStateChange) {
+                                    return originalOnReadyStateChange.apply(this, arguments);
+                                }
+                            };
+                            
+                            return originalSend.apply(this, arguments);
+                        };
+                        
+                        log('Method 6 - XHR interception installed');
+                    } catch(e) {
+                        log('Method 6 failed: ' + e.message);
+                    }
+                    
+                    // Method 7: Check iframe postMessage
+                    try {
+                        // Already set up in Method 2, but let's be more aggressive
+                        var originalPostMessage = window.postMessage;
+                        window.postMessage = function(data, origin) {
+                            log('PostMessage intercepted: ' + JSON.stringify(data));
+                            return originalPostMessage.apply(window, arguments);
+                        };
+                        
+                        log('Method 7 - PostMessage override installed');
+                    } catch(e) {
+                        log('Method 7 failed: ' + e.message);
+                    }
+                    
+                    // Send rendered notification
+                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.strigaNative) {
+                        window.webkit.messageHandlers.strigaNative.postMessage({
+                            type: 'rendered'
+                        });
+                    }
+                }, 1000); // Delay to ensure rendering is complete
+                
+                // Try again after a longer delay
+                setTimeout(function() {
+                    log('=== SECOND EXTRACTION ATTEMPT (3s delay) ===');
+                    
+                    // Check all iframes again
+                    var iframes = document.querySelectorAll('iframe');
+                    iframes.forEach(function(iframe, idx) {
+                        try {
+                            // Try to access the iframe document
+                            var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                            var body = iframeDoc.body;
+                            
+                            // Get all text content
+                            var allText = body.innerText || body.textContent;
+                            if (allText && allText.trim()) {
+                                log('🎉🎉🎉 IFRAME ' + idx + ' FINAL CONTENT: ' + allText);
+                            }
+                            
+                            // Try to get specific elements
+                            var spans = iframeDoc.querySelectorAll('span, div, p');
+                            spans.forEach(function(span) {
+                                var text = span.innerText || span.textContent;
+                                if (text && text.match(/\d{4}/)) {
+                                    log('🎯 Found number in iframe ' + idx + ': ' + text);
+                                }
+                            });
+                        } catch(e) {
+                            // Try selection API
+                            try {
+                                iframe.contentWindow.document.execCommand('selectAll');
+                                var selection = iframe.contentWindow.getSelection();
+                                if (selection && selection.toString()) {
+                                    log('🎯 SELECTION in iframe ' + idx + ': ' + selection.toString());
+                                }
+                            } catch(e2) {}
+                        }
                     });
-                }
+                    
+                    // Final check of Striga internals
+                    if (window.StrigaUXPlugin) {
+                        log('Final StrigaUXPlugin check:');
+                        log('Properties: ' + Object.getOwnPropertyNames(window.StrigaUXPlugin).join(', '));
+                        
+                        // Try to access rendered elements
+                        var renderedElements = window.StrigaUXPlugin._renderedElements || 
+                                             window.StrigaUXPlugin.renderedElements ||
+                                             window.StrigaUXPlugin._elements ||
+                                             window.StrigaUXPlugin.elements;
+                        if (renderedElements) {
+                            log('Found rendered elements: ' + JSON.stringify(renderedElements));
+                        }
+                    }
+                    
+                    // Method 8: Try to capture the visual rendering
+                    try {
+                        // Try html2canvas approach - create canvas from iframe
+                        var iframes = document.querySelectorAll('iframe');
+                        iframes.forEach(function(iframe, idx) {
+                            try {
+                                // Try to draw the iframe to a canvas
+                                var canvas = document.createElement('canvas');
+                                var ctx = canvas.getContext('2d');
+                                canvas.width = iframe.offsetWidth;
+                                canvas.height = iframe.offsetHeight;
+                                
+                                // This might work if same-origin
+                                ctx.drawImage(iframe, 0, 0);
+                                
+                                // Try to get image data
+                                var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                                log('Canvas capture successful for iframe ' + idx);
+                                
+                                // Convert to base64 and send to Swift for OCR
+                                var dataURL = canvas.toDataURL();
+                                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.strigaNative) {
+                                    window.webkit.messageHandlers.strigaNative.postMessage({
+                                        type: 'screenshot',
+                                        iframe: idx,
+                                        image: dataURL
+                                    });
+                                }
+                            } catch(e) {
+                                log('Canvas capture failed for iframe ' + idx + ': ' + e.message);
+                            }
+                        });
+                    } catch(e) {
+                        log('Method 8 (canvas) failed: ' + e.message);
+                    }
+                    
+                    // Method 9: Try to use getComputedStyle to read rendered text
+                    try {
+                        var cardNumEl = document.querySelector('#cardNumber iframe');
+                        if (cardNumEl) {
+                            // Get the bounding box
+                            var rect = cardNumEl.getBoundingClientRect();
+                            log('Card number iframe position: ' + rect.left + ',' + rect.top + ' size: ' + rect.width + 'x' + rect.height);
+                            
+                            // Try to get what's visually at that position
+                            var elements = document.elementsFromPoint(rect.left + rect.width/2, rect.top + rect.height/2);
+                            elements.forEach(function(el) {
+                                if (el.innerText || el.textContent) {
+                                    log('Element at card position: ' + (el.innerText || el.textContent));
+                                }
+                            });
+                        }
+                    } catch(e) {
+                        log('Method 9 (computed style) failed: ' + e.message);
+                    }
+                    
+                    // Method 10: Request Swift to take a screenshot
+                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.strigaNative) {
+                        window.webkit.messageHandlers.strigaNative.postMessage({
+                            type: 'requestScreenshot',
+                            message: 'Please capture the screen content'
+                        });
+                    }
+                    
+                }, 3000); // 3 second delay for final attempt
             }).catch(function(e) {
                 log('ERROR: renderCard failed: ' + e);
                 if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.strigaNative) {
@@ -221,6 +684,12 @@
                     });
                 }
             });
+        };
+        
+        // Set card details from Swift (name and expiry)
+        window.setCardDetails = function(holder, expiry) {
+            document.getElementById('cardHolder').innerText = holder.toUpperCase();
+            document.getElementById('expiry').innerText = expiry;
         };
     </script>
 </body>

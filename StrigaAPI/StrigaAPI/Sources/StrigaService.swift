@@ -81,13 +81,45 @@ public final class StrigaService {
 
     @discardableResult
     public func getWallets(userId: String) async throws -> GetWalletsResponse {
-        let url = try url(for: "v1/wallets/\(userId)")
-        return try await httpClient.get(url: url)
+        // Correct endpoint from Striga documentation: v1/wallets/get/all
+        let url = try url(for: "v1/wallets/get/all")
+        
+        // Create date range for the last year
+        let endDate = Date()
+        let startDate = Calendar.current.date(byAdding: .year, value: -1, to: endDate) ?? endDate
+        
+        // Convert to Unix timestamps in milliseconds (Striga standard)
+        let startTimestamp = Int(startDate.timeIntervalSince1970 * 1000)
+        let endTimestamp = Int(endDate.timeIntervalSince1970 * 1000)
+        
+        struct GetWalletsInput: Encodable {
+            let userId: String
+            let startDate: Int
+            let endDate: Int
+            let page: Int
+        }
+        
+        let input = GetWalletsInput(
+            userId: userId,
+            startDate: startTimestamp,
+            endDate: endTimestamp,
+            page: 1
+        )
+        
+        print("[StrigaService] Getting wallets with timestamps: start=\(startTimestamp), end=\(endTimestamp)")
+        
+        return try await httpClient.post(url: url, input: input)
     }
     
     @discardableResult
     public func enrichAccount(_ input: EnrichAccount) async throws -> EnrichAccountResponse {
-        let url = try url(for: "v1/account/enrich")
+        let url = try url(for: "v1/wallets/account/enrich")
+        return try await httpClient.post(url: url, input: input)
+    }
+    
+    @discardableResult
+    public func getAccount(_ input: GetAccount) async throws -> GetAccountResponse {
+        let url = try url(for: "v1/wallets/get/account")
         return try await httpClient.post(url: url, input: input)
     }
 

@@ -1,0 +1,7 @@
+{
+  "key_id": "YOUR_KEY_ID_HERE",
+  "issuer_id": "YOUR_ISSUER_ID_HERE", 
+  "key": "-----BEGIN PRIVATE KEY-----\nPASTE_YOUR_P8_FILE_CONTENTS_HERE\n-----END PRIVATE KEY-----",
+  "duration": 1200,
+  "in_house": false
+}

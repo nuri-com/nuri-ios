@@ -17,6 +17,7 @@ public struct CreateWalletResponse: Codable {
         public let btc: Account?
         public let eth: Account?
         public let usdt: Account?
+        public let sol: Account?
 
         private enum CodingKeys: String, CodingKey {
             case eur = "EUR"
@@ -26,6 +27,7 @@ public struct CreateWalletResponse: Codable {
             case btc = "BTC"
             case eth = "ETH"
             case usdt = "USDT"
+            case sol = "SOL"
         }
     }
 
@@ -45,8 +47,39 @@ public struct CreateWalletResponse: Codable {
         public let parentApplicationId: String
         public let syncedOwnerId: String
         public let accountPath: String
-        public let blockchainNetworks: [String]?
+        public let blockchainNetworks: [BlockchainNetworkInfo]?
         public let multiChainSupport: Bool?
+        public let blockchainDepositAddress: String?
+        public let blockchainNetwork: BlockchainNetworkInfo?
+        public let bankingDetails: BankingDetails?
+        
+        public struct BlockchainNetworkInfo: Codable {
+            public let name: String
+        }
+        
+        public struct BankingDetails: Codable {
+            public let currency: String
+            public let status: String
+            public let internalAccountId: String
+            public let bankCountry: String
+            public let bankAddress: String
+            public let iban: String
+            public let bic: String
+            public let accountNumber: String
+            public let bankName: String
+            public let bankAccountHolderName: String
+            public let provider: String
+            public let paymentType: String?
+            public let domestic: Bool
+            public let routingCodeEntries: [String]
+            public let payInReference: String?
+            public let bban: String?
+            
+            // Computed property for compatibility
+            public var accountHolderName: String {
+                return bankAccountHolderName
+            }
+        }
     }
 
     public struct Balance: Codable {
