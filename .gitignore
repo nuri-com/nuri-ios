@@ -135,3 +135,7 @@ Certificates/
 # Logs
 Logs/
 *.log
+
+# Local development files - NEVER COMMIT
+.local/
+local/
