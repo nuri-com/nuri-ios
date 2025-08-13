@@ -39,6 +39,7 @@ platform :ios do
       clean: true,
       xcargs: "CURRENT_PROJECT_VERSION=#{next_build}",
       export_method: "app-store",
+      build_number: build_number.to_s,
       export_options: {
         method: "app-store-connect",
         teamID: "MH2SRQ3N27",
