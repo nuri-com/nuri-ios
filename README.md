@@ -11,6 +11,16 @@ tuist generate
 
 Then open the generated workspace and select the **Nuri** scheme.
 
+## 📚 Documentation
+
+All project documentation is organized in the [Documentation](./Documentation/) folder:
+
+- **[Setup Instructions](./Documentation/Setup/)** - Development environment and Fastlane configuration
+- **[Deployment Guide](./Documentation/Deployment/DEPLOYMENT_INSTRUCTIONS.md)** - Automated TestFlight deployment
+- **[Architecture](./Documentation/Architecture/)** - Design patterns and guidelines
+- **[Implementation Details](./Documentation/Implementation/)** - Feature specifications and integration docs
+- **[Development Guides](./Documentation/Guides/)** - Testing, debugging, and best practices
+
 ## Building and Distribution
 
 ### Prerequisites
@@ -24,9 +34,24 @@ Then open the generated workspace and select the **Nuri** scheme.
 
 ### Building with Fastlane
 
-Fastlane provides several options for building the app:
+#### Automated TestFlight Deployment (Recommended)
 
-#### 1. Build Archive for Manual Distribution (Recommended)
+Deploy directly to TestFlight with one command:
+
+```bash
+fastlane deploy
+```
+
+This automatically:
+- Generates the project with Tuist
+- Retrieves the latest build number
+- Increments the build number
+- Builds and signs the app
+- Uploads to TestFlight
+
+For detailed instructions, see [Deployment Documentation](./Documentation/Deployment/DEPLOYMENT_INSTRUCTIONS.md).
+
+#### Build Archive for Manual Distribution
 
 To build an archive that you can manually distribute through Xcode Organizer:
 
@@ -42,31 +67,6 @@ This will create an archive at `./builds/Nuri.xcarchive`. After the build comple
 5. Click "Distribute App"
 6. Choose "App Store Connect"
 7. Follow the wizard to upload to TestFlight
-
-#### 2. Build IPA Directly
-
-To build an IPA file directly (requires proper signing configuration):
-
-```bash
-fastlane build_only
-```
-
-This creates an IPA at `./builds/Nuri-TestFlight.ipa`.
-
-#### 3. Build and Upload to TestFlight Automatically
-
-To build and upload directly to TestFlight:
-
-```bash
-fastlane beta
-```
-
-This will:
-- Check that your git status is clean
-- Increment the build number
-- Build the app
-- Upload to TestFlight
-- Commit and push the version bump
 
 ### Manual Build with Xcode
 
