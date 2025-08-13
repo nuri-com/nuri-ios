@@ -127,6 +127,11 @@ fastlane/AuthKey_*.p8
 *.certSigningRequest
 *.p8
 api_key.json
+Certificates/
 
 # Additional provisioning profiles in root (backup rule)
 *.mobileprovision
+
+# Logs
+Logs/
+*.log
