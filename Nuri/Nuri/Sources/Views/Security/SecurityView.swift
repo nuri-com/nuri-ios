@@ -48,6 +48,8 @@ struct SecurityView: View {
     @AppStorage("encryptionKeysMatch") var encryptionKeysMatch: Bool = false
     @AppStorage("canDecryptWallet") var canDecryptWallet: Bool = false
     
+    // Bitcoin Network Settings
+    @AppStorage("bitcoinNetwork") var bitcoinNetwork: String = "testnet3"
 
 
     var body: some View {
@@ -60,6 +62,43 @@ struct SecurityView: View {
             )
         } content: {
             Form {
+                Section(header: Text("Bitcoin Network")) {
+                    HStack {
+                        Image(systemName: "network")
+                            .foregroundColor(.orange)
+                        Text("Network")
+                        Spacer()
+                        Picker("", selection: $bitcoinNetwork) {
+                            Text("Mainnet").tag("mainnet")
+                            Text("Testnet3").tag("testnet3")
+                        }
+                        .pickerStyle(SegmentedPickerStyle())
+                        .frame(width: 180)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Image(systemName: bitcoinNetwork == "testnet3" ? "testtube.2" : "bitcoinsign.circle")
+                                .foregroundColor(bitcoinNetwork == "testnet3" ? .orange : .yellow)
+                                .font(.caption)
+                            Text(bitcoinNetwork == "testnet3" ? "Using Bitcoin Testnet3" : "Using Bitcoin Mainnet")
+                                .font(.caption)
+                                .foregroundColor(bitcoinNetwork == "testnet3" ? .orange : .primary)
+                        }
+                        Text(bitcoinNetwork == "testnet3" ? 
+                            "Test network for development. Coins have no value." : 
+                            "Real Bitcoin network. Transactions are irreversible.")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                }
+                .onChange(of: bitcoinNetwork) { newNetwork in
+                    Task {
+                        await handleNetworkChange(to: newNetwork)
+                    }
+                }
+                
                 Section(header: Text("Session Management")) {
                     Button(action: { showingLogoutConfirmation = true }) {
                         HStack {
@@ -2306,6 +2345,23 @@ struct SecurityView: View {
         }
         
         isLoadingStrigaUser = false
+    }
+    
+    @MainActor
+    private func handleNetworkChange(to newNetwork: String) async {
+        Log.ui.info("Switching Bitcoin network", metadata: ["newNetwork": newNetwork])
+        
+        // Show loading state
+        isLoading = true
+        resultText = "Switching to \(newNetwork == "testnet3" ? "Testnet3" : "Mainnet")...\n\nThis will clear your wallet and create a new one on the selected network."
+        
+        // Switch the network in the wallet service
+        await bitcoinWalletService.switchNetwork(to: newNetwork == "testnet3" ? .testnet : .bitcoin)
+        
+        // Clear loading state
+        isLoading = false
+        
+        resultText = "✅ Switched to \(newNetwork == "testnet3" ? "Bitcoin Testnet3" : "Bitcoin Mainnet")\n\nWallet has been reset for the new network."
     }
 }
 

@@ -123,7 +123,15 @@ struct Country: Identifiable, Equatable {
     var display: String { "\(flag) \(name)" }
 
     static var `default`: Country? {
-        if let code = Locale.current.regionCode,
+        // iOS 16+ fix for deprecated regionCode
+        let code: String?
+        if #available(iOS 16.0, *) {
+            code = Locale.current.region?.identifier
+        } else {
+            code = Locale.current.regionCode
+        }
+        
+        if let code = code,
            let name = Locale.current.localizedString(forRegionCode: code) {
             return Country(code: code, name: name)
         }

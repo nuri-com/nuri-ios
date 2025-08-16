@@ -21,6 +21,7 @@ struct BitcoinView: View {
     @State private var showStrigaDebug = false
     @State private var refreshTask: Task<Void, Never>?
     @State private var isRefreshingPrice = false
+    @AppStorage("bitcoinNetwork") var bitcoinNetwork: String = "testnet3"
     
     // Cache key for exchange rate
     private let exchangeRateCacheKey = "nuri.exchangeRate.eur"
@@ -39,9 +40,31 @@ struct BitcoinView: View {
             VStack(spacing: 0) {
                 NuriHeader<AnyView, AnyView>.logoAndCTA(
                     title: "",
-                    cta: "+ Buy Bitcoin",
-                    onCTA: { navigation.isBuyViewPresented = true }
+                    cta: NetworkConfiguration.shared.shouldShowBuyButton ? NetworkConfiguration.shared.buyButtonText : "",
+                    onCTA: { 
+                        if NetworkConfiguration.shared.shouldShowBuyButton {
+                            navigation.isBuyViewPresented = true
+                        }
+                    }
                 )
+                
+                // Network indicator
+                if bitcoinNetwork == "testnet3" {
+                    HStack {
+                        Image(systemName: "testtube.2")
+                            .font(.caption2)
+                        Text("TESTNET3")
+                            .font(.caption2.bold())
+                        Text("- Test coins only")
+                            .font(.caption2)
+                    }
+                    .foregroundColor(.orange)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 4)
+                    .background(Color.orange.opacity(0.1))
+                    .cornerRadius(4)
+                    .padding(.top, 8)
+                }
 
                 VStack {
                     Spacer()
@@ -50,11 +73,11 @@ struct BitcoinView: View {
                             AmountAndCurrency(isPrimaryBTC: $isPrimaryBTC,
                                              isBalanceHidden: $isBalanceHidden,
                                              sats: walletState.balance.confirmed,
-                                             rate: exchangeRate)
+                                             rate: NetworkConfiguration.shared.getDisplayExchangeRate(exchangeRate))
                             SecondaryCurrencyAndAmount(isPrimaryBTC: $isPrimaryBTC,
                                                        isBalanceHidden: $isBalanceHidden,
                                                        sats: walletState.balance.confirmed,
-                                                       rate: exchangeRate)
+                                                       rate: NetworkConfiguration.shared.getDisplayExchangeRate(exchangeRate))
                         }
                         .onTapGesture {
                             isBalanceHidden.toggle()

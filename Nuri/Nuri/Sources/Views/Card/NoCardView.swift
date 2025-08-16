@@ -44,6 +44,14 @@ struct NoCardView: View {
                     .padding(.top, -6)
                     .padding(.bottom, 24)
                 Button(action: {
+                    let hasStrigaId = UserSettings().strigaUserId != nil
+                    print("\n" + String(repeating: "=", count: 80))
+                    print("🎯 [NoCardView] USER INITIATING CARD CREATION")
+                    print("   👤 Has Striga ID: \(hasStrigaId)")
+                    print("   📝 Button Text: \(hasStrigaId ? "Get Card" : "Create Account")")
+                    print("   🔄 Flow: \(hasStrigaId ? "Create card for existing user" : "New user registration")")
+                    print(String(repeating: "=", count: 80) + "\n")
+                    
                     navigation.isPresented = true
                 }) {
                     NuriButton(

@@ -12,7 +12,13 @@ final class TransactionManager {
     
     // MARK: - Dependencies
     private let walletService: BitcoinWalletService
-    private let walletState = WalletStateManager.shared
+    
+    // MARK: - Network Helper
+    private var currentNetwork: Network {
+        // Read network from UserDefaults
+        let networkString = UserDefaults.standard.string(forKey: "bitcoinNetwork") ?? "testnet3"
+        return networkString == "testnet3" ? .testnet : .bitcoin
+    }
     
     private init(walletService: BitcoinWalletService = .shared) {
         self.walletService = walletService
@@ -81,8 +87,7 @@ final class TransactionManager {
     func validateAddress(_ address: String) -> Bool {
         do {
             // Use the current network from wallet service
-            let network: Network = .bitcoin // mainnet
-            let _ = try Address(address: address, network: network)
+            let _ = try Address(address: address, network: currentNetwork)
             return true
         } catch {
             print("❌ [TransactionManager] Invalid address validation: \(error)")
@@ -122,7 +127,7 @@ final class TransactionManager {
         
         // Get current balance from cached state
         print("🔍 [TransactionManager] Getting balance from state manager...")
-        let balance = await walletState.getBalance(forceRefresh: false)
+        let balance = await WalletStateManager.shared.getBalance(forceRefresh: false)
         
         print("💰 [TransactionManager] Balance details:")
         print("   ✅ Confirmed: \(balance.confirmed) sats")
@@ -140,7 +145,7 @@ final class TransactionManager {
         
         do {
             // Create actual transaction to estimate fee (using real recipient address)
-            let script = try Address(address: recipientAddress, network: .bitcoin).scriptPubkey()
+            let script = try Address(address: recipientAddress, network: currentNetwork).scriptPubkey()
             
             let txBuilder = try TxBuilder()
                 .addRecipient(
@@ -213,7 +218,7 @@ final class TransactionManager {
         
         // Verify we have enough funds including fee (use cached balance for speed)
         print("🔍 [TransactionManager] Final balance check...")
-        let balance = await walletState.getBalance(forceRefresh: false)
+        let balance = await WalletStateManager.shared.getBalance(forceRefresh: false)
         
         print("💰 [TransactionManager] Final balance comparison:")
         print("   ✅ Confirmed: \(balance.confirmed) sats")
@@ -420,7 +425,7 @@ final class TransactionManager {
         feeRate: UInt64
     ) throws -> Psbt {
         
-        let script = try Address(address: recipientAddress, network: .bitcoin).scriptPubkey()
+        let script = try Address(address: recipientAddress, network: currentNetwork).scriptPubkey()
         
         let txBuilder = try TxBuilder()
             .addRecipient(

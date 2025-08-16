@@ -8,8 +8,8 @@ struct SetAmountView: View {
     @StateObject private var walletState = WalletStateManager.shared
 
     @State private var navigateToConfirm = false
-    @State private var satsToEurRate: Double = 0
-    @State private var btcToEurRate: Double = 0
+    @State private var satsToEurRate: Double = 0.0005 // Default fallback rate
+    @State private var btcToEurRate: Double = 50000.0 // Default fallback rate
 
     // Amounts to forward to confirmation screen  
     @State private var btcAmount: Double = 0 // Still in BTC for compatibility with ConfirmTransactionView
@@ -61,11 +61,16 @@ struct SetAmountView: View {
                     } else {
                         // amount is in EUR
                         eur = amount
-                        btc = amount / btcToEurRate
+                        // Ensure we never divide by zero
+                        let safeRate = btcToEurRate > 0 ? btcToEurRate : 50000.0
+                        btc = amount / safeRate
                         print("💶 [SetAmountView] EUR PATH:")
                         print("   💶 EUR: \(eur)")
                         print("   ₿ BTC: \(btc)")
-                        print("   🧮 Calculation: \(eur) EUR / \(btcToEurRate) rate = \(btc) BTC")
+                        print("   🧮 Calculation: \(eur) EUR / \(safeRate) rate = \(btc) BTC")
+                        if btcToEurRate == 0 {
+                            print("⚠️ [SetAmountView] Exchange rate was 0, using fallback rate: \(safeRate)")
+                        }
                         
                         if btc == 0 {
                             print("❌ [SetAmountView] 🚨 CRITICAL: btc calculated as 0!")
@@ -114,8 +119,14 @@ struct SetAmountView: View {
                 print("⚡ [SetAmountView] Fee rates: \(walletState.feeRates.defaultFee) sat/vB")
                 
                 await MainActor.run {
-                    btcToEurRate = fetchedBtcToEurRate
-                    satsToEurRate = fetchedBtcToEurRate / 100_000_000
+                    // Ensure we have a valid exchange rate
+                    if fetchedBtcToEurRate > 0 {
+                        btcToEurRate = fetchedBtcToEurRate
+                        satsToEurRate = fetchedBtcToEurRate / 100_000_000
+                    } else {
+                        // Keep the default fallback values
+                        print("⚠️ [SetAmountView] Using fallback exchange rate")
+                    }
                 }
             }
 
@@ -140,15 +151,21 @@ struct SetAmountView: View {
     }
     
     private func fetchPrice() async -> Double {
-        guard let url = URL(string: "https://mempool.space/api/v1/prices") else { return 0 }
+        guard let url = URL(string: "https://mempool.space/api/v1/prices") else { 
+            print("❌ [SetAmountView] Invalid URL for price fetch")
+            return 50000.0 // Default fallback price
+        }
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
             if let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any], let eur = dict["EUR"] as? Double {
+                print("✅ [SetAmountView] Fetched BTC price: €\(eur)")
                 return eur
             }
         } catch {
-            print("Price fetch failed", error)
+            print("❌ [SetAmountView] Price fetch failed: \(error)")
         }
-        return 0
+        // Return a reasonable default price instead of 0
+        print("⚠️ [SetAmountView] Using fallback BTC price: €50000")
+        return 50000.0 // Reasonable fallback price to prevent division by zero
     }
 }

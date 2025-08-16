@@ -12,6 +12,10 @@ struct BuyConfirmView: View {
     @State private var isBuying = false
     @State private var showSuccess = false
     @State private var btcAddress = ""
+    @State private var errorMessage = ""
+    @State private var showError = false
+    @State private var eurAccountId = ""
+    @State private var btcAccountId = ""
     
     private let striga = StrigaService.shared
     
@@ -163,15 +167,35 @@ struct BuyConfirmView: View {
             SuccessView(
                 illustration: "bitcoin-sent",
                 title: "Bitcoin purchased!",
-                subtitle: "₿ \(String(amountSats)) will arrive in your wallet shortly",
+                subtitle: "₿ \(String(amountSats)) has been purchased in your Striga wallet",
                 onDone: {
                     navigation.isBuyViewPresented = false
                 }
             )
         }
+        .alert("Error", isPresented: $showError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(errorMessage)
+        }
     }
     
     private func loadBitcoinAddress() async {
+        // Get the user's actual testnet wallet address from the app
+        if let appWalletAddress = BitcoinWalletService.shared.currentAddress() {
+            await MainActor.run {
+                self.btcAddress = appWalletAddress
+            }
+            print("✅ [BuyConfirmView] Using app's testnet wallet address: \(appWalletAddress)")
+        } else {
+            print("❌ [BuyConfirmView] Could not get wallet address from app")
+            await MainActor.run {
+                self.errorMessage = "Unable to get your wallet address. Please try again."
+                self.showError = true
+            }
+        }
+        
+        // Also load the Striga account IDs for the swap
         do {
             guard let userId = StrigaSession.shared.userId ?? UserSettings().strigaUserId,
                   let cardId = StrigaSession.shared.cardId ?? UserSettings().strigaCardId else {
@@ -189,35 +213,36 @@ struct BuyConfirmView: View {
             // Get wallet details
             let walletResponse = try await striga.getWallet(cardResponse.parentWalletId, userId: userId)
             
-            // Get Bitcoin address
+            // Store account IDs for swap
+            if let eurAccount = walletResponse.accounts.eur {
+                await MainActor.run {
+                    self.eurAccountId = eurAccount.accountId
+                }
+                print("✅ [BuyConfirmView] EUR account ID: \(eurAccount.accountId)")
+            }
+            
             if let btcAccount = walletResponse.accounts.btc {
-                // Check if already has address
-                if let address = btcAccount.blockchainDepositAddress, !address.isEmpty {
-                    await MainActor.run {
-                        self.btcAddress = address
-                    }
-                } else {
-                    // Need to enrich
+                await MainActor.run {
+                    self.btcAccountId = btcAccount.accountId
+                }
+                print("✅ [BuyConfirmView] BTC account ID: \(btcAccount.accountId)")
+                
+                // Ensure BTC account is enriched (has blockchain address)
+                if btcAccount.blockchainDepositAddress == nil || btcAccount.blockchainDepositAddress!.isEmpty {
                     print("🔄 [BuyConfirmView] Enriching BTC account...")
-                    let enrichResponse = try await striga.enrichAccount(
+                    _ = try await striga.enrichAccount(
                         EnrichAccount(accountId: btcAccount.accountId, userId: userId)
                     )
-                    
-                    if let address = enrichResponse.blockchainDepositAddress {
-                        await MainActor.run {
-                            self.btcAddress = address
-                        }
-                    }
+                    print("✅ [BuyConfirmView] BTC account enriched")
                 }
-                print("✅ [BuyConfirmView] Bitcoin address: \(btcAddress)")
             }
         } catch {
-            print("❌ [BuyConfirmView] Error loading Bitcoin address: \(error)")
+            print("❌ [BuyConfirmView] Error loading account IDs: \(error)")
         }
     }
     
     private func buyBitcoin() {
-        print("🚀 [BuyConfirmView] Buy Bitcoin clicked - MOCKUP MODE")
+        print("🚀 [BuyConfirmView] Starting real EUR to BTC swap on testnet")
         print("   💰 Amount: ₿ \(amountSats) sats")
         print("   💶 EUR: €\(eurAmount)")
         print("   📍 Destination: \(btcAddress)")
@@ -226,17 +251,71 @@ struct BuyConfirmView: View {
         
         isBuying = true
         
-        // Mock the purchase - just show success after 2 seconds
         Task {
-            try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
-            
-            await MainActor.run {
-                isBuying = false
-                showSuccess = true
+            do {
+                guard let userId = StrigaSession.shared.userId ?? UserSettings().strigaUserId else {
+                    throw NSError(domain: "BuyConfirmView", code: 1, userInfo: [NSLocalizedDescriptionKey: "Missing user ID"])
+                }
+                
+                guard !eurAccountId.isEmpty && !btcAccountId.isEmpty else {
+                    throw NSError(domain: "BuyConfirmView", code: 2, userInfo: [NSLocalizedDescriptionKey: "Missing account IDs"])
+                }
+                
+                // Convert EUR amount to cents (Striga uses smallest units)
+                let eurAmountCents = Int(totalEUR * 100)
+                
+                print("🔄 [BuyConfirmView] Step 1: Performing EUR to BTC swap...")
+                print("   💶 Source: EUR account \(eurAccountId)")
+                print("   ₿ Destination: BTC account \(btcAccountId)")
+                print("   💰 Amount: \(eurAmountCents) cents")
+                
+                // Perform the swap from EUR to BTC
+                let swapResponse = try await striga.swapCurrencies(.init(
+                    userId: userId,
+                    sourceAccountId: eurAccountId,
+                    destinationAccountId: btcAccountId,
+                    amount: String(eurAmountCents),
+                    ip: "127.0.0.1"
+                ))
+                
+                print("✅ [BuyConfirmView] Swap successful!")
+                print("   🆔 Swap ID: \(swapResponse.id)")
+                print("   📊 Status: \(swapResponse.status)")
+                print("   💶 EUR used: \(swapResponse.sourceAmount) cents (\(swapResponse.order?.debit.amountFloat ?? "0") EUR)")
+                print("   ₿ BTC received: \(swapResponse.destinationAmount) satoshis (\(swapResponse.order?.credit.amountFloat ?? "0") BTC)")
+                print("   📈 Exchange rate: \(swapResponse.exchangeRate) EUR/BTC")
+                
+                // Wait a moment for the swap to process
+                try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+                
+                // Step 2: BTC is now in user's Striga BTC wallet
+                print("🎉 [BuyConfirmView] Purchase completed successfully!")
+                print("   ✅ EUR to BTC swap executed on Striga testnet")
+                print("   💶 EUR spent: \(swapResponse.order?.debit.amountFloat ?? "0") EUR")
+                print("   ₿ BTC received: \(swapResponse.order?.credit.amountFloat ?? "0") BTC (\(swapResponse.destinationAmount) sats)")
+                print("   📍 BTC is now in your Striga BTC wallet")
+                print("")
+                print("ℹ️ [BuyConfirmView] Next step in production:")
+                print("   • User would withdraw BTC from Striga to: \(btcAddress)")
+                print("   • This can be done via Striga's web interface or API")
+                print("   • For testnet demonstration, the BTC remains in Striga wallet")
+                
+                await MainActor.run {
+                    isBuying = false
+                    showSuccess = true
+                }
+                
+                // Refresh balance after successful purchase
+                await walletState.getBalance(forceRefresh: true)
+                
+            } catch {
+                print("❌ [BuyConfirmView] Error during purchase: \(error)")
+                await MainActor.run {
+                    isBuying = false
+                    errorMessage = "Failed to complete purchase: \(error.localizedDescription)"
+                    showError = true
+                }
             }
-            
-            print("✅ [BuyConfirmView] MOCKUP: Purchase completed successfully")
-            print("ℹ️ [BuyConfirmView] Note: This is a mockup - no actual purchase was made")
         }
     }
 }

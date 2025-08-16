@@ -91,7 +91,10 @@ public struct AmountEntryScreen: View {
                             .font(.system(size: 40, weight: .semibold))
                             .keyboardType(.numberPad)
                             .tint(Color("PrimaryNuriLilac"))
-                            .onChange(of: amountText, perform: sanitizeInput)
+                            .onChange(of: amountText, perform: { newValue in
+                                print("📝 [AmountEntryScreen] Amount text changed: '\(newValue)'")
+                                sanitizeInput(newValue)
+                            })
                         Button(action: toggleCurrency) {
                             Image("transfer_vertical")
                                 .resizable()
@@ -151,37 +154,48 @@ public struct AmountEntryScreen: View {
     private func secondaryDisplayText() -> String {
         guard !amountText.isEmpty else { return "" }
         
-        // Guard against invalid exchange rate
-        guard exchangeRate > 0 else {
-            return isPrimaryCrypto ? "€ --" : "₿ --"
-        }
+        // Prevent calculations with extremely large numbers
+        guard amountValue < 1_000_000_000_000 else { return "Amount too large" }
+        
+        // Use a safe default exchange rate if not set
+        let safeRate = max(exchangeRate, 1.0) // Never allow zero or negative
         
         if isPrimaryCrypto {
             // When crypto is primary, we need to check which symbol we're actually showing
             if secondarySymbol == "₿" {
                 // We toggled, so ₿ is now primary, meaning amountValue is in SATOSHIS
                 // Convert sats to EUR: sats -> BTC -> EUR
+                guard amountValue > 0 else { return "€ 0.00" }
                 let btcValue = amountValue / 100_000_000
-                let eurValue = btcValue * exchangeRate
+                let eurValue = btcValue * safeRate
+                guard eurValue.isFinite && eurValue < Double.greatestFiniteMagnitude else {
+                    return "€ --"
+                }
                 return "€ " + String(format: "%.2f", eurValue)
             } else {
                 // Showing BTC, convert to EUR
-                let eurValue = amountValue * exchangeRate
+                let eurValue = amountValue * safeRate
+                guard eurValue.isFinite && eurValue < Double.greatestFiniteMagnitude else {
+                    return "€ --"
+                }
                 return "€ " + String(format: "%.2f", eurValue)
             }
         } else {
             // Showing EUR, convert to sats
             if secondarySymbol == "₿" {
-                let sats = (amountValue / exchangeRate) * 100_000_000
-                // Protect against NaN/Infinity before converting to Int
-                if sats.isNaN || sats.isInfinite {
+                guard amountValue > 0 && safeRate > 0 else { return "₿ 0" }
+                // Check if division would be safe
+                guard amountValue < safeRate * 21_000_000 else { return "₿ --" } // Max BTC supply
+                let sats = (amountValue / safeRate) * 100_000_000
+                guard sats.isFinite && sats > 0 && sats < 2_100_000_000_000_000 else {
                     return "₿ --"
                 }
-                return "₿ " + String(Int(round(sats)))
+                return "₿ " + String(Int(min(sats, Double(Int.max))))
             } else {
                 // EUR to BTC
-                let btcValue = amountValue / exchangeRate
-                if btcValue.isNaN || btcValue.isInfinite {
+                guard amountValue > 0 && safeRate > 0 else { return secondarySymbol + " 0" }
+                let btcValue = amountValue / safeRate
+                guard btcValue.isFinite && btcValue < 21_000_000 else {
                     return secondarySymbol + " --"
                 }
                 return secondarySymbol + " " + String(format: "%.8f", btcValue)
@@ -192,40 +206,61 @@ public struct AmountEntryScreen: View {
     private func toggleCurrency() {
         let current = amountValue
         
-        // Guard against invalid exchange rate
-        guard exchangeRate > 0 else {
-            // Can't toggle without valid exchange rate
+        // Bounds check
+        guard current >= 0 && current < 1_000_000_000_000 else {
+            isPrimaryCrypto.toggle()
             return
         }
+        
+        // Use a safe default exchange rate if not set
+        let safeRate = max(exchangeRate, 1.0)
         
         if isPrimaryCrypto { // Switching from Crypto to Fiat
             if secondarySymbol == "₿" {
                 // We're showing ₿ as primary, so current is in SATOSHIS
                 // Converting from sats to EUR
                 let btcValue = current / 100_000_000
-                let eurValue = btcValue * exchangeRate
-                if !eurValue.isNaN && !eurValue.isInfinite {
+                let eurValue = btcValue * safeRate
+                if eurValue.isFinite && eurValue > 0 && eurValue < 1_000_000_000 {
                     amountText = String(Int(round(eurValue)))
+                } else {
+                    amountText = "0"
                 }
             } else {
                 // Converting from BTC to EUR
-                let eurValue = current * exchangeRate
-                if !eurValue.isNaN && !eurValue.isInfinite {
+                let eurValue = current * safeRate
+                if eurValue.isFinite && eurValue > 0 && eurValue < 1_000_000_000 {
                     amountText = String(Int(round(eurValue)))
+                } else {
+                    amountText = "0"
                 }
             }
         } else { // Switching from Fiat (EUR) to Crypto (sats)
             if secondarySymbol == "₿" {
                 // Converting from EUR to sats
-                let satsValue = (current / exchangeRate) * 100_000_000
-                if !satsValue.isNaN && !satsValue.isInfinite {
-                    amountText = String(Int(round(satsValue)))
+                guard safeRate > 0 else {
+                    amountText = "0"
+                    isPrimaryCrypto.toggle()
+                    return
+                }
+                let satsValue = (current / safeRate) * 100_000_000
+                if satsValue.isFinite && satsValue > 0 && satsValue < 2_100_000_000_000_000 {
+                    amountText = String(Int(min(round(satsValue), Double(Int.max))))
+                } else {
+                    amountText = "0"
                 }
             } else {
                 // Converting from EUR to BTC
-                let btcValue = current / exchangeRate
-                if !btcValue.isNaN && !btcValue.isInfinite {
+                guard safeRate > 0 else {
+                    amountText = "0"
+                    isPrimaryCrypto.toggle()
+                    return
+                }
+                let btcValue = current / safeRate
+                if btcValue.isFinite && btcValue > 0 && btcValue < 21_000_000 {
                     amountText = String(Int(round(btcValue)))
+                } else {
+                    amountText = "0"
                 }
             }
         }
@@ -237,26 +272,29 @@ public struct AmountEntryScreen: View {
     }
     
     private var amountInSats: Double {
-        // Guard against invalid exchange rate
-        guard exchangeRate > 0 else { return 0 }
+        // Bounds check
+        guard amountValue > 0 && amountValue < 1_000_000_000_000 else { return 0 }
+        
+        // Use a safe default exchange rate if not set
+        let safeRate = max(exchangeRate, 1.0) // Never allow zero or negative
         
         if isPrimaryCrypto {
             // When crypto is primary, check what type of crypto
             if secondarySymbol == "₿" {
                 // ₿ is now primary, so amountValue is already in satoshis
-                return amountValue
+                return min(amountValue, 2_100_000_000_000_000) // Max supply in sats
             } else {
                 // BTC is primary, convert to sats
-                return amountValue * 100_000_000
+                let sats = amountValue * 100_000_000
+                return min(sats, 2_100_000_000_000_000)
             }
         } else {
             // EUR is primary, convert to sats
-            let sats = (amountValue / exchangeRate) * 100_000_000
-            // Protect against NaN/Infinity
-            if sats.isNaN || sats.isInfinite {
-                return 0
-            }
-            return sats
+            guard safeRate > 0 else { return 0 }
+            let sats = (amountValue / safeRate) * 100_000_000
+            // Protect against NaN/Infinity and bounds
+            guard sats.isFinite && sats > 0 else { return 0 }
+            return min(sats, 2_100_000_000_000_000)
         }
     }
 
@@ -273,8 +311,8 @@ public struct AmountEntryScreen: View {
     private var isInsufficientFunds: Bool {
         guard let balance = availableBalance, !amountText.isEmpty else { return false }
         
-        // Guard against invalid exchange rate to prevent calculation errors
-        guard exchangeRate > 0 else { return false }
+        // Use a safe default exchange rate if not set
+        let safeRate = exchangeRate > 0 ? exchangeRate : 50000.0
         
         // Check if this is a buy flow (EUR primary, BTC secondary)
         let isBuyFlow = primarySymbol == "€" && secondarySymbol == "₿"
@@ -286,7 +324,7 @@ public struct AmountEntryScreen: View {
                 // User toggled to BTC (sats) input, convert to EUR
                 // When toggled, amountValue is in satoshis
                 let btcValue = amountValue / 100_000_000
-                eurAmount = btcValue * exchangeRate
+                eurAmount = btcValue * safeRate
             } else {
                 // User is entering EUR directly
                 eurAmount = amountValue
@@ -349,6 +387,11 @@ public struct AmountEntryScreen: View {
         // Only allow integers - no decimal points, commas, or any other characters
         var sanitized = newValue.filter { "0123456789".contains($0) }
         
+        // Limit input length to prevent overflow (max 12 digits)
+        if sanitized.count > 12 {
+            sanitized = String(sanitized.prefix(12))
+        }
+        
         // Remove all leading zeros
         while sanitized.hasPrefix("0") && sanitized.count > 1 {
             sanitized = String(sanitized.dropFirst())
@@ -357,6 +400,11 @@ public struct AmountEntryScreen: View {
         // If the string was all zeros, keep one zero
         if sanitized.isEmpty && newValue.contains("0") {
             sanitized = "0"
+        }
+        
+        // Prevent extremely large numbers
+        if let value = Double(sanitized), value > 999_999_999_999 {
+            sanitized = "999999999999"
         }
         
         if sanitized != newValue {

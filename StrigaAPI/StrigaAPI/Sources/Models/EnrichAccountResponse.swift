@@ -24,7 +24,13 @@ public struct EnrichAccountResponse: Codable {
     }
     
     public struct BlockchainNetwork: Codable {
-        public let network: String
-        public let blockchainDepositAddress: String
+        public let name: String?  // Changed from 'network' to 'name' to match API response
+        public let network: String? // Keep both for compatibility
+        public let blockchainDepositAddress: String?
+        
+        // Computed property to get the network name from either field
+        public var networkName: String? {
+            return name ?? network
+        }
     }
 }

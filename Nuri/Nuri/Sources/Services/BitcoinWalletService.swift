@@ -8,7 +8,11 @@ final class BitcoinWalletService {
     static let shared = BitcoinWalletService()
 
     // MARK: - Constants
-    private let network: Network = .bitcoin // mainnet
+    private var network: Network {
+        // Read network from UserDefaults
+        let networkString = UserDefaults.standard.string(forKey: "bitcoinNetwork") ?? "testnet3"
+        return networkString == "testnet3" ? .testnet : .bitcoin
+    }
     private var keychain: Keychain?
     private var backupKeychain: Keychain?
     private var addressKeychain: Keychain?
@@ -47,7 +51,7 @@ final class BitcoinWalletService {
     private init() {
         print("🔑 [BitcoinWalletService] Initializing wallet service...")
         // Initialize Esplora client - using authenticated client if available
-        self.esploraClient = AuthenticatedEsploraClient.createClient()
+        self.esploraClient = AuthenticatedEsploraClient.createClient(network: network)
         // Wallet initialization will happen when user ID is available
     }
     
@@ -604,8 +608,9 @@ final class BitcoinWalletService {
     private func walletDBPath() throws -> String {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let userID = getCurrentUserID()
-        // User-specific wallet data directory
-        let dir = docs.appendingPathComponent("wallet_data_\(userID)")
+        // User-specific and network-specific wallet data directory
+        let networkFolder = network == .testnet ? "testnet3" : "mainnet"
+        let dir = docs.appendingPathComponent("wallet_data_\(userID)/\(networkFolder)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("wallet.sqlite").path
     }
@@ -2000,6 +2005,37 @@ final class BitcoinWalletService {
         await WalletStateManager.shared.refreshAll()
         
         print("✅ [BitcoinWalletService] Complete wallet refresh finished")
+    }
+    
+    /// Switch Bitcoin network (mainnet/testnet3)
+    func switchNetwork(to newNetwork: Network) async {
+        print("🔄 [BitcoinWalletService] Switching network to: \(newNetwork == .testnet ? "testnet3" : "mainnet")")
+        
+        // Save network preference
+        UserDefaults.standard.set(newNetwork == .testnet ? "testnet3" : "mainnet", forKey: "bitcoinNetwork")
+        
+        // Clear wallet data for the old network
+        wallet = nil
+        connection = nil
+        currentBitcoinAddress = nil
+        
+        // Update Esplora client for new network
+        self.esploraClient = AuthenticatedEsploraClient.createClient(network: newNetwork)
+        
+        // Clear cached data
+        let userID = getCurrentUserID()
+        try? addressKeychain?.remove(Keys.currentAddress(for: userID))
+        
+        // Clear wallet database
+        if let dbPath = try? walletDBPath() {
+            try? FileManager.default.removeItem(at: URL(fileURLWithPath: dbPath))
+            print("🗑️ [BitcoinWalletService] Cleared wallet database for network switch")
+        }
+        
+        // Re-initialize wallet on new network
+        initializeWalletOnAppStart()
+        
+        print("✅ [BitcoinWalletService] Successfully switched to \(newNetwork == .testnet ? "testnet3" : "mainnet")")
     }
     
     /// Add force refresh button functionality for Security screen

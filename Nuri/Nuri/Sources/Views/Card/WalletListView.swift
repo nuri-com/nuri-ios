@@ -82,7 +82,7 @@ struct WalletListView: View {
                                         Spacer()
                                         Toggle("", isOn: $autoConversionEnabled)
                                             .labelsHidden()
-                                            .onChange(of: autoConversionEnabled) { newValue in
+                                            .onChange(of: autoConversionEnabled) { _, newValue in
                                                 if newValue {
                                                     startMonitoringForAutoConversion()
                                                     print("✅ [WalletListView] Auto-conversion enabled")
@@ -342,9 +342,10 @@ struct WalletListView: View {
                 print("✅ [WalletListView] Got \(account.currency) address: \(address)")
                 return address
             } else if let networks = enrichResponse.blockchainNetworks, !networks.isEmpty {
-                let address = networks[0].blockchainDepositAddress
-                print("✅ [WalletListView] Got \(account.currency) address from network: \(address)")
-                return address
+                if let address = networks[0].blockchainDepositAddress {
+                    print("✅ [WalletListView] Got \(account.currency) address from network: \(address)")
+                    return address
+                }
             }
         } catch {
             print("❌ [WalletListView] Error enriching \(account.currency): \(error)")
@@ -372,8 +373,11 @@ struct WalletListView: View {
             // Check for multiple networks
             if let networks = enrichResponse.blockchainNetworks, !networks.isEmpty {
                 for network in networks {
-                    addresses.append((network.network, network.blockchainDepositAddress))
-                    print("✅ [WalletListView] Got \(account.currency) address for \(network.network): \(network.blockchainDepositAddress)")
+                    if let networkName = network.networkName ?? network.network ?? network.name,
+                       let address = network.blockchainDepositAddress {
+                        addresses.append((networkName, address))
+                        print("✅ [WalletListView] Got \(account.currency) address for \(networkName): \(address)")
+                    }
                 }
             } else if let address = enrichResponse.blockchainDepositAddress {
                 // Single address
@@ -457,7 +461,6 @@ struct WalletListView: View {
                 // Log account details for debugging
                 print("🔍 [WalletListView] Checking \(currency) account:")
                 print("  - Account ID: \(account.accountId)")
-                print("  - Available Balance: \(account.availableBalance.amount) \(account.availableBalance.currency)")
                 print("  - Available Balance: \(account.availableBalance.amount) \(account.availableBalance.currency)")
                 print("  - Status: \(account.status)")
                 if let blockchainAddress = account.blockchainDepositAddress {
@@ -562,7 +565,6 @@ struct WalletListView: View {
                         print("  - currency: \(currency)")
                         print("  - Account status: \(account.status)")
                         print("  - Available balance: \(account.availableBalance.amount) \(account.availableBalance.currency)")
-                        print("  - Available balance: \(account.availableBalance.amount) \(account.availableBalance.currency)")
                         
                         // Log the actual amount in human-readable format
                         if currency == "ETH" {
@@ -586,9 +588,6 @@ struct WalletListView: View {
                         print("👍 Source: \(swapResponse.sourceAmount) \(currency)")
                         print("👍 Destination: \(swapResponse.destinationAmount) EUR")
                         print("👍 Exchange Rate: \(swapResponse.exchangeRate)")
-                        if let fee = swapResponse.fee {
-                            print("👍 Fee: \(fee)")
-                        }
                         print("====================================")
                         
                         // Reset failure counter on success

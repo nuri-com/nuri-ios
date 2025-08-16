@@ -13,6 +13,15 @@ struct NuriApp: App {
         print("🔑 [NuriApp] App started")
         // BitcoinWalletService will be initialized when Bitcoin tab is accessed
         
+        // Initialize Bitcoin network setting if not set
+        if UserDefaults.standard.object(forKey: "bitcoinNetwork") == nil {
+            UserDefaults.standard.set("testnet3", forKey: "bitcoinNetwork")
+            print("🌐 [NuriApp] Initialized Bitcoin network to testnet3")
+        } else {
+            let network = UserDefaults.standard.string(forKey: "bitcoinNetwork") ?? "testnet3"
+            print("🌐 [NuriApp] Bitcoin network is set to: \(network)")
+        }
+        
         // Uncomment to force logout for testing
         // UserDefaults.standard.set(false, forKey: "isUserLoggedIn")
         // print("🔓 [NuriApp] Login state reset to: \(UserDefaults.standard.bool(forKey: "isUserLoggedIn"))")

@@ -14,7 +14,13 @@ class StrigaSyncService {
     /// - Parameter userId: The Striga user ID to sync data for
     /// - Returns: True if sync was successful, false otherwise
     func syncUserData(userId: String) async -> Bool {
-        print("[StrigaSyncService:syncUserData:17] Starting sync for user: \(userId)")
+        print("\n" + String(repeating: "=", count: 80))
+        print("🔄 [StrigaSyncService] STARTING FULL SYNC")
+        print("📱 Sync Type: \(UserSettings().strigaCardId == nil ? "FRESH INSTALL/RECOVERY" : "EXISTING USER")")
+        print("👤 User ID: \(userId)")
+        print("💳 Current Card ID: \(UserSettings().strigaCardId ?? "NONE")")
+        print("👛 Current Wallet ID: \(UserSettings().strigaWalletId ?? "NONE")")
+        print(String(repeating: "=", count: 80))
         
         // Clear any old cached data first to prevent conflicts
         clearCachedData()
@@ -60,16 +66,25 @@ class StrigaSyncService {
                 }
             } catch {
                 print("[StrigaSyncService:syncUserData:31] Failed to get user details: \(error)")
-                print("[StrigaSyncService:syncUserData:32] Continuing with sync anyway...")
+                print("[StrigaSyncService:syncUserData:32] This is expected - /users/get endpoint doesn't exist")
+                print("[StrigaSyncService] Continuing with wallet check...")
             }
             // Store the user ID
-            var settings = UserSettings()
-            settings.strigaUserId = userId
+            UserSettings().strigaUserId = userId
             StrigaSession.shared.userId = userId
             
             // Fetch user's wallets
+            print("\n📊 [StrigaSyncService] STEP 1: Fetching wallets...")
             let walletsResponse = try await StrigaService.shared.getWallets(userId: userId)
-            print("[StrigaSyncService:syncUserData:42] Found \(walletsResponse.wallets.count) wallet(s) for user")
+            print("✅ [StrigaSyncService] Found \(walletsResponse.wallets.count) wallet(s)")
+            
+            // Log wallet details
+            for (index, wallet) in walletsResponse.wallets.enumerated() {
+                print("\n👛 Wallet #\(index + 1):")
+                print("   ID: \(wallet.walletId)")
+                print("   Created: \(wallet.createdAt)")
+                print("   Comment: \(wallet.comment as String? ?? "none")")
+            }
             
             guard let firstWallet = walletsResponse.wallets.first else {
                 print("[StrigaSyncService:syncUserData:45] No wallets found for user")
@@ -93,17 +108,27 @@ class StrigaSyncService {
             }
             
             // Store wallet ID
-            settings.strigaWalletId = firstWallet.walletId
+            UserSettings().strigaWalletId = firstWallet.walletId
             print("[StrigaSyncService] Stored wallet ID: \(firstWallet.walletId)")
             
             // Find linked card from wallet accounts
+            print("\n🔍 [StrigaSyncService] STEP 2: Searching for existing cards...")
             var foundCardId: String?
             
+            print("📝 Checking first wallet (\(firstWallet.walletId)):")
+            
             // Check EUR account for linked card (most common)
-            if let eurAccount = firstWallet.accounts.eur,
-               let linkedCardId = eurAccount.linkedCardId {
-                foundCardId = linkedCardId
-                print("[StrigaSyncService] Found card linked to EUR account: \(linkedCardId)")
+            if let eurAccount = firstWallet.accounts.eur {
+                print("   EUR Account ID: \(eurAccount.accountId)")
+                print("   EUR linkedCardId: \(eurAccount.linkedCardId as String? ?? "nil")")
+                
+                if let linkedCardId = eurAccount.linkedCardId,
+                   linkedCardId != "UNLINKED" && !linkedCardId.isEmpty {
+                    foundCardId = linkedCardId
+                    print("   ✅ Found valid card: \(linkedCardId)")
+                } else {
+                    print("   ❌ No valid card (UNLINKED or empty)")
+                }
             }
             
             // If no card in EUR, check other accounts
@@ -116,11 +141,52 @@ class StrigaSyncService {
                 ].compactMap { $0 }
                 
                 for account in accounts {
-                    if let linkedCardId = account.linkedCardId {
+                    if let linkedCardId = account.linkedCardId,
+                       linkedCardId != "UNLINKED" && !linkedCardId.isEmpty {
                         foundCardId = linkedCardId
                         print("[StrigaSyncService] Found card linked to \(account.currency) account: \(linkedCardId)")
                         break
                     }
+                }
+            }
+            
+            // If still no card found, check ALL wallet accounts (not just the first wallet)
+            if foundCardId == nil && walletsResponse.wallets.count > 1 {
+                print("\n🔍 No card in first wallet, checking remaining \(walletsResponse.wallets.count - 1) wallet(s)...")
+                
+                for (index, wallet) in walletsResponse.wallets.dropFirst().enumerated() {
+                    print("\n📝 Checking wallet #\(index + 2) (\(wallet.walletId)):")
+                    
+                    // Check all accounts in this wallet
+                    let allAccounts = [
+                        wallet.accounts.eur,
+                        wallet.accounts.btc,
+                        wallet.accounts.eth,
+                        wallet.accounts.usdc,
+                        wallet.accounts.usdt,
+                        wallet.accounts.sol,
+                        wallet.accounts.bnb,
+                        wallet.accounts.pol
+                    ].compactMap { $0 }
+                    
+                    for account in allAccounts {
+                        print("   \(account.currency) Account: \(account.accountId)")
+                        print("   \(account.currency) linkedCardId: \(account.linkedCardId as String? ?? "nil")")
+                        
+                        if let linkedCardId = account.linkedCardId,
+                           linkedCardId != "UNLINKED" && !linkedCardId.isEmpty {
+                            foundCardId = linkedCardId
+                            print("   ✅ FOUND VALID CARD: \(linkedCardId)")
+                            print("   📍 Card is in wallet: \(wallet.walletId)")
+                            print("   💱 Card is linked to: \(account.currency) account")
+                            
+                            // Also update the wallet ID to the one with the card
+                            UserSettings().strigaWalletId = wallet.walletId
+                            print("   ✅ Updated stored wallet ID to: \(wallet.walletId)")
+                            break
+                        }
+                    }
+                    if foundCardId != nil { break }
                 }
             }
             
@@ -141,7 +207,7 @@ class StrigaSyncService {
                     }
                     
                     // Store card ID
-                    settings.strigaCardId = cardId
+                    UserSettings().strigaCardId = cardId
                     StrigaSession.shared.cardId = cardId
                     print("[StrigaSyncService] Successfully verified and stored card: \(cardId)")
                     print("[StrigaSyncService] Card status: \(cardResponse.status)")
@@ -151,18 +217,33 @@ class StrigaSyncService {
                     // Don't store invalid card ID
                 }
             } else {
-                print("[StrigaSyncService] No card found for user's wallets")
+                print("\n⚠️ [StrigaSyncService] No card found in any wallet")
+                print("📝 This user needs to create a card")
             }
             
-            print("[StrigaSyncService] ✅ Sync completed successfully")
-            print("[StrigaSyncService] - User ID: \(userId)")
-            print("[StrigaSyncService] - Wallet ID: \(firstWallet.walletId)")
-            print("[StrigaSyncService] - Card ID: \(foundCardId ?? "none")")
+            // Final sync summary
+            print("\n" + String(repeating: "=", count: 80))
+            print("✅ [StrigaSyncService] SYNC COMPLETED SUCCESSFULLY")
+            print("📊 Final State:")
+            print("   👤 User ID: \(userId)")
+            print("   👛 Wallet ID: \(UserSettings().strigaWalletId as String? ?? "none")")
+            print("   💳 Card ID: \(UserSettings().strigaCardId as String? ?? "none")")
+            print("   🏦 Total Wallets: \(walletsResponse.wallets.count)")
+            
+            if UserSettings().strigaCardId == nil {
+                print("\n⚠️ ACTION REQUIRED: User needs to create a card")
+            } else {
+                print("\n✅ User is fully set up with card and wallet")
+            }
+            print(String(repeating: "=", count: 80) + "\n")
             
             return true
             
         } catch {
-            print("[StrigaSyncService:syncUserData:124] ❌ Sync failed: \(error)")
+            print("\n" + String(repeating: "=", count: 80))
+            print("❌ [StrigaSyncService] SYNC FAILED")
+            print("Error: \(error)")
+            print(String(repeating: "=", count: 80) + "\n")
             return false
         }
     }
@@ -171,7 +252,7 @@ class StrigaSyncService {
     private func clearCachedData() {
         print("[StrigaSyncService] Clearing cached Striga data")
         
-        var settings = UserSettings()
+        let settings = UserSettings()
         
         // Clear old IDs
         let oldUserId = settings.strigaUserId

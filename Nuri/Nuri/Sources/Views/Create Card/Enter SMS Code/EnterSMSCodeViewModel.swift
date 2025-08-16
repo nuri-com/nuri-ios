@@ -222,12 +222,34 @@ final class EnterSMSCodeViewModel: ObservableObject {
             }
             
         } catch {
-            print("[KYC] Error creating card/wallet in background: \(error)")
+            print("\n❌ [KYC] ERROR CREATING CARD/WALLET IN BACKGROUND")
+            print("Error: \(error)")
+            
             if let errorResponse = error as? ErrorResponse {
-                print("[KYC] Error details:")
-                print("[KYC] - Message: \(errorResponse.message)")
-                print("[KYC] - Code: \(errorResponse.errorCode)")
-                print("[KYC] - Details: \(errorResponse.errorDetails)")
+                print("[KYC] API Error details:")
+                print("   Message: \(errorResponse.message)")
+                print("   Code: \(errorResponse.errorCode)")
+                print("   Details: \(errorResponse.errorDetails as String? ?? "none")")
+            }
+            
+            // IMPORTANT: Still dismiss and let user continue
+            // The user is registered with KYC approved, they can create card from main screen
+            print("\n⚠️ [KYC] RECOVERY STRATEGY:")
+            print("   1. User is registered ✅")
+            print("   2. KYC is approved ✅")
+            print("   3. Card creation failed ❌")
+            print("   4. User can create card from Card tab")
+            print("   5. Dismissing to main screen...")
+            
+            DispatchQueue.main.async {
+                // Find and dismiss the navigation
+                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let window = windowScene.windows.first,
+                   let rootVC = window.rootViewController {
+                    rootVC.dismiss(animated: true) {
+                        print("✅ [KYC] Dismissed SMS screen - user can now create card from Card tab")
+                    }
+                }
             }
         }
     }

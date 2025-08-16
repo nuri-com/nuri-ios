@@ -253,7 +253,7 @@ struct CardViewActive: View {
         .refreshable {
             // Pull-to-refresh support
             await Task {
-                fetchCardAndWalletDetails(showRefreshIndicator: true)
+                await fetchCardAndWalletDetails(showRefreshIndicator: true)
             }.value
         }
         .fullScreenCover(isPresented: $showCardDetailsFlow) {
@@ -323,9 +323,9 @@ struct CardViewActive: View {
         // Check UserSettings
         let settings = UserSettings()
         print("\n📊 UserSettings state:")
-        print("  • userId: \(settings.strigaUserId ?? "nil")")
-        print("  • cardId: \(settings.strigaCardId ?? "nil")")
-        print("  • walletId: \(settings.strigaWalletId ?? "nil")")
+        print("  • userId: \(settings.strigaUserId as String? ?? "nil")")
+        print("  • cardId: \(settings.strigaCardId as String? ?? "nil")")
+        print("  • walletId: \(settings.strigaWalletId as String? ?? "nil")")
         
         // Store IDs in session for later use
         if let userId = settings.strigaUserId {
@@ -339,8 +339,8 @@ struct CardViewActive: View {
             // Check for invalid card IDs before setting them
             if cardId == "UNLINKED" || cardId == "mock-card-id" || cardId.isEmpty {
                 print("❌ Found invalid card ID '\(cardId)', clearing it")
-                var mutableSettings = UserSettings()
-                mutableSettings.strigaCardId = nil
+                var settings = UserSettings()
+                settings.strigaCardId = nil
                 StrigaSession.shared.cardId = nil
                 // This will trigger the NoCardView which can create a real card
             } else {
@@ -353,9 +353,9 @@ struct CardViewActive: View {
         }
         
         print("\n🔐 Final StrigaSession state:")
-        print("  • userId: \(StrigaSession.shared.userId ?? "nil")")
-        print("  • cardId: \(StrigaSession.shared.cardId ?? "nil")")
-        print("  • name: \(StrigaSession.shared.name ?? "nil")")
+        print("  • userId: \(StrigaSession.shared.userId as String? ?? "nil")")
+        print("  • cardId: \(StrigaSession.shared.cardId as String? ?? "nil")")
+        print("  • name: \(StrigaSession.shared.name as String? ?? "nil")")
         print(String(repeating: "=", count: 60) + "\n")
         
         // Don't set default balance here - let fetchCardAndWalletDetails handle it
@@ -554,9 +554,10 @@ struct CardViewActive: View {
                                 if let btcAddress = enrichResponse.blockchainDepositAddress {
                                     self.btcAddress = btcAddress
                                     print("✅ [CardViewActive] Bitcoin address found: \(btcAddress)")
-                                } else if let networks = enrichResponse.blockchainNetworks, !networks.isEmpty {
-                                    self.btcAddress = networks[0].blockchainDepositAddress
-                                    print("✅ [CardViewActive] Bitcoin address from network: \(self.btcAddress)")
+                                } else if let networks = enrichResponse.blockchainNetworks, !networks.isEmpty,
+                                          let address = networks[0].blockchainDepositAddress {
+                                    self.btcAddress = address
+                                    print("✅ [CardViewActive] Bitcoin address from network: \(address)")
                                 } else {
                                     print("⚠️ [CardViewActive] No BTC address in enrich response")
                                     // Keep the default address instead of showing account ID
@@ -581,9 +582,10 @@ struct CardViewActive: View {
                                 if let btcAddress = enrichResponse.blockchainDepositAddress {
                                     self.btcAddress = btcAddress
                                     print("✅ [CardViewActive] Bitcoin address found: \(btcAddress)")
-                                } else if let networks = enrichResponse.blockchainNetworks, !networks.isEmpty {
-                                    self.btcAddress = networks[0].blockchainDepositAddress
-                                    print("✅ [CardViewActive] Bitcoin address from network: \(self.btcAddress)")
+                                } else if let networks = enrichResponse.blockchainNetworks, !networks.isEmpty,
+                                          let address = networks[0].blockchainDepositAddress {
+                                    self.btcAddress = address
+                                    print("✅ [CardViewActive] Bitcoin address from network: \(address)")
                                 } else {
                                     print("⚠️ [CardViewActive] No BTC address in enrich response")
                                     // Keep the default address instead of showing account ID
@@ -668,8 +670,9 @@ struct CardViewActive: View {
                             await MainActor.run {
                                 if let btcAddress = enrichResponse.blockchainDepositAddress {
                                     self.btcAddress = btcAddress
-                                } else if let networks = enrichResponse.blockchainNetworks, !networks.isEmpty {
-                                    self.btcAddress = networks[0].blockchainDepositAddress
+                                } else if let networks = enrichResponse.blockchainNetworks, !networks.isEmpty,
+                                          let address = networks[0].blockchainDepositAddress {
+                                    self.btcAddress = address
                                 }
                             }
                         } catch {
@@ -717,7 +720,7 @@ struct CardViewActive: View {
                 await MainActor.run {
                     print("🔄 [CardViewActive] Auto-refreshing balance...")
                 }
-                fetchCardAndWalletDetails(showRefreshIndicator: false)
+                await fetchCardAndWalletDetails(showRefreshIndicator: false)
             }
         }
         print("⏰ [CardViewActive] Auto-refresh timer started (5 seconds)")
@@ -808,9 +811,6 @@ struct CardViewActive: View {
                 print("  - Source Amount: \(swapResponse.sourceAmount) sats")
                 print("  - Destination Amount: \(swapResponse.destinationAmount) EUR cents")
                 print("  - Exchange Rate: \(swapResponse.exchangeRate)")
-                if let fee = swapResponse.fee {
-                    print("  - Fee: \(fee)")
-                }
                 
                 // Refresh balance after conversion
                 await MainActor.run {

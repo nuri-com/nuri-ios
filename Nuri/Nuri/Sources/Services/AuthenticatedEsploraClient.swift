@@ -54,13 +54,25 @@ extension AuthenticatedEsploraClient {
     }
     
     /// Get the appropriate Esplora client based on configuration
-    static func createClient() -> EsploraClient {
+    static func createClient(network: Network? = nil) -> EsploraClient {
+        // Determine network - if not specified, read from UserDefaults
+        let actualNetwork: Network
+        if let network = network {
+            actualNetwork = network
+        } else {
+            let networkString = UserDefaults.standard.string(forKey: "bitcoinNetwork") ?? "testnet3"
+            actualNetwork = networkString == "testnet3" ? .testnet : .bitcoin
+        }
+        
         if shouldUseAuthentication() {
             print("🔐 [AuthenticatedEsplora] Using authenticated enterprise endpoint")
             return EsploraClient(url: BlockstreamAuthManager.shared.authenticatedBaseURL)
         } else {
-            print("📡 [AuthenticatedEsplora] Using public API endpoint")
-            return EsploraClient(url: "https://blockstream.info/api")
+            let url = actualNetwork == .testnet ? 
+                "https://blockstream.info/testnet/api" : 
+                "https://blockstream.info/api"
+            print("📡 [AuthenticatedEsplora] Using public API endpoint for \(actualNetwork == .testnet ? "testnet3" : "mainnet"): \(url)")
+            return EsploraClient(url: url)
         }
     }
 }

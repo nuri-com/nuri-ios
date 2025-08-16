@@ -4,6 +4,7 @@ struct TransactionsView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var walletState = WalletStateManager.shared
     @State private var isLoading = false
+    @AppStorage("bitcoinNetwork") var bitcoinNetwork: String = "testnet3"
 
     // MARK: - Mock Data (Commented out - replaced with real transactions)
     /*
@@ -54,7 +55,7 @@ struct TransactionsView: View {
                         } else {
                             // Real transactions
                             ForEach(Array(walletState.transactions.enumerated()), id: \.offset) { index, cachedTx in
-                                RealTransactionRow(cachedTx: cachedTx)
+                                RealTransactionRow(cachedTx: cachedTx, network: bitcoinNetwork)
 
                                 if index != walletState.transactions.count - 1 {
                                     Color.clear.frame(height: 8)             // Top gutter (8 pt)
@@ -180,6 +181,7 @@ private struct TransactionRow: View {
 // MARK: - Real Transaction Row
 private struct RealTransactionRow: View {
     let cachedTx: WalletStateManager.CachedTransaction
+    let network: String
 
     var body: some View {
         HStack(alignment: .center, spacing: 7) {
@@ -233,8 +235,9 @@ private struct RealTransactionRow: View {
         UIPasteboard.general.string = cachedTx.txId
         print("📋 [RealTransactionRow] Transaction ID copied to clipboard: \(cachedTx.txId)")
         
-        // Open mempool.space explorer in browser
-        let explorerURL = "https://mempool.space/tx/\(cachedTx.txId)"
+        // Open block explorer in browser (use appropriate network)
+        let explorerURL = NetworkConfiguration.shared.blockExplorerURL(for: cachedTx.txId)
+        
         if let url = URL(string: explorerURL) {
             UIApplication.shared.open(url)
             print("📋 [RealTransactionRow] Opening explorer: \(explorerURL)")
