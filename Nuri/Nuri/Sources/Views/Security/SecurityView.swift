@@ -5,6 +5,106 @@ import Photos
 import StrigaAPI
 import KeychainAccess
 
+// Temporary inline implementation until added to project
+fileprivate class EUREnrichmentDebugger {
+    static let shared = EUREnrichmentDebugger()
+    private let striga = StrigaService.shared
+    
+    private init() {
+        if striga.configuration == nil {
+            striga.configuration = StrigaCredentials.current
+        }
+    }
+    
+    func tryAllEnrichmentApproaches(userId: String, walletId: String) async -> [String] {
+        var logs: [String] = []
+        
+        logs.append("🔬 EUR ENRICHMENT DEBUGGER STARTED")
+        logs.append("User ID: \(userId)")
+        logs.append("Wallet ID: \(walletId)")
+        
+        do {
+            let wallet = try await striga.getWallet(walletId, userId: userId)
+            
+            guard let eurAccount = wallet.accounts.eur else {
+                logs.append("❌ No EUR account in wallet!")
+                return logs
+            }
+            
+            logs.append("\n📊 EUR Account Status:")
+            logs.append("  Account ID: \(eurAccount.accountId)")
+            logs.append("  Status: \(eurAccount.status)")
+            logs.append("  Enriched: \(eurAccount.enriched)")
+            
+            if eurAccount.enriched {
+                logs.append("✅ Already enriched!")
+                return logs
+            }
+            
+            // Try direct enrichment
+            logs.append("\n🔄 Attempting Direct Enrichment")
+            do {
+                let result = try await striga.enrichAccount(.init(
+                    accountId: eurAccount.accountId,
+                    userId: userId
+                ))
+                logs.append("✅ Success! IBAN: \(result.iban ?? "none")")
+                return logs
+            } catch {
+                logs.append("❌ Failed: \(error)")
+            }
+            
+            logs.append("\n❌ ENRICHMENT FAILED")
+            
+        } catch {
+            logs.append("❌ Fatal error: \(error)")
+        }
+        
+        return logs
+    }
+    
+    func testCryptoEnrichment(userId: String, walletId: String) async -> [String] {
+        var logs: [String] = []
+        
+        logs.append("🔬 CRYPTO ENRICHMENT TEST")
+        
+        do {
+            let wallet = try await striga.getWallet(walletId, userId: userId)
+            
+            if let btc = wallet.accounts.btc, !btc.enriched {
+                logs.append("\n🔄 Enriching BTC...")
+                do {
+                    let result = try await striga.enrichAccount(.init(
+                        accountId: btc.accountId,
+                        userId: userId
+                    ))
+                    logs.append("✅ BTC Success! Address: \(result.blockchainDepositAddress ?? "none")")
+                } catch {
+                    logs.append("❌ BTC Failed: \(error)")
+                }
+            }
+            
+            if let sol = wallet.accounts.sol, !sol.enriched {
+                logs.append("\n🔄 Enriching SOL...")
+                do {
+                    let result = try await striga.enrichAccount(.init(
+                        accountId: sol.accountId,
+                        userId: userId
+                    ))
+                    logs.append("✅ SOL Success! Address: \(result.blockchainDepositAddress ?? "none")")
+                } catch {
+                    logs.append("❌ SOL Failed: \(error)")
+                }
+            }
+            
+        } catch {
+            logs.append("❌ Error: \(error)")
+        }
+        
+        return logs
+    }
+}
+
 struct SecurityView: View {
     @State private var resultText = "Press the button to test the encrypted iCloud backup."
     @State private var debugKeyText = "Press button to show encryption key info."
@@ -26,6 +126,16 @@ struct SecurityView: View {
     @State private var manualStrigaUserId = ""
     @State private var overrideMessage = ""
     @State private var overrideMessageIsError = false
+    
+    // Striga Debug States
+    @State private var strigaWallets: [CreateWalletResponse] = []
+    @State private var strigaCards: [GetCardResponse] = []
+    @State private var isLoadingWallets = false
+    @State private var walletsDebugText = ""
+    @State private var enrichmentLogs: [String] = []
+    @State private var selectedWalletForEnrichment: String?
+    @State private var selectedAccountForEnrichment: String?
+    
     private let bitcoinWalletService = BitcoinWalletService.shared
     private let striga = StrigaService.shared
     
@@ -294,6 +404,140 @@ struct SecurityView: View {
                     }
                     .padding(.vertical, 8)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                
+                // Comprehensive Striga Debug Section
+                Section(header: Text("🔍 Striga Wallets & Enrichment Debug")) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        // Load Wallets Button
+                        Button(action: {
+                            Task {
+                                await loadAllWalletsDebug()
+                            }
+                        }) {
+                            HStack {
+                                if isLoadingWallets {
+                                    ProgressView()
+                                        .scaleEffect(0.8)
+                                } else {
+                                    Image(systemName: "arrow.clockwise")
+                                }
+                                Text("Load All Wallets & Accounts")
+                            }
+                        }
+                        .disabled(isLoadingWallets)
+                        
+                        // Display Wallets Info
+                        if !strigaWallets.isEmpty {
+                            ForEach(Array(strigaWallets.enumerated()), id: \.offset) { index, wallet in
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Wallet #\(index + 1)")
+                                        .font(.headline)
+                                        .foregroundColor(.blue)
+                                    
+                                    Text("ID: \(wallet.walletId)")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    
+                                    // Show all accounts in this wallet
+                                    if let eurAccount = wallet.accounts.eur {
+                                        accountDebugView(account: eurAccount, walletId: wallet.walletId, currency: "EUR")
+                                    }
+                                    if let btcAccount = wallet.accounts.btc {
+                                        accountDebugView(account: btcAccount, walletId: wallet.walletId, currency: "BTC")
+                                    }
+                                    if let solAccount = wallet.accounts.sol {
+                                        accountDebugView(account: solAccount, walletId: wallet.walletId, currency: "SOL")
+                                    }
+                                    if let ethAccount = wallet.accounts.eth {
+                                        accountDebugView(account: ethAccount, walletId: wallet.walletId, currency: "ETH")
+                                    }
+                                    if let usdcAccount = wallet.accounts.usdc {
+                                        accountDebugView(account: usdcAccount, walletId: wallet.walletId, currency: "USDC")
+                                    }
+                                }
+                                .padding()
+                                .background(Color.gray.opacity(0.1))
+                                .cornerRadius(8)
+                            }
+                        }
+                        
+                        // Debug Text Output
+                        if !walletsDebugText.isEmpty {
+                            ScrollView {
+                                Text(walletsDebugText)
+                                    .font(.system(.caption, design: .monospaced))
+                                    .padding(8)
+                                    .background(Color.black.opacity(0.05))
+                                    .cornerRadius(4)
+                            }
+                            .frame(maxHeight: 200)
+                        }
+                        
+                        // Enrichment Logs
+                        if !enrichmentLogs.isEmpty {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Enrichment Logs:")
+                                    .font(.headline)
+                                ForEach(Array(enrichmentLogs.enumerated()), id: \.offset) { _, log in
+                                    Text(log)
+                                        .font(.system(.caption, design: .monospaced))
+                                        .foregroundColor(.green)
+                                }
+                            }
+                            .padding(8)
+                            .background(Color.black.opacity(0.05))
+                            .cornerRadius(4)
+                        }
+                        
+                        // Debug Enrichment Buttons
+                        if !strigaWallets.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("🔬 Advanced Debug")
+                                    .font(.headline)
+                                    .foregroundColor(.red)
+                                
+                                ForEach(Array(strigaWallets.enumerated()), id: \.offset) { index, wallet in
+                                    HStack {
+                                        Text("Wallet #\(index + 1)")
+                                            .font(.caption)
+                                        
+                                        Button(action: {
+                                            Task {
+                                                await debugEUREnrichment(walletId: wallet.walletId)
+                                            }
+                                        }) {
+                                            Text("Debug EUR")
+                                                .font(.caption)
+                                                .padding(.horizontal, 8)
+                                                .padding(.vertical, 4)
+                                                .background(Color.red)
+                                                .foregroundColor(.white)
+                                                .cornerRadius(4)
+                                        }
+                                        
+                                        Button(action: {
+                                            Task {
+                                                await testCryptoEnrichment(walletId: wallet.walletId)
+                                            }
+                                        }) {
+                                            Text("Test Crypto")
+                                                .font(.caption)
+                                                .padding(.horizontal, 8)
+                                                .padding(.vertical, 4)
+                                                .background(Color.orange)
+                                                .foregroundColor(.white)
+                                                .cornerRadius(4)
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(8)
+                            .background(Color.red.opacity(0.05))
+                            .cornerRadius(4)
+                        }
+                    }
+                    .padding(.vertical, 8)
                 }
                 
                 Section(header: Text("Encryption Key Verification Status")) {
@@ -2362,6 +2606,313 @@ struct SecurityView: View {
         isLoading = false
         
         resultText = "✅ Switched to \(newNetwork == "testnet3" ? "Bitcoin Testnet3" : "Bitcoin Mainnet")\n\nWallet has been reset for the new network."
+    }
+    
+    // MARK: - Striga Debug Functions
+    
+    private func debugEUREnrichment(walletId: String) async {
+        guard let userId = StrigaSession.shared.userId ?? UserSettings().strigaUserId else { return }
+        
+        enrichmentLogs.removeAll()
+        enrichmentLogs.append("Starting EUR enrichment debug for wallet: \(walletId)")
+        
+        let logs = await EUREnrichmentDebugger.shared.tryAllEnrichmentApproaches(
+            userId: userId,
+            walletId: walletId
+        )
+        
+        await MainActor.run {
+            enrichmentLogs.append(contentsOf: logs)
+        }
+    }
+    
+    private func testCryptoEnrichment(walletId: String) async {
+        guard let userId = StrigaSession.shared.userId ?? UserSettings().strigaUserId else { return }
+        
+        enrichmentLogs.removeAll()
+        enrichmentLogs.append("Testing crypto enrichment for wallet: \(walletId)")
+        
+        let logs = await EUREnrichmentDebugger.shared.testCryptoEnrichment(
+            userId: userId,
+            walletId: walletId
+        )
+        
+        await MainActor.run {
+            enrichmentLogs.append(contentsOf: logs)
+        }
+    }
+    
+    @ViewBuilder
+    private func accountDebugView(account: CreateWalletResponse.Account, walletId: String, currency: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("\(currency) Account")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                
+                if account.enriched {
+                    Label("Enriched", systemImage: "checkmark.circle.fill")
+                        .font(.caption2)
+                        .foregroundColor(.green)
+                } else {
+                    Label("Not Enriched", systemImage: "xmark.circle.fill")
+                        .font(.caption2)
+                        .foregroundColor(.red)
+                }
+            }
+            
+            Text("Account ID: \(account.accountId)")
+                .font(.system(.caption2, design: .monospaced))
+            
+            if let linkedCardId = account.linkedCardId {
+                Text("Linked Card: \(linkedCardId)")
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundColor(linkedCardId == "UNLINKED" ? .red : .green)
+            }
+            
+            if currency == "EUR" {
+                if let bankingDetails = account.bankingDetails {
+                    Text("IBAN: \(bankingDetails.iban)")
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundColor(.green)
+                    Text("BIC: \(bankingDetails.bic)")
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundColor(.green)
+                } else {
+                    Text("No IBAN/BIC")
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundColor(.orange)
+                }
+            } else {
+                if let address = account.blockchainDepositAddress {
+                    Text("Address: \(String(address.prefix(20)))...")
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundColor(.green)
+                } else {
+                    Text("No blockchain address")
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundColor(.orange)
+                }
+            }
+            
+            Text("Balance: \(account.availableBalance.amount) \(account.availableBalance.currency)")
+                .font(.system(.caption2, design: .monospaced))
+            
+            // Manual Enrichment Button
+            if !account.enriched {
+                Button(action: {
+                    Task {
+                        await enrichAccount(accountId: account.accountId, walletId: walletId, currency: currency)
+                    }
+                }) {
+                    HStack {
+                        Image(systemName: "wand.and.stars")
+                            .font(.caption)
+                        Text("Enrich \(currency)")
+                            .font(.caption)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(4)
+                }
+                .padding(.top, 4)
+            }
+        }
+        .padding(8)
+        .background(Color.blue.opacity(0.05))
+        .cornerRadius(4)
+    }
+    
+    private func loadAllWalletsDebug() async {
+        guard let userId = UserSettings().strigaUserId ?? StrigaSession.shared.userId else {
+            walletsDebugText = "❌ No user ID found"
+            return
+        }
+        
+        isLoadingWallets = true
+        enrichmentLogs.removeAll()
+        walletsDebugText = "Loading wallets for user: \(userId)\n\n"
+        
+        // Configure Striga if needed
+        if striga.configuration == nil {
+            striga.configuration = StrigaCredentials.current
+        }
+        
+        do {
+            // Get all wallets
+            let walletsResponse = try await striga.getWallets(userId: userId)
+            walletsDebugText += "Found \(walletsResponse.wallets.count) wallet(s)\n\n"
+            
+            // Load detailed info for each wallet
+            var detailedWallets: [CreateWalletResponse] = []
+            for wallet in walletsResponse.wallets {
+                let walletDetails = try await striga.getWallet(wallet.walletId, userId: userId)
+                detailedWallets.append(walletDetails)
+                
+                walletsDebugText += "Wallet: \(wallet.walletId)\n"
+                walletsDebugText += "Created: \(wallet.createdAt)\n"
+                
+                // Check each account
+                let accounts = [
+                    ("EUR", walletDetails.accounts.eur),
+                    ("BTC", walletDetails.accounts.btc),
+                    ("SOL", walletDetails.accounts.sol),
+                    ("ETH", walletDetails.accounts.eth),
+                    ("USDC", walletDetails.accounts.usdc),
+                    ("USDT", walletDetails.accounts.usdt)
+                ]
+                
+                for (currency, account) in accounts {
+                    if let acc = account {
+                        walletsDebugText += "  \(currency): \(acc.enriched ? "✅" : "❌") enriched"
+                        if let cardId = acc.linkedCardId {
+                            walletsDebugText += " | Card: \(cardId == "UNLINKED" ? "❌" : cardId)"
+                        }
+                        walletsDebugText += "\n"
+                    }
+                }
+                walletsDebugText += "\n"
+            }
+            
+            strigaWallets = detailedWallets
+            
+            // Load cards
+            walletsDebugText += "Loading cards...\n"
+            for wallet in detailedWallets {
+                // Check if any account has a linked card
+                let linkedCardIds = [
+                    wallet.accounts.eur?.linkedCardId,
+                    wallet.accounts.btc?.linkedCardId,
+                    wallet.accounts.sol?.linkedCardId,
+                    wallet.accounts.eth?.linkedCardId,
+                    wallet.accounts.usdc?.linkedCardId,
+                    wallet.accounts.usdt?.linkedCardId
+                ].compactMap { $0 }.filter { $0 != "UNLINKED" }
+                
+                for cardId in Set(linkedCardIds) {
+                    do {
+                        let card = try await striga.getCard(.init(
+                            userId: userId,
+                            cardId: cardId,
+                            authToken: nil
+                        ))
+                        strigaCards.append(card)
+                        walletsDebugText += "Card: \(cardId) | Status: \(card.status)\n"
+                    } catch {
+                        walletsDebugText += "Card: \(cardId) | Error: \(error)\n"
+                    }
+                }
+            }
+            
+        } catch {
+            walletsDebugText += "❌ Error: \(error)\n"
+        }
+        
+        isLoadingWallets = false
+    }
+    
+    private func enrichAccount(accountId: String, walletId: String, currency: String) async {
+        guard let userId = UserSettings().strigaUserId ?? StrigaSession.shared.userId else {
+            enrichmentLogs.append("❌ No user ID")
+            return
+        }
+        
+        enrichmentLogs.append("🔄 Enriching \(currency) account: \(accountId)")
+        enrichmentLogs.append("  User ID: \(userId)")
+        enrichmentLogs.append("  Account ID: \(accountId)")
+        enrichmentLogs.append("  Wallet ID: \(walletId)")
+        
+        // Get account details first
+        do {
+            let walletDetails = try await striga.getWallet(walletId, userId: userId)
+            
+            // Find the specific account
+            let account: CreateWalletResponse.Account? = {
+                switch currency {
+                case "EUR": return walletDetails.accounts.eur
+                case "BTC": return walletDetails.accounts.btc
+                case "SOL": return walletDetails.accounts.sol
+                case "ETH": return walletDetails.accounts.eth
+                case "USDC": return walletDetails.accounts.usdc
+                case "USDT": return walletDetails.accounts.usdt
+                default: return nil
+                }
+            }()
+            
+            if let acc = account {
+                enrichmentLogs.append("  Account Status: \(acc.status)")
+                enrichmentLogs.append("  Already Enriched: \(acc.enriched)")
+                if let cardId = acc.linkedCardId {
+                    enrichmentLogs.append("  Linked Card: \(cardId)")
+                }
+                if currency == "EUR" {
+                    enrichmentLogs.append("  Has Banking Details: \(acc.bankingDetails != nil)")
+                }
+            }
+        } catch {
+            enrichmentLogs.append("  ⚠️ Couldn't fetch account details: \(error)")
+        }
+        
+        enrichmentLogs.append("  Calling enrichAccount API...")
+        
+        do {
+            let enrichResult = try await striga.enrichAccount(.init(
+                accountId: accountId,
+                userId: userId
+            ))
+            
+            enrichmentLogs.append("✅ \(currency) enrichment API call succeeded!")
+            enrichmentLogs.append("  Response account ID: \(enrichResult.accountId)")
+            enrichmentLogs.append("  Response currency: \(enrichResult.currency)")
+            
+            if currency == "EUR" {
+                enrichmentLogs.append("  IBAN present: \(enrichResult.iban != nil)")
+                enrichmentLogs.append("  BIC present: \(enrichResult.bic != nil)")
+                if let iban = enrichResult.iban {
+                    enrichmentLogs.append("  IBAN: \(iban)")
+                }
+                if let bic = enrichResult.bic {
+                    enrichmentLogs.append("  BIC: \(bic)")
+                }
+                if enrichResult.iban == nil {
+                    enrichmentLogs.append("  ⚠️ API succeeded but no IBAN returned!")
+                }
+            } else {
+                if let address = enrichResult.blockchainDepositAddress, !address.isEmpty {
+                    enrichmentLogs.append("  Address: \(String(address.prefix(20)))...")
+                }
+            }
+            
+            // Reload wallets to show updated status
+            await loadAllWalletsDebug()
+            
+        } catch {
+            enrichmentLogs.append("❌ Failed to enrich \(currency): \(error)")
+            
+            // Log very detailed error
+            if let nsError = error as? NSError {
+                enrichmentLogs.append("  Error Code: \(nsError.code)")
+                enrichmentLogs.append("  Error Domain: \(nsError.domain)")
+                enrichmentLogs.append("  Error Description: \(nsError.localizedDescription)")
+                
+                // Check for specific error messages
+                if let errorMessage = nsError.userInfo[NSLocalizedDescriptionKey] as? String {
+                    enrichmentLogs.append("  Error Message: \(errorMessage)")
+                }
+                
+                // Log the full error for debugging
+                enrichmentLogs.append("  Full Error: \(String(describing: error))")
+            }
+            
+            // Check if it's a Striga API error
+            if let apiError = error as? ErrorResponse {
+                enrichmentLogs.append("  API Error Code: \(apiError.errorCode)")
+                enrichmentLogs.append("  API Message: \(apiError.message)")
+                enrichmentLogs.append("  API Details: \(apiError.errorDetails)")
+            }
+        }
     }
 }
 

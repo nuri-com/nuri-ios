@@ -189,8 +189,41 @@ class StrigaCardCreationService: CardCreationServiceProtocol {
             }
         } catch {
             // If getWallets fails or no wallets exist, create a new wallet
-            print("[StrigaCardCreation] Error or no wallets: \(error)")
-            print("[StrigaCardCreation] Creating new wallet...")
+            print("[StrigaCardCreation] Error checking wallets: \(error)")
+            
+            // First, try to get wallets again to make sure we don't have any
+            // This prevents duplicate wallet creation due to transient errors
+            var shouldCreateWallet = true
+            
+            do {
+                print("[StrigaCardCreation] Double-checking for existing wallets...")
+                let doubleCheckResponse = try await striga.getWallets(userId: userId)
+                if !doubleCheckResponse.wallets.isEmpty {
+                    print("[StrigaCardCreation] ⚠️ Found \(doubleCheckResponse.wallets.count) wallet(s) on double-check!")
+                    print("[StrigaCardCreation] Using first wallet instead of creating new one")
+                    
+                    let existingWallet = doubleCheckResponse.wallets[0]
+                    walletId = existingWallet.walletId
+                    
+                    // Get wallet details
+                    let walletDetails = try await striga.getWallet(walletId, userId: userId)
+                    
+                    // Use EUR account from existing wallet
+                    if let eurAccount = walletDetails.accounts.eur {
+                        linkedAccountId = eurAccount.accountId
+                        print("[StrigaCardCreation] Using existing EUR account: \(linkedAccountId)")
+                        shouldCreateWallet = false
+                    } else {
+                        throw NSError(domain: "StrigaCardCreation", code: 6,
+                                    userInfo: [NSLocalizedDescriptionKey: "Existing wallet has no EUR account"])
+                    }
+                }
+            } catch let doubleCheckError {
+                print("[StrigaCardCreation] Double-check also failed: \(doubleCheckError)")
+            }
+            
+            if shouldCreateWallet {
+                print("[StrigaCardCreation] Confirmed: No wallets exist. Creating new wallet...")
             
             let walletResponse = try await striga.createWallet(.init(
                 userId: userId,
@@ -269,6 +302,7 @@ class StrigaCardCreationService: CardCreationServiceProtocol {
                 throw NSError(domain: "StrigaCardCreation", code: 5,
                             userInfo: [NSLocalizedDescriptionKey: "New wallet has no EUR account - critical error"])
             }
+            } // Close the shouldCreateWallet if statement
         }
         
         // Generate a secure password for 3D Secure
@@ -300,6 +334,43 @@ class StrigaCardCreationService: CardCreationServiceProtocol {
         print("   📱 Card Type: VIRTUAL")
         print("   ✅ Ready for Apple Pay")
         print(String(repeating: "=", count: 80) + "\n")
+        
+        // IMPORTANT: Try to enrich EUR account after card is created and linked
+        // This is needed for auto-swap functionality
+        print("\n🔄 [StrigaCardCreation] POST-CARD EUR ENRICHMENT FOR AUTO-SWAP:")
+        print("   Attempting to enrich EUR account for auto-swap functionality...")
+        print("   Account ID: \(linkedAccountId)")
+        
+        do {
+            // Add a small delay to let the card linking settle
+            try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+            
+            let enrichResult = try await striga.enrichAccount(.init(
+                accountId: linkedAccountId,
+                userId: userId
+            ))
+            
+            print("✅ [StrigaCardCreation] EUR account enriched successfully!")
+            if let iban = enrichResult.iban {
+                print("   IBAN: \(iban)")
+                if let bic = enrichResult.bic {
+                    print("   BIC: \(bic)")
+                }
+            }
+            print("   Auto-swap from crypto to EUR is now enabled!")
+            
+        } catch {
+            print("⚠️ [StrigaCardCreation] EUR enrichment failed: \(error)")
+            print("   This means auto-swap won't work until EUR is enriched")
+            print("   User can manually enrich from Security > Striga Debug")
+            
+            // Log detailed error for debugging
+            if let nsError = error as? NSError {
+                print("   Error code: \(nsError.code)")
+                print("   Error domain: \(nsError.domain)")
+            }
+            // Don't fail card creation - enrichment can be done later
+        }
         
         return CardCreationResult(
             id: cardResponse.id,
