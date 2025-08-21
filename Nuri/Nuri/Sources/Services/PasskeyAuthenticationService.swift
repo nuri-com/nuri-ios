@@ -250,7 +250,7 @@ final class PasskeyAuthenticationService: NSObject {
             if let credential = authorization.credential as? ASAuthorizationPlatformPublicKeyCredentialAssertion {
                 Log.passkey.success("User selected platform credential (built-in)", metadata: [
                     "credentialId": credential.credentialID.base64URLEncodedString(),
-                    "userHandle": credential.userID.base64URLEncodedString(),
+                    "userHandle": credential.userID?.base64URLEncodedString() ?? "none",
                     "authenticatorDataSize": credential.rawAuthenticatorData.count,
                     "clientDataJSONSize": credential.rawClientDataJSON.count,
                     "signatureSize": credential.signature.count
@@ -302,7 +302,7 @@ final class PasskeyAuthenticationService: NSObject {
             } else if let credential = authorization.credential as? ASAuthorizationSecurityKeyPublicKeyCredentialAssertion {
                 Log.passkey.success("User selected security key credential (hardware key)", metadata: [
                     "credentialId": credential.credentialID.base64URLEncodedString(),
-                    "userHandle": credential.userID.base64URLEncodedString(),
+                    "userHandle": credential.userID?.base64URLEncodedString() ?? "none",
                     "authenticatorDataSize": credential.rawAuthenticatorData.count,
                     "clientDataJSONSize": credential.rawClientDataJSON.count,
                     "signatureSize": credential.signature.count
@@ -456,7 +456,7 @@ final class PasskeyAuthenticationService: NSObject {
             
             Log.passkey.success("Hardware security key presented successfully", metadata: [
                 "credentialId": credential.credentialID.base64URLEncodedString(),
-                "userHandle": credential.userID.base64URLEncodedString()
+                "userHandle": credential.userID?.base64URLEncodedString() ?? "none"
             ])
             
             // Step 4: Verify with server
@@ -837,7 +837,7 @@ final class PasskeyAuthenticationService: NSObject {
                     authenticatorData: credential.rawAuthenticatorData.base64URLEncodedString(),
                     clientDataJSON: credential.rawClientDataJSON.base64URLEncodedString(),
                     signature: credential.signature.base64URLEncodedString(),
-                    userHandle: credential.userID.base64URLEncodedString()
+                    userHandle: credential.userID?.base64URLEncodedString()  // Can be nil for security keys
                 )
             )
         )
@@ -853,7 +853,7 @@ final class PasskeyAuthenticationService: NSObject {
         Log.passkey.debug("Security key verification request", metadata: [
             "credentialId": credentialIdBase64,
             "authenticatorType": "securityKey",
-            "userHandle": credential.userID.base64URLEncodedString(),
+            "userHandle": credential.userID?.base64URLEncodedString() ?? "none",
             "endpoint": endpoint
         ])
         
@@ -908,7 +908,7 @@ final class PasskeyAuthenticationService: NSObject {
                     authenticatorData: credential.rawAuthenticatorData.base64URLEncodedString(),
                     clientDataJSON: credential.rawClientDataJSON.base64URLEncodedString(),
                     signature: credential.signature.base64URLEncodedString(),
-                    userHandle: credential.userID.base64URLEncodedString()
+                    userHandle: credential.userID?.base64URLEncodedString()  // Can be nil for security keys
                 )
             )
         )
@@ -925,7 +925,7 @@ final class PasskeyAuthenticationService: NSObject {
         Log.passkey.debug("Verification request", metadata: [
             "credentialId": credentialIdBase64,
             "credentialIdLength": credential.credentialID.count,
-            "userHandle": credential.userID.base64URLEncodedString(),
+            "userHandle": credential.userID?.base64URLEncodedString() ?? "none",
             "authenticatorDataSize": credential.rawAuthenticatorData.count,
             "signatureSize": credential.signature.count
         ])
