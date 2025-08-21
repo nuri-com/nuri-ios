@@ -375,6 +375,22 @@ final class PasskeyAuthenticationService: NSObject {
         }
     }
     
+    // Helper method to clear stored passkey credentials (useful for debugging)
+    func clearStoredCredentials() {
+        Log.passkey.info("Clearing stored passkey credentials")
+        UserDefaults.standard.removeObject(forKey: "passkeyUsername")
+        UserDefaults.standard.removeObject(forKey: "passkeyCredentialId")
+        UserDefaults.standard.removeObject(forKey: "passkeyIsAnonymous")
+        UserDefaults.standard.removeObject(forKey: "passkeyUserEmail")
+    }
+    
+    // Helper method to get stored credential info
+    func getStoredCredentialInfo() -> (username: String?, credentialId: String?) {
+        let username = UserDefaults.standard.string(forKey: "passkeyUsername")
+        let credentialId = UserDefaults.standard.string(forKey: "passkeyCredentialId")
+        return (username, credentialId)
+    }
+    
     // Authenticate with hardware security key only (no platform passkey selection)
     func authenticateWithSecurityKeyOnly(username: String, presentationAnchor: ASPresentationAnchor) async throws -> (verified: Bool, username: String?, isAnonymous: Bool) {
         Log.passkey.info("Starting hardware security key ONLY authentication flow", metadata: [
@@ -405,6 +421,23 @@ final class PasskeyAuthenticationService: NSObject {
         
         // Set user verification to discouraged to avoid PIN prompt
         securityKeyRequest.userVerificationPreference = .discouraged
+        
+        // IMPORTANT: Specify which credential to use to avoid showing credential selector
+        // This filters to only the credential that was registered for this user
+        if let storedCredentialId = UserDefaults.standard.string(forKey: "passkeyCredentialId"),
+           let credentialIdData = Data(base64URLEncoded: storedCredentialId) {
+            Log.passkey.info("Filtering to specific credential", metadata: [
+                "credentialId": String(storedCredentialId.prefix(20)) + "..."
+            ])
+            
+            let descriptor = ASAuthorizationSecurityKeyPublicKeyCredentialDescriptor(
+                credentialID: credentialIdData,
+                transports: [.usb, .nfc]  // Support both USB and NFC keys
+            )
+            securityKeyRequest.allowedCredentials = [descriptor]
+        } else {
+            Log.passkey.warning("No stored credential ID found, user may see multiple credentials")
+        }
         
         // Step 3: Perform authorization with ONLY security key request
         Log.passkey.info("Step 3: Presenting hardware security key authentication (no passkey selection)")

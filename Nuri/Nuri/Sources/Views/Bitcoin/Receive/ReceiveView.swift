@@ -73,14 +73,18 @@ struct ReceiveView: View {
                         UIPasteboard.general.string = address
                         showCopiedToast = true
                         
-                        // Hide toast after 2 seconds and open webview
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        // Hide toast after 2 seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                             showCopiedToast = false
+                        }
+                    }
+                    
+                    // Close receive view first, then open buy view
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        navigation.isReceiveViewPresented = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                             navigation.isBuyViewPresented = true
                         }
-                    } else {
-                        // If no address available, just open the webview
-                        navigation.isBuyViewPresented = true
                     }
                 }
                 .buttonStyle(ProminentButtonStyle())
