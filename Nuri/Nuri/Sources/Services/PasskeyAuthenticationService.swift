@@ -387,14 +387,14 @@ final class PasskeyAuthenticationService: NSObject {
         
         // Step 1: Get authentication options
         Log.passkey.info("Step 1: Fetching authentication options for security key")
-        let authOptions = try await getAuthenticationOptions(username: username)
+        let authOptions = try await fetchAuthenticationOptions(username: username)
         
         // Step 2: Create security key only request
         Log.passkey.info("Step 2: Creating security key ONLY assertion request")
         
         guard let challenge = Data(base64URLEncoded: authOptions.challenge) else {
             Log.passkey.error("Invalid challenge from server")
-            throw PasskeyError.invalidChallenge
+            throw PasskeyError.serverError  // Use existing error case
         }
         
         let rpId = authOptions.rpId
