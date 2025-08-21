@@ -69,13 +69,19 @@ class CardViewModel: ObservableObject {
                 } else {
                     print("\n⚠️ [CardViewModel] NO EXISTING CARD FOUND")
                     print("   📝 This user has never created a card")
-                    print("   🔍 Checking if we should auto-create one...")
-                    await checkAndAutoCreateCard(userId: strigaUserId!)
+                    print("   ⛔ AUTO-CREATION DISABLED - User must manually create from UserInfoView")
+                    // DISABLED: Automatic wallet/card creation
+                    // Users must manually create wallet/card from UserInfoView after KYC
+                    // await checkAndAutoCreateCard(userId: strigaUserId!)
                 }
             }
         }
     }
     
+    // DISABLED: Automatic wallet/card creation
+    // This function is kept for reference but should NOT be called
+    // Users must manually create wallet/card from UserInfoView after KYC
+    /*
     @MainActor
     private func checkAndAutoCreateCard(userId: String) async {
         print("\n" + String(repeating: "=", count: 80))
@@ -157,56 +163,22 @@ class CardViewModel: ObservableObject {
                 }
                 
                 if walletsResponse.wallets.isEmpty {
-                    // Create wallet and card - ONLY if no wallets exist
-                    print("\n✅ [CardViewModel] SAFE TO CREATE - No wallets exist")
-                    print("   📝 Creating first wallet and card...")
+                    // Use CardCreationService to create wallet and card
+                    print("\n✅ [CardViewModel] No wallets exist - using CardCreationService")
+                    print("   📝 CardCreationService will handle wallet/card creation properly...")
                     
-                    let createWalletInput = CreateWallet(
-                        userId: userId,
-                        accountCurrency: ["EUR", "BTC"]
-                    )
+                    let cardService = CardCreationServiceProvider.shared.service
+                    let cardResult = try await cardService.createCard(name: userName, userId: userId)
                     
-                    let walletResponse = try await StrigaService.shared.createWallet(createWalletInput)
-                    print("[CardViewModel] Created wallet: \(walletResponse.walletId)")
-                    
-                    // Enrich EUR account
-                    if let eurAccount = walletResponse.accounts.eur {
-                        let enrichInput = EnrichAccount(
-                            accountId: eurAccount.accountId,
-                            userId: userId
-                        )
-                        
-                        _ = try await StrigaService.shared.enrichAccount(enrichInput)
-                        print("[CardViewModel] Enriched EUR account")
-                    }
-                    
-                    // Create card with 3D Secure password
-                    let cardName = userName
-                    // Generate secure password following Striga's policy (same as user creation flow)
-                    let threeDSecurePassword = generateSecurePassword()
-                    print("[CardViewModel:checkAndAutoCreateCard:103] Generated 3D Secure password")
-                    
-                    // Store the 3D Secure password securely
-                    UserDefaults.standard.set(threeDSecurePassword, forKey: "striga3DSecurePassword")
-                    
-                    let createCardInput = CreateCard(
-                        userId: userId,
-                        linkedAccountId: walletResponse.accounts.eur?.accountId ?? "",
-                        name: cardName,
-                        type: "VIRTUAL",
-                        threeDSecurePassword: threeDSecurePassword
-                    )
-                    
-                    let cardResponse = try await StrigaService.shared.createCard(createCardInput)
-                    print("[CardViewModel] Created card: \(cardResponse.id)")
+                    print("[CardViewModel] Card created via CardCreationService: \(cardResult.id)")
                     
                     // Save IDs
                     var settings = UserSettings()
-                    settings.strigaWalletId = walletResponse.walletId
-                    settings.strigaCardId = cardResponse.id
+                    settings.strigaWalletId = cardResult.parentWalletId
+                    settings.strigaCardId = cardResult.id
                     
-                    StrigaSession.shared.cardId = cardResponse.id
-                    StrigaSession.shared.name = cardName
+                    StrigaSession.shared.cardId = cardResult.id
+                    StrigaSession.shared.name = userName
                     
                     // Update hasCard
                     hasCard = true
@@ -358,6 +330,7 @@ class CardViewModel: ObservableObject {
         isCheckingKYC = false
         isCreatingCard = false
     }
+    */
     
     // Copy the exact password generation logic from CardCreationService
     private func generateSecurePassword() -> String {

@@ -150,15 +150,9 @@ struct CardViewActive: View {
                 StrigaCardPreview(
                     holder: cardHolderName,
                     maskedNumber: maskedCardNumber,
-                    expiry: cardExpiry
-                )
-                .opacity(cardOpacity)
-                .transition(.opacity)
-                .padding(.bottom, 20)
-
-                HStack(spacing: 32) {
-                    SmallIconButton(icon: "eye", 
-                                  title: "Show") {
+                    expiry: cardExpiry,
+                    isCardFrozen: isCardFrozen,
+                    onShowTap: {
                         print("\n════════════════════════════════════════")
                         print("🎯 [CardViewActive] STARTING STREAMLINED CARD FLOW")
                         print("════════════════════════════════════════")
@@ -183,14 +177,13 @@ struct CardViewActive: View {
                         
                         print("✅ [CardViewActive] Opening streamlined flow...")
                         showCardDetailsFlow = true
-                    }
-                    SmallIconButton(icon: isCardFrozen ? "lock" : "lock_open", title: isCardFrozen ? "Unfreeze" : "Freeze") {
+                    },
+                    onFreezeTap: {
                         toggleCardFreeze()
                     }
-                    SmallIconButton(icon: "money_topup", title: "Top-Up") {
-                        isTopUpPresented = true
-                    }
-                }
+                )
+                .opacity(cardOpacity)
+                .transition(.opacity)
                 .padding(.bottom, 30)
 
                 Button(action: {
@@ -240,6 +233,11 @@ struct CardViewActive: View {
             loadCardData()
             fetchCardAndWalletDetails()
             startAutoRefresh()
+            
+            // Ensure AutoConversionService is running (as a backup)
+            Task {
+                await ensureAutoConversionIsRunning()
+            }
             
             // Also fetch immediately after 2 seconds to catch any pending transactions
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
@@ -778,6 +776,25 @@ struct CardViewActive: View {
         }
     }
     
+    private func ensureAutoConversionIsRunning() async {
+        // Check if user has a valid card
+        let cardId = StrigaSession.shared.cardId ?? UserSettings().strigaCardId
+        
+        guard let cardId = cardId, !cardId.isEmpty, cardId != "UNLINKED" else {
+            print("[CardViewActive] No valid card ID, skipping auto-conversion")
+            return
+        }
+        
+        // Check if AutoConversionService is already monitoring
+        if AutoConversionService.shared.isMonitoring {
+            print("[CardViewActive] ✅ Auto-conversion already monitoring")
+            return
+        }
+        
+        print("[CardViewActive] 🚀 Starting auto-conversion monitoring from CardView")
+        await AutoConversionService.shared.startMonitoring()
+    }
+    
     private func autoConvertBTCtoEUR(btcAmount: String, btcAccountId: String, eurAccountId: String) {
         Task {
             do {
@@ -997,6 +1014,9 @@ private struct StrigaCardPreview: View {
     let holder: String
     let maskedNumber: String
     let expiry: String
+    var isCardFrozen: Bool = false
+    var onShowTap: (() -> Void)? = nil
+    var onFreezeTap: (() -> Void)? = nil
     
     var body: some View {
         // Standard credit card aspect ratio: width/height = 1.586 (85.6mm x 53.98mm)
@@ -1013,19 +1033,34 @@ private struct StrigaCardPreview: View {
             .cornerRadius(16)
             
             VStack(alignment: .leading, spacing: 0) {
-                // Card Holder section at top
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("CARD HOLDER")
-                        .font(.custom("Inter", size: 10))
-                        .foregroundColor(.white.opacity(0.7))
-                        .tracking(0.5)
-                    Text(holder.uppercased())
-                        .font(.custom("Inter", size: 18).weight(.medium))
-                        .foregroundColor(.white)
+                // Top row with Card Holder and Eye icon
+                HStack(alignment: .top) {
+                    // Card Holder section
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("CARD HOLDER")
+                            .font(.custom("Inter", size: 10))
+                            .foregroundColor(.white.opacity(0.7))
+                            .tracking(0.5)
+                        Text(holder.uppercased())
+                            .font(.custom("Inter", size: 18).weight(.medium))
+                            .foregroundColor(.white)
+                    }
+                    
+                    Spacer()
+                    
+                    // Eye icon in top right
+                    if let onShowTap = onShowTap {
+                        Button(action: onShowTap) {
+                            Image("eye")
+                                .resizable()
+                                .renderingMode(.template)
+                                .foregroundColor(.white)
+                                .frame(width: 24, height: 24)
+                        }
+                    }
                 }
                 .padding(.top, 24)
-                .padding(.leading, 21)
-                .padding(.trailing, 40)
+                .padding(.horizontal, 21)
                 
                 // Card Number section in middle
                 VStack(alignment: .leading, spacing: 4) {
@@ -1039,35 +1074,48 @@ private struct StrigaCardPreview: View {
                         .tracking(1.5)
                 }
                 .padding(.top, 24)
-                .padding(.leading, 21)
-                .padding(.trailing, 40)
+                .padding(.horizontal, 21)
                 
                 Spacer()
                 
-                // Bottom row - Expires and CVV
-                HStack(spacing: 50) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("EXPIRES")
-                            .font(.custom("Inter", size: 10))
-                            .foregroundColor(.white.opacity(0.7))
-                            .tracking(0.5)
-                        Text(expiry)
-                            .font(.custom("Inter", size: 18).weight(.medium))
-                            .foregroundColor(.white)
+                // Bottom row - Expires, CVV and Freeze icon
+                HStack(alignment: .bottom) {
+                    HStack(spacing: 50) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("EXPIRES")
+                                .font(.custom("Inter", size: 10))
+                                .foregroundColor(.white.opacity(0.7))
+                                .tracking(0.5)
+                            Text(expiry)
+                                .font(.custom("Inter", size: 18).weight(.medium))
+                                .foregroundColor(.white)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("CVV")
+                                .font(.custom("Inter", size: 10))
+                                .foregroundColor(.white.opacity(0.7))
+                                .tracking(0.5)
+                            Text("***")
+                                .font(.system(size: 18, weight: .medium, design: .monospaced))
+                                .foregroundColor(.white)
+                        }
                     }
                     
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("CVV")
-                            .font(.custom("Inter", size: 10))
-                            .foregroundColor(.white.opacity(0.7))
-                            .tracking(0.5)
-                        Text("***")
-                            .font(.system(size: 18, weight: .medium, design: .monospaced))
-                            .foregroundColor(.white)
+                    Spacer()
+                    
+                    // Freeze icon in bottom right
+                    if let onFreezeTap = onFreezeTap {
+                        Button(action: onFreezeTap) {
+                            Image(isCardFrozen ? "lock" : "lock_open")
+                                .resizable()
+                                .renderingMode(.template)
+                                .foregroundColor(.white)
+                                .frame(width: 24, height: 24)
+                        }
                     }
                 }
-                .padding(.leading, 21)
-                .padding(.trailing, 40)
+                .padding(.horizontal, 21)
                 .padding(.bottom, 24)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

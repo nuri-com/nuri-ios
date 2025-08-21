@@ -38,7 +38,7 @@ struct NoCardView: View {
                     .padding(.bottom, 24)
                 NuriTitleWithSubtitle(
                     title: "Nuri Card for Apple Pay",
-                    subtitle: UserSettings().strigaUserId == nil ? "Create your account to get started" : ""
+                    subtitle: ""
                 )
                 featureList()
                     .padding(.top, -6)
@@ -48,7 +48,7 @@ struct NoCardView: View {
                     print("\n" + String(repeating: "=", count: 80))
                     print("🎯 [NoCardView] USER INITIATING CARD CREATION")
                     print("   👤 Has Striga ID: \(hasStrigaId)")
-                    print("   📝 Button Text: \(hasStrigaId ? "Get Card" : "Create Account")")
+                    print("   📝 Button Text: Get Visa Card")
                     print("   🔄 Flow: \(hasStrigaId ? "Create card for existing user" : "New user registration")")
                     print(String(repeating: "=", count: 80) + "\n")
                     
@@ -56,7 +56,7 @@ struct NoCardView: View {
                 }) {
                     NuriButton(
                         icon: "card_contactless",
-                        title: UserSettings().strigaUserId == nil ? "Create Account" : "Get Card",
+                        title: "Get Visa Card",
                         style: .primary
                     )
                 }

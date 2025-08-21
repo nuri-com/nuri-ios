@@ -47,24 +47,6 @@ struct BitcoinView: View {
                         }
                     }
                 )
-                
-                // Network indicator
-                if bitcoinNetwork == "testnet3" {
-                    HStack {
-                        Image(systemName: "testtube.2")
-                            .font(.caption2)
-                        Text("TESTNET3")
-                            .font(.caption2.bold())
-                        Text("- Test coins only")
-                            .font(.caption2)
-                    }
-                    .foregroundColor(.orange)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 4)
-                    .background(Color.orange.opacity(0.1))
-                    .cornerRadius(4)
-                    .padding(.top, 8)
-                }
 
                 VStack {
                     Spacer()
@@ -72,11 +54,11 @@ struct BitcoinView: View {
                         VStack(spacing: 4) {
                             AmountAndCurrency(isPrimaryBTC: $isPrimaryBTC,
                                              isBalanceHidden: $isBalanceHidden,
-                                             sats: walletState.balance.confirmed,
+                                             sats: walletState.balance.total,
                                              rate: NetworkConfiguration.shared.getDisplayExchangeRate(exchangeRate))
                             SecondaryCurrencyAndAmount(isPrimaryBTC: $isPrimaryBTC,
                                                        isBalanceHidden: $isBalanceHidden,
-                                                       sats: walletState.balance.confirmed,
+                                                       sats: walletState.balance.total,
                                                        rate: NetworkConfiguration.shared.getDisplayExchangeRate(exchangeRate))
                         }
                         .onTapGesture {
@@ -187,7 +169,7 @@ struct BitcoinView: View {
             
             print("🔄 [BitcoinView] View appeared, checking wallet status...")
             print("   📱 Has wallet: \(walletService.hasWallet())")
-            print("   💰 Cached balance: \(walletState.balance.confirmed) sats")
+            print("   💰 Cached balance: \(walletState.balance.total) sats (confirmed: \(walletState.balance.confirmed), pending: \(walletState.balance.pending))")
             
             // Always initialize wallet on app start (it will skip if already initialized)
             walletService.initializeWalletOnAppStart()
@@ -208,7 +190,7 @@ struct BitcoinView: View {
                 } else {
                     print("❌ [BitcoinView] Wallet initialization failed or timed out")
                     // Show cached balance if available
-                    print("💰 [BitcoinView] Using cached balance: \(walletState.balance.confirmed) sats")
+                    print("💰 [BitcoinView] Using cached balance: \(walletState.balance.total) sats (confirmed: \(walletState.balance.confirmed), pending: \(walletState.balance.pending))")
                 }
             }
         }
@@ -427,7 +409,7 @@ struct BitcoinView: View {
         
         // Use cached balance first, then refresh in background
         let cachedBalance = await walletState.getBalance(forceRefresh: false)
-        print("💰 [BitcoinView] Using cached balance: \(cachedBalance.confirmed) sats")
+        print("💰 [BitcoinView] Using cached balance: \(cachedBalance.total) sats (confirmed: \(cachedBalance.confirmed), pending: \(cachedBalance.pending))")
         
         // Check if exchange rate needs refresh
         let cachedTimestamp = UserDefaults.standard.object(forKey: exchangeRateTimestampKey) as? Date ?? Date.distantPast

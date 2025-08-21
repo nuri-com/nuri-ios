@@ -5,105 +5,6 @@ import Photos
 import StrigaAPI
 import KeychainAccess
 
-// Temporary inline implementation until added to project
-fileprivate class EUREnrichmentDebugger {
-    static let shared = EUREnrichmentDebugger()
-    private let striga = StrigaService.shared
-    
-    private init() {
-        if striga.configuration == nil {
-            striga.configuration = StrigaCredentials.current
-        }
-    }
-    
-    func tryAllEnrichmentApproaches(userId: String, walletId: String) async -> [String] {
-        var logs: [String] = []
-        
-        logs.append("🔬 EUR ENRICHMENT DEBUGGER STARTED")
-        logs.append("User ID: \(userId)")
-        logs.append("Wallet ID: \(walletId)")
-        
-        do {
-            let wallet = try await striga.getWallet(walletId, userId: userId)
-            
-            guard let eurAccount = wallet.accounts.eur else {
-                logs.append("❌ No EUR account in wallet!")
-                return logs
-            }
-            
-            logs.append("\n📊 EUR Account Status:")
-            logs.append("  Account ID: \(eurAccount.accountId)")
-            logs.append("  Status: \(eurAccount.status)")
-            logs.append("  Enriched: \(eurAccount.enriched)")
-            
-            if eurAccount.enriched {
-                logs.append("✅ Already enriched!")
-                return logs
-            }
-            
-            // Try direct enrichment
-            logs.append("\n🔄 Attempting Direct Enrichment")
-            do {
-                let result = try await striga.enrichAccount(.init(
-                    accountId: eurAccount.accountId,
-                    userId: userId
-                ))
-                logs.append("✅ Success! IBAN: \(result.iban ?? "none")")
-                return logs
-            } catch {
-                logs.append("❌ Failed: \(error)")
-            }
-            
-            logs.append("\n❌ ENRICHMENT FAILED")
-            
-        } catch {
-            logs.append("❌ Fatal error: \(error)")
-        }
-        
-        return logs
-    }
-    
-    func testCryptoEnrichment(userId: String, walletId: String) async -> [String] {
-        var logs: [String] = []
-        
-        logs.append("🔬 CRYPTO ENRICHMENT TEST")
-        
-        do {
-            let wallet = try await striga.getWallet(walletId, userId: userId)
-            
-            if let btc = wallet.accounts.btc, !btc.enriched {
-                logs.append("\n🔄 Enriching BTC...")
-                do {
-                    let result = try await striga.enrichAccount(.init(
-                        accountId: btc.accountId,
-                        userId: userId
-                    ))
-                    logs.append("✅ BTC Success! Address: \(result.blockchainDepositAddress ?? "none")")
-                } catch {
-                    logs.append("❌ BTC Failed: \(error)")
-                }
-            }
-            
-            if let sol = wallet.accounts.sol, !sol.enriched {
-                logs.append("\n🔄 Enriching SOL...")
-                do {
-                    let result = try await striga.enrichAccount(.init(
-                        accountId: sol.accountId,
-                        userId: userId
-                    ))
-                    logs.append("✅ SOL Success! Address: \(result.blockchainDepositAddress ?? "none")")
-                } catch {
-                    logs.append("❌ SOL Failed: \(error)")
-                }
-            }
-            
-        } catch {
-            logs.append("❌ Error: \(error)")
-        }
-        
-        return logs
-    }
-}
 
 struct SecurityView: View {
     @State private var resultText = "Press the button to test the encrypted iCloud backup."
@@ -135,6 +36,7 @@ struct SecurityView: View {
     @State private var enrichmentLogs: [String] = []
     @State private var selectedWalletForEnrichment: String?
     @State private var selectedAccountForEnrichment: String?
+    @State private var comprehensiveEnrichmentLogs: [String] = []
     
     private let bitcoinWalletService = BitcoinWalletService.shared
     private let striga = StrigaService.shared
@@ -536,6 +438,57 @@ struct SecurityView: View {
                             .background(Color.red.opacity(0.05))
                             .cornerRadius(4)
                         }
+                        
+                        // Comprehensive Enrichment & Linking Test Button
+                        VStack(spacing: 12) {
+                            Divider()
+                            
+                            Text("🔗 Comprehensive Enrichment & Card Linking")
+                                .font(.headline)
+                                .foregroundColor(.blue)
+                            
+                            Text("This will test the full enrichment and card linking flow")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            Button(action: {
+                                Task {
+                                    await performComprehensiveEnrichmentTest()
+                                }
+                            }) {
+                                HStack {
+                                    Image(systemName: "link.badge.plus")
+                                    Text("Test Full Enrichment & Linking")
+                                        .fontWeight(.semibold)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.blue)
+                                .foregroundColor(.white)
+                                .cornerRadius(8)
+                            }
+                            
+                            // Display comprehensive enrichment results
+                            if !comprehensiveEnrichmentLogs.isEmpty {
+                                ScrollView {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        ForEach(Array(comprehensiveEnrichmentLogs.enumerated()), id: \.offset) { _, log in
+                                            Text(log)
+                                                .font(.system(size: 11, design: .monospaced))
+                                                .foregroundColor(logColor(for: log))
+                                        }
+                                    }
+                                    .padding(8)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .frame(maxHeight: 300)
+                                .background(Color.black.opacity(0.05))
+                                .cornerRadius(4)
+                            }
+                        }
+                        .padding(8)
+                        .background(Color.blue.opacity(0.05))
+                        .cornerRadius(4)
                     }
                     .padding(.vertical, 8)
                 }
@@ -2609,6 +2562,46 @@ struct SecurityView: View {
     }
     
     // MARK: - Striga Debug Functions
+    
+    private func performComprehensiveEnrichmentTest() async {
+        await MainActor.run {
+            comprehensiveEnrichmentLogs.removeAll()
+            comprehensiveEnrichmentLogs.append("🚀 Starting comprehensive enrichment test...")
+        }
+        
+        let result = await WalletEnrichmentService.shared.performFullEnrichmentAndLinking()
+        
+        await MainActor.run {
+            comprehensiveEnrichmentLogs = result.logs
+            
+            // Also log to console for debugging
+            print("\n" + String(repeating: "=", count: 80))
+            print("COMPREHENSIVE ENRICHMENT TEST RESULTS")
+            print(String(repeating: "=", count: 80))
+            for log in result.logs {
+                print(log)
+            }
+            print(String(repeating: "=", count: 80) + "\n")
+        }
+    }
+    
+    private func logColor(for log: String) -> Color {
+        if log.contains("✅") || log.contains("SUCCESS") {
+            return .green
+        } else if log.contains("❌") || log.contains("FAILED") || log.contains("FATAL") {
+            return .red
+        } else if log.contains("⚠️") || log.contains("WARNING") {
+            return .orange
+        } else if log.contains("🔄") || log.contains("🔗") {
+            return .blue
+        } else if log.contains("📍") || log.contains("📊") || log.contains("💶") || log.contains("₿") {
+            return .purple
+        } else if log.contains("════") || log.contains("────") {
+            return .gray
+        } else {
+            return .primary
+        }
+    }
     
     private func debugEUREnrichment(walletId: String) async {
         guard let userId = StrigaSession.shared.userId ?? UserSettings().strigaUserId else { return }

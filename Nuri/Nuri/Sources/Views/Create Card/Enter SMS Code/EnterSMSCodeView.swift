@@ -21,12 +21,13 @@ struct EnterSMSCodeView: View {
         .onChange(of: viewModel.viewState.codeTextField.text) { _, newValue in
             viewModel.viewState.codeTextField.textChangeHandler?.action(newValue)
         }
-        // Card creation now happens automatically in background after KYC approval
         .loadingOverlay(
             isPresented: viewModel.viewState.isLoadingAnimationActive,
             title: "Verifying code...",
             subtitle: nil
         )
-        // Card creation now happens automatically in background after KYC approval
+        // REMOVED: Navigation to UserInfoView
+        // After KYC approval, PostKYCCoordinator handles the flow
+        // This prevents SMS screen from appearing again
     }
 }

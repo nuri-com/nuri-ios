@@ -115,6 +115,10 @@ struct NuriApp: App {
         } else {
             print("[NuriApp] ✅ Cached data is valid, no sync needed")
         }
+        
+        // ALWAYS start auto-conversion monitoring if user has a card
+        // This ensures it's running even after app restarts
+        await ensureAutoConversionIsRunning()
     }
     
     @MainActor
@@ -166,6 +170,34 @@ struct NuriApp: App {
         if StrigaSession.shared.cardId != nil {
             print("[NuriApp] Starting auto-conversion monitoring")
             await AutoConversionService.shared.startMonitoring()
+        }
+    }
+    
+    @MainActor
+    private func ensureAutoConversionIsRunning() async {
+        // Check if user has a card ID in either session or settings
+        let cardId = StrigaSession.shared.cardId ?? UserSettings().strigaCardId
+        
+        guard let cardId = cardId, !cardId.isEmpty, cardId != "UNLINKED" else {
+            print("[NuriApp] No valid card ID found, skipping auto-conversion")
+            return
+        }
+        
+        // Check if already monitoring
+        if AutoConversionService.shared.isMonitoring {
+            print("[NuriApp] ✅ Auto-conversion already monitoring")
+            return
+        }
+        
+        print("[NuriApp] 🚀 Starting auto-conversion monitoring (Card ID: \(cardId))")
+        await AutoConversionService.shared.startMonitoring()
+        
+        // Also trigger an immediate check after a short delay
+        // This helps catch any pending transactions right after app launch
+        Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+            print("[NuriApp] Triggering immediate balance check after app launch")
+            // The service will check on its own schedule
         }
     }
 }

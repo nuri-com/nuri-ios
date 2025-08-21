@@ -160,97 +160,24 @@ final class EnterSMSCodeViewModel: ObservableObject {
         // Don't set token expiration handler - let the SDK handle it internally
         // The token from Striga should be valid for the entire KYC session
         sdk.present()
-        sdk.verificationHandler { [weak self] (isApproved) in
+        sdk.verificationHandler { (isApproved) in
             print("[Lukas] verificationHandler: Applicant is " + (isApproved ? "approved" : "finally rejected"))
             if isApproved {
-                Task {
-                    // Don't show the CreatingCardView - do it in the background
-                    await self?.createCardAndWalletInBackground()
-                }
+                print("\n═══════════════════════════════════════════════════")
+                print("✅ [KYC] KYC APPROVED - TRANSITIONING TO POST-KYC FLOW")
+                print("   📋 Will present UserInfoView in new modal")
+                print("   ⚠️ SMS screen will be dismissed permanently")
+                print("═══════════════════════════════════════════════════\n")
+                
+                // Use PostKYCCoordinator to handle the flow properly
+                // This dismisses SMS screen and presents UserInfoView in a new modal
+                PostKYCCoordinator.shared.presentUserInfoAfterKYC()
+            } else {
+                print("[KYC] ❌ KYC rejected - user needs to retry or contact support")
             }
         }
     }
     
-    @MainActor
-    private func createCardAndWalletInBackground() async {
-        print("[KYC] Creating card and wallet in background after KYC approval...")
-        
-        do {
-            let session = StrigaSession.shared
-            guard let userId = session.userId else {
-                print("[KYC] ERROR: No userId in session")
-                return
-            }
-            
-            // REMOVED: Duplicate wallet creation here
-            // Wallet is created ONCE in CardCreationService when creating the card
-            
-            // Then create the card
-            let name: String
-            if let firstName = session.firstName, let lastName = session.lastName {
-                name = "\(firstName) \(lastName)"
-                print("[KYC] Using full name for card: \(name)")
-            } else if let sessionName = session.name {
-                name = sessionName
-                print("[KYC] Using session name for card: \(name)")
-            } else {
-                print("[KYC] ERROR: No name available for card creation")
-                return
-            }
-            
-            print("[KYC] Creating card for user: \(userId) with name: \(name)")
-            let cardService = CardCreationServiceProvider.shared.service
-            let cardResponse = try await cardService.createCard(name: name, userId: userId)
-            print("[KYC] Card created successfully: \(cardResponse)")
-            
-            // Store card details
-            UserSettings().strigaUserId = userId
-            UserSettings().strigaCardId = cardResponse.id
-            UserSettings().strigaWalletId = cardResponse.parentWalletId
-            
-            // Post notification that card was created
-            NotificationCenter.default.post(name: Notification.Name("CardCreatedSuccessfully"), object: nil)
-            
-            // Close the entire card creation flow
-            print("[KYC] Card and wallet created successfully, closing flow...")
-            
-            // Find and dismiss the navigation
-            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-               let window = windowScene.windows.first,
-               let rootVC = window.rootViewController {
-                rootVC.dismiss(animated: true)
-            }
-            
-        } catch {
-            print("\n❌ [KYC] ERROR CREATING CARD/WALLET IN BACKGROUND")
-            print("Error: \(error)")
-            
-            if let errorResponse = error as? ErrorResponse {
-                print("[KYC] API Error details:")
-                print("   Message: \(errorResponse.message)")
-                print("   Code: \(errorResponse.errorCode)")
-                print("   Details: \(errorResponse.errorDetails as String? ?? "none")")
-            }
-            
-            // IMPORTANT: Still dismiss and let user continue
-            // The user is registered with KYC approved, they can create card from main screen
-            print("\n⚠️ [KYC] RECOVERY STRATEGY:")
-            print("   1. User is registered ✅")
-            print("   2. KYC is approved ✅")
-            print("   3. Card creation failed ❌")
-            print("   4. User can create card from Card tab")
-            print("   5. Dismissing to main screen...")
-            
-            DispatchQueue.main.async {
-                // Find and dismiss the navigation
-                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                   let window = windowScene.windows.first,
-                   let rootVC = window.rootViewController {
-                    rootVC.dismiss(animated: true) {
-                        print("✅ [KYC] Dismissed SMS screen - user can now create card from Card tab")
-                    }
-                }
-            }
-        }
-    }
+    // REMOVED: Automatic wallet/card creation after KYC
+    // This is now handled manually in UserInfoView to prevent duplicates
 }

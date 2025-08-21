@@ -294,18 +294,23 @@ final class WalletStateManager: ObservableObject {
         
         // Immediately update balance (optimistic update)
         let totalDeducted = amount + fee
+        let previousTotal = balance.total
         let previousConfirmed = balance.confirmed
         
         // Only do optimistic update if we have sufficient funds
-        if balance.confirmed >= totalDeducted {
-            balance.confirmed = balance.confirmed - totalDeducted
-            balance.total = balance.confirmed + balance.pending
+        if balance.total >= totalDeducted {
+            // Move the amount from confirmed/total to pending
+            // This maintains the correct total balance while showing the transaction is pending
+            balance.pending = balance.pending + totalDeducted
+            balance.total = previousTotal // Keep total the same initially
             balance.lastUpdated = Date()
             
             print("💰 [WalletStateManager] Balance updated optimistically:")
+            print("💰 [WalletStateManager]   Previous total: \(previousTotal) sats")
             print("💰 [WalletStateManager]   Previous confirmed: \(previousConfirmed) sats")
-            print("💰 [WalletStateManager]   New confirmed: \(balance.confirmed) sats")
-            print("💰 [WalletStateManager]   Amount deducted: \(totalDeducted) sats")
+            print("💰 [WalletStateManager]   New pending: \(balance.pending) sats")
+            print("💰 [WalletStateManager]   New total: \(balance.total) sats")
+            print("💰 [WalletStateManager]   Amount moved to pending: \(totalDeducted) sats")
             
             // Persist the optimistic update
             persistBalance(balance)
@@ -325,15 +330,18 @@ final class WalletStateManager: ObservableObject {
         }
     }
     
-    /// Get available spending balance (confirmed only)
+    /// Get available spending balance (total balance minus pending outgoing)
     var availableBalance: UInt64 {
-        balance.confirmed
+        // Use total balance for spending calculations to match what user sees
+        // This prevents confusion when pending incoming transactions are present
+        balance.total
     }
     
     /// Check if we have sufficient funds for a transaction
     func hasSufficientFunds(amount: UInt64, fee: UInt64 = 0) -> Bool {
         let required = amount + fee
-        return balance.confirmed >= required
+        // Check against total balance to match what user sees in the UI
+        return balance.total >= required
     }
     
     // MARK: - Private Methods
@@ -384,31 +392,35 @@ final class WalletStateManager: ObservableObject {
         print("📡 [WalletStateManager]   Pending: \(detailedBalance.pending) sats")
         print("📡 [WalletStateManager]   Total: \(detailedBalance.total) sats")
         
-        // Adjust for pending transactions that might not be reflected in network yet
+        // Handle balance sync with pending transactions
         var adjustedConfirmed = detailedBalance.confirmed
+        var adjustedTotal = detailedBalance.total
         
-        // If we have pending transactions and the network balance is significantly different from our cached balance,
-        // it might mean the network hasn't seen our transaction yet or there was an error in our optimistic update
-        if !pendingTransactions.isEmpty && abs(Int64(detailedBalance.confirmed) - Int64(balance.confirmed)) > 1000000 {
-            print("⚠️ [WalletStateManager] Large balance difference detected with pending transactions")
-            print("⚠️ [WalletStateManager] Network: \(detailedBalance.confirmed), Cached: \(balance.confirmed)")
+        // If we have pending transactions, be careful about overwriting our optimistic updates
+        if !pendingTransactions.isEmpty {
+            print("⚠️ [WalletStateManager] Syncing with \(pendingTransactions.count) pending transactions")
+            print("⚠️ [WalletStateManager] Network confirmed: \(detailedBalance.confirmed), Cached total: \(balance.total)")
             
-            // If network balance is much higher, it likely hasn't seen our transaction yet
-            if detailedBalance.confirmed > balance.confirmed && detailedBalance.confirmed > 1000000 {
-                print("⚠️ [WalletStateManager] Network balance higher - keeping optimistic balance temporarily")
+            // If the network returns 0 balance but we have a cached balance with pending transactions,
+            // this is likely a sync issue - keep our cached balance
+            if detailedBalance.confirmed == 0 && balance.total > 0 {
+                print("⚠️ [WalletStateManager] Network returned 0 but we have cached balance - keeping cached values")
                 adjustedConfirmed = balance.confirmed
+                adjustedTotal = balance.total
             }
-            // If network balance is much lower, there might be an issue with our optimistic update
-            else if detailedBalance.confirmed < balance.confirmed && detailedBalance.confirmed == 0 {
-                print("⚠️ [WalletStateManager] Network balance is zero - this might be a sync issue, keeping cached balance")
-                adjustedConfirmed = balance.confirmed
+            // If network balance hasn't changed from our last known confirmed balance,
+            // it means the network hasn't seen our transaction yet
+            else if abs(Int64(detailedBalance.confirmed) - Int64(previousBalance.confirmed)) < 1000 {
+                print("⚠️ [WalletStateManager] Network balance unchanged - transaction might not be visible yet")
+                // Keep our optimistic balance
+                adjustedTotal = balance.total
             }
         }
         
         let newBalance = WalletBalance(
             confirmed: adjustedConfirmed,
             pending: detailedBalance.pending,
-            total: adjustedConfirmed + detailedBalance.pending,
+            total: adjustedTotal,
             lastUpdated: Date()
         )
         

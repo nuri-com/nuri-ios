@@ -74,6 +74,7 @@ class StrigaCardCreationService: CardCreationServiceProtocol {
         print("   👤 User ID: \(userId)")
         print("   📝 Card Name: \(name)")
         print("   🔄 Process: Check wallets → Create if needed → Enrich → Create card")
+        print("   ⚠️ RULE: ONE wallet, ONE card, ONE IBAN per user")
         print(String(repeating: "=", count: 80))
         
         var walletId: String = ""
@@ -85,7 +86,8 @@ class StrigaCardCreationService: CardCreationServiceProtocol {
             let walletsResponse = try await striga.getWallets(userId: userId)
             print("[StrigaCardCreation] Found \(walletsResponse.wallets.count) wallet(s)")
             
-            // Check if any wallet already has a valid card
+            // CRITICAL: Check if ANY wallet already has a valid card
+            // RULE: ONE card per user - if any wallet has a card, return it
             for wallet in walletsResponse.wallets {
                 let hasValidCard = [
                     wallet.accounts.eur?.linkedCardId,
@@ -98,13 +100,21 @@ class StrigaCardCreationService: CardCreationServiceProtocol {
                 }
                 
                 if hasValidCard {
-                    print("[StrigaCardCreation] ⚠️ Wallet \(wallet.walletId) already has a card - skipping card creation")
+                    print("[StrigaCardCreation] ✅ FOUND EXISTING CARD - Wallet \(wallet.walletId) already has a card")
+                    print("[StrigaCardCreation] 🚫 PREVENTING DUPLICATE - Returning existing card")
                     // Don't create another card - just return the existing one
                     if let eurCardId = wallet.accounts.eur?.linkedCardId,
                        eurCardId != "UNLINKED" && !eurCardId.isEmpty {
+                        print("[StrigaCardCreation] Returning existing card: \(eurCardId)")
                         return CardCreationResult(id: eurCardId, parentWalletId: wallet.walletId)
                     }
                 }
+            }
+            
+            // CRITICAL: Only allow ONE wallet per user
+            if walletsResponse.wallets.count > 0 {
+                print("[StrigaCardCreation] ⚠️ User already has \(walletsResponse.wallets.count) wallet(s)")
+                print("[StrigaCardCreation] 🚫 PREVENTING DUPLICATE WALLET - Using existing wallet")
             }
             
             // Find a wallet without a card, or use the first wallet
@@ -224,13 +234,14 @@ class StrigaCardCreationService: CardCreationServiceProtocol {
             
             if shouldCreateWallet {
                 print("[StrigaCardCreation] Confirmed: No wallets exist. Creating new wallet...")
+                print("[StrigaCardCreation] 🔒 ENFORCING RULE: ONE wallet per user")
             
             let walletResponse = try await striga.createWallet(.init(
                 userId: userId,
                 accountCurrency: ["EUR", "BTC"]
             ))
             walletId = walletResponse.walletId
-            print("[StrigaCardCreation] Wallet created: \(walletId)")
+            print("[StrigaCardCreation] ✅ Created FIRST and ONLY wallet: \(walletId)")
             
             // Enrich BTC account first to get blockchain address
             if let btcAccount = walletResponse.accounts.btc {
