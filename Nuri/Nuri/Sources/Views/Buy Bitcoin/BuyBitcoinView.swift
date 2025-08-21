@@ -41,7 +41,7 @@ struct BuyBitcoinView: View {
         VStack(spacing: 0) {
             NuriHeader<AnyView, AnyView>.logo(
                 title: "Buy Bitcoin",
-                onClose: { navigation.isBuyViewPresented = false }
+                onClose: { navigation.isBuyBitcoinPresented = false }
             )
             
             BuyBitcoinWebView()

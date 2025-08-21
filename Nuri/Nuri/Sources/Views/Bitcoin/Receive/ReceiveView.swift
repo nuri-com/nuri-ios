@@ -79,11 +79,11 @@ struct ReceiveView: View {
                         }
                     }
                     
-                    // Close receive view first, then open buy view
+                    // Close receive view first, then open buy webview
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                         navigation.isReceiveViewPresented = false
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            navigation.isBuyViewPresented = true
+                            navigation.isBuyBitcoinPresented = true
                         }
                     }
                 }
