@@ -150,9 +150,8 @@ struct BitcoinView: View {
             }
         }
         .sheet(isPresented: $navigation.isBuyViewPresented) {
-            NavigationStack {
-                BuyBitcoinFlowView()
-            }
+            BuyBitcoinView()
+                .environmentObject(navigation)
         }
         .environmentObject(navigation)
         .fullScreenCover(isPresented: $navigation.isTransactionsPresented) {

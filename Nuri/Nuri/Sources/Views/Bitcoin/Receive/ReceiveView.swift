@@ -66,8 +66,8 @@ struct ReceiveView: View {
                 }
                 .buttonStyle(ProminentBlackButtonStyle())
 
-                NavigationLink("Buy Bitcoin") {
-                    BuyBitcoinView(isPresented: $navigation.isReceiveViewPresented)
+                Button("Buy Bitcoin") {
+                    navigation.isBuyViewPresented = true
                 }
                 .buttonStyle(ProminentButtonStyle())
                 Spacer()

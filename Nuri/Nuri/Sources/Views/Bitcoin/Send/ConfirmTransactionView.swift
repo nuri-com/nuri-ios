@@ -1,5 +1,6 @@
 import SwiftUI
 import BitcoinDevKit
+import AuthenticationServices
 
 struct ConfirmTransactionView: View {
 
@@ -27,6 +28,11 @@ struct ConfirmTransactionView: View {
     @State private var showSuccess = false
     @State private var transactionId = ""
     
+    // Hardware security key verification
+    @State private var isVerifyingSecurityKey = false
+    @State private var showSecurityKeyAlert = false
+    @State private var securityKeyVerified = false
+    
     // Services
     private let transactionManager = TransactionManager.shared
     
@@ -46,7 +52,15 @@ struct ConfirmTransactionView: View {
         } else if isInsufficientFunds {
             return "Insufficient Funds"
         } else {
-            return "Send Bitcoin"
+            let hasUsername = UserDefaults.standard.string(forKey: "passkeyUsername") != nil
+            let hasCredentialId = UserDefaults.standard.string(forKey: "passkeyCredentialId") != nil
+            let hasRegisteredHardwareKey = hasUsername && hasCredentialId
+            
+            if hasRegisteredHardwareKey && !securityKeyVerified {
+                return "Confirm Transaction"
+            } else {
+                return "Send Bitcoin"
+            }
         }
     }
     
@@ -229,6 +243,42 @@ struct ConfirmTransactionView: View {
                 }
             )
         }
+        .alert("Security Key Required", isPresented: $showSecurityKeyAlert) {
+            Button("Verify with Security Key", role: .none) {
+                Task {
+                    await verifySecurityKey()
+                }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Please connect and verify your hardware security key to authorize this transaction.")
+        }
+        .overlay {
+            if isVerifyingSecurityKey {
+                ZStack {
+                    Color.black.opacity(0.5)
+                        .ignoresSafeArea()
+                    
+                    VStack(spacing: 20) {
+                        ProgressView()
+                            .scaleEffect(1.5)
+                            .tint(.white)
+                        
+                        Text("Verifying Security Key...")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        
+                        Text("Please touch your security key when prompted")
+                            .font(.subheadline)
+                            .foregroundColor(.white.opacity(0.8))
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(40)
+                    .background(Color.black.opacity(0.8))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                }
+            }
+        }
     }
 
     // MARK: - Subviews
@@ -331,6 +381,20 @@ struct ConfirmTransactionView: View {
             return 
         }
         
+        // Check if user has a registered hardware security key (single device)
+        // We need to check if there's a username AND a credential ID stored
+        let hasUsername = UserDefaults.standard.string(forKey: "passkeyUsername") != nil
+        let hasCredentialId = UserDefaults.standard.string(forKey: "passkeyCredentialId") != nil
+        let hasRegisteredHardwareKey = hasUsername && hasCredentialId
+        
+        if hasRegisteredHardwareKey && !securityKeyVerified {
+            print("🔐 [ConfirmTransactionView] Hardware security key required for transaction")
+            print("   Username: \(UserDefaults.standard.string(forKey: "passkeyUsername") ?? "none")")
+            print("   Has Key: \(hasCredentialId)")
+            showSecurityKeyAlert = true
+            return
+        }
+        
         print("✅ [ConfirmTransactionView] transactionInfo found:")
         print("   📍 recipientAddress: \(txInfo.recipientAddress)")
         print("   💰 amountSats: \(txInfo.amountSats)")
@@ -383,6 +447,7 @@ struct ConfirmTransactionView: View {
                 await MainActor.run {
                     self.transactionId = txId
                     self.isSending = false
+                    self.securityKeyVerified = false // Reset for next transaction
                     self.showSuccess = true
                 }
             } catch {
@@ -391,6 +456,69 @@ struct ConfirmTransactionView: View {
                     self.isSending = false
                     self.showError = true
                 }
+            }
+        }
+    }
+    
+    // MARK: - Security Key Verification
+    
+    @MainActor
+    private func verifySecurityKey() async {
+        print("🔐 [ConfirmTransactionView] Starting security key verification")
+        
+        isVerifyingSecurityKey = true
+        defer { isVerifyingSecurityKey = false }
+        
+        do {
+            // Get the window for presentation
+            guard let window = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first?.windows
+                .first(where: { $0.isKeyWindow }) else {
+                print("❌ [ConfirmTransactionView] Failed to get presentation window")
+                errorMessage = "Failed to get presentation window"
+                showError = true
+                return
+            }
+            
+            // Get the stored username - REQUIRED for hardware key verification
+            guard let username = UserDefaults.standard.string(forKey: "passkeyUsername") else {
+                print("❌ [ConfirmTransactionView] No passkey username found")
+                errorMessage = "No registered user found. Please register a security key first."
+                showError = true
+                return
+            }
+            
+            print("🔐 [ConfirmTransactionView] Authenticating with hardware security key ONLY for user: \(username)")
+            
+            // Use the new method that ONLY prompts for hardware security key
+            let result = try await PasskeyAuthenticationService.shared.authenticateWithSecurityKeyOnly(
+                username: username,
+                presentationAnchor: window
+            )
+            
+            if result.verified {
+                print("✅ [ConfirmTransactionView] Security key verified successfully")
+                securityKeyVerified = true
+                
+                // Now proceed with the transaction
+                sendTransaction()
+            } else {
+                print("❌ [ConfirmTransactionView] Security key verification failed")
+                errorMessage = "Security key verification failed. Please try again."
+                showError = true
+            }
+            
+        } catch {
+            print("❌ [ConfirmTransactionView] Security key verification error: \(error)")
+            
+            // Handle specific error cases
+            if error.localizedDescription.contains("cancelled") || error.localizedDescription.contains("canceled") {
+                // User cancelled - no need to show error
+                print("⚠️ [ConfirmTransactionView] User cancelled security key verification")
+            } else {
+                errorMessage = "Failed to verify security key: \(error.localizedDescription)"
+                showError = true
             }
         }
     }

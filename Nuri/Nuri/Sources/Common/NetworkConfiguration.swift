@@ -69,8 +69,6 @@ struct NetworkConfiguration {
     var buyButtonText: String {
         if isTestnet && !showBuyButtonOnTestnet {
             return "" // Hide button
-        } else if isTestnet {
-            return "+ Buy Testnet BTC" // Make it clear it's test
         } else {
             return "+ Buy Bitcoin"
         }
