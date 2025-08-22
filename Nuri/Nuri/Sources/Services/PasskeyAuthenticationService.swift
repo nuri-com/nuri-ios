@@ -250,7 +250,7 @@ final class PasskeyAuthenticationService: NSObject {
             if let credential = authorization.credential as? ASAuthorizationPlatformPublicKeyCredentialAssertion {
                 Log.passkey.success("User selected platform credential (built-in)", metadata: [
                     "credentialId": credential.credentialID.base64URLEncodedString(),
-                    "userHandle": credential.userID.base64URLEncodedString(),
+                    "userHandle": credential.userID?.base64URLEncodedString() ?? "none",
                     "authenticatorDataSize": credential.rawAuthenticatorData.count,
                     "clientDataJSONSize": credential.rawClientDataJSON.count,
                     "signatureSize": credential.signature.count
@@ -302,7 +302,7 @@ final class PasskeyAuthenticationService: NSObject {
             } else if let credential = authorization.credential as? ASAuthorizationSecurityKeyPublicKeyCredentialAssertion {
                 Log.passkey.success("User selected security key credential (hardware key)", metadata: [
                     "credentialId": credential.credentialID.base64URLEncodedString(),
-                    "userHandle": credential.userID.base64URLEncodedString(),
+                    "userHandle": credential.userID?.base64URLEncodedString() ?? "none",
                     "authenticatorDataSize": credential.rawAuthenticatorData.count,
                     "clientDataJSONSize": credential.rawClientDataJSON.count,
                     "signatureSize": credential.signature.count
@@ -371,6 +371,108 @@ final class PasskeyAuthenticationService: NSObject {
                     throw PasskeyError.noPasskeysFound
                 }
             }
+            throw error
+        }
+    }
+    
+    // Helper method to clear stored passkey credentials (useful for debugging)
+    func clearStoredCredentials() {
+        Log.passkey.info("Clearing stored passkey credentials")
+        UserDefaults.standard.removeObject(forKey: "passkeyUsername")
+        UserDefaults.standard.removeObject(forKey: "passkeyCredentialId")
+        UserDefaults.standard.removeObject(forKey: "passkeyIsAnonymous")
+        UserDefaults.standard.removeObject(forKey: "passkeyUserEmail")
+    }
+    
+    // Helper method to get stored credential info
+    func getStoredCredentialInfo() -> (username: String?, credentialId: String?) {
+        let username = UserDefaults.standard.string(forKey: "passkeyUsername")
+        let credentialId = UserDefaults.standard.string(forKey: "passkeyCredentialId")
+        return (username, credentialId)
+    }
+    
+    // Authenticate with hardware security key only (no platform passkey selection)
+    func authenticateWithSecurityKeyOnly(username: String, presentationAnchor: ASPresentationAnchor) async throws -> (verified: Bool, username: String?, isAnonymous: Bool) {
+        Log.passkey.info("Starting hardware security key ONLY authentication flow", metadata: [
+            "username": username
+        ])
+        
+        // Store the presentation anchor
+        self.currentPresentationAnchor = presentationAnchor
+        defer { self.currentPresentationAnchor = nil }
+        
+        // Step 1: Get authentication options
+        Log.passkey.info("Step 1: Fetching authentication options for security key")
+        let authOptions = try await fetchAuthenticationOptions(username: username)
+        
+        // Step 2: Create security key only request
+        Log.passkey.info("Step 2: Creating security key ONLY assertion request")
+        
+        guard let challenge = Data(base64URLEncoded: authOptions.challenge) else {
+            Log.passkey.error("Invalid challenge from server")
+            throw PasskeyError.serverError  // Use existing error case
+        }
+        
+        let rpId = authOptions.rpId
+        
+        // ONLY create security key provider - no platform provider
+        let securityKeyProvider = ASAuthorizationSecurityKeyPublicKeyCredentialProvider(relyingPartyIdentifier: rpId)
+        let securityKeyRequest = securityKeyProvider.createCredentialAssertionRequest(challenge: challenge)
+        
+        // Set user verification to discouraged to avoid PIN prompt
+        securityKeyRequest.userVerificationPreference = .discouraged
+        
+        // IMPORTANT: Specify which credential to use to avoid showing credential selector
+        // This filters to only the credential that was registered for this user
+        if let storedCredentialId = UserDefaults.standard.string(forKey: "passkeyCredentialId"),
+           let credentialIdData = Data(base64URLEncoded: storedCredentialId) {
+            Log.passkey.info("Filtering to specific credential", metadata: [
+                "credentialId": String(storedCredentialId.prefix(20)) + "..."
+            ])
+            
+            let descriptor = ASAuthorizationSecurityKeyPublicKeyCredentialDescriptor(
+                credentialID: credentialIdData,
+                transports: [.usb, .nfc]  // Support both USB and NFC keys
+            )
+            securityKeyRequest.allowedCredentials = [descriptor]
+        } else {
+            Log.passkey.warning("No stored credential ID found, user may see multiple credentials")
+        }
+        
+        // Step 3: Perform authorization with ONLY security key request
+        Log.passkey.info("Step 3: Presenting hardware security key authentication (no passkey selection)")
+        let authController = ASAuthorizationController(authorizationRequests: [securityKeyRequest])
+        authController.delegate = self
+        authController.presentationContextProvider = self
+        
+        do {
+            let authorization = try await performAuthorization(controller: authController)
+            
+            // We should only get security key credentials
+            guard let credential = authorization.credential as? ASAuthorizationSecurityKeyPublicKeyCredentialAssertion else {
+                Log.passkey.error("Expected security key credential but got different type")
+                throw PasskeyError.invalidCredentialType
+            }
+            
+            Log.passkey.success("Hardware security key presented successfully", metadata: [
+                "credentialId": credential.credentialID.base64URLEncodedString(),
+                "userHandle": credential.userID?.base64URLEncodedString() ?? "none"
+            ])
+            
+            // Step 4: Verify with server
+            Log.passkey.info("Step 4: Verifying security key with server")
+            let result = try await verifySecurityKeyAuthentication(credential: credential)
+            
+            if result.verified {
+                Log.passkey.success("Hardware security key verified successfully", metadata: [
+                    "username": result.username ?? "unknown"
+                ])
+            }
+            
+            return result
+            
+        } catch {
+            Log.passkey.error("Hardware security key authentication failed", error: error)
             throw error
         }
     }
@@ -735,7 +837,7 @@ final class PasskeyAuthenticationService: NSObject {
                     authenticatorData: credential.rawAuthenticatorData.base64URLEncodedString(),
                     clientDataJSON: credential.rawClientDataJSON.base64URLEncodedString(),
                     signature: credential.signature.base64URLEncodedString(),
-                    userHandle: credential.userID.base64URLEncodedString()
+                    userHandle: credential.userID?.base64URLEncodedString()  // Can be nil for security keys
                 )
             )
         )
@@ -751,7 +853,7 @@ final class PasskeyAuthenticationService: NSObject {
         Log.passkey.debug("Security key verification request", metadata: [
             "credentialId": credentialIdBase64,
             "authenticatorType": "securityKey",
-            "userHandle": credential.userID.base64URLEncodedString(),
+            "userHandle": credential.userID?.base64URLEncodedString() ?? "none",
             "endpoint": endpoint
         ])
         
@@ -806,7 +908,7 @@ final class PasskeyAuthenticationService: NSObject {
                     authenticatorData: credential.rawAuthenticatorData.base64URLEncodedString(),
                     clientDataJSON: credential.rawClientDataJSON.base64URLEncodedString(),
                     signature: credential.signature.base64URLEncodedString(),
-                    userHandle: credential.userID.base64URLEncodedString()
+                    userHandle: credential.userID?.base64URLEncodedString()  // Can be nil for security keys
                 )
             )
         )
@@ -823,7 +925,7 @@ final class PasskeyAuthenticationService: NSObject {
         Log.passkey.debug("Verification request", metadata: [
             "credentialId": credentialIdBase64,
             "credentialIdLength": credential.credentialID.count,
-            "userHandle": credential.userID.base64URLEncodedString(),
+            "userHandle": credential.userID?.base64URLEncodedString() ?? "none",
             "authenticatorDataSize": credential.rawAuthenticatorData.count,
             "signatureSize": credential.signature.count
         ])

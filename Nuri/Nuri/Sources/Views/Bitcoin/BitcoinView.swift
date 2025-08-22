@@ -154,6 +154,10 @@ struct BitcoinView: View {
                 BuyBitcoinFlowView()
             }
         }
+        .sheet(isPresented: $navigation.isBuyBitcoinPresented) {
+            BuyBitcoinView()
+                .environmentObject(navigation)
+        }
         .environmentObject(navigation)
         .fullScreenCover(isPresented: $navigation.isTransactionsPresented) {
             // Use the main UnifiedTransactionsView that shows both Bitcoin and Striga transactions

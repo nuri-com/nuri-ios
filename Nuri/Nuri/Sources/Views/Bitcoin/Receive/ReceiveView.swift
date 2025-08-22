@@ -5,6 +5,7 @@ struct ReceiveView: View {
     @EnvironmentObject var navigation: BitcoinViewNavigation
     @State private var address: String = ""
     @State private var isLoading = false
+    @State private var showCopiedToast = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -66,8 +67,25 @@ struct ReceiveView: View {
                 }
                 .buttonStyle(ProminentBlackButtonStyle())
 
-                NavigationLink("Buy Bitcoin") {
-                    BuyBitcoinView(isPresented: $navigation.isReceiveViewPresented)
+                Button("Buy Bitcoin") {
+                    // Copy address to clipboard
+                    if Self.isBitcoinAddress(address) {
+                        UIPasteboard.general.string = address
+                        showCopiedToast = true
+                        
+                        // Hide toast after 2 seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                            showCopiedToast = false
+                        }
+                    }
+                    
+                    // Close receive view first, then open buy webview
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        navigation.isReceiveViewPresented = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            navigation.isBuyBitcoinPresented = true
+                        }
+                    }
                 }
                 .buttonStyle(ProminentButtonStyle())
                 Spacer()
@@ -75,6 +93,28 @@ struct ReceiveView: View {
             .padding(32)
         }
         .background(NuriAsset.background.swiftUIColor)
+        .overlay(
+            Group {
+                if showCopiedToast {
+                    VStack {
+                        HStack {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.white)
+                            Text("Bitcoin address copied!")
+                                .foregroundColor(.white)
+                                .font(.system(size: 14, weight: .medium))
+                        }
+                        .padding()
+                        .background(Color.black.opacity(0.8))
+                        .cornerRadius(20)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        Spacer()
+                    }
+                    .padding(.top, 50)
+                    .animation(.easeInOut, value: showCopiedToast)
+                }
+            }
+        )
         .task {
             await loadWalletData()
         }
